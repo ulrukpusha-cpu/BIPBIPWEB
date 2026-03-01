@@ -27,7 +27,7 @@
         }
         body { background-color: #0f172a; }
         .led-wrap { overflow: hidden; white-space: nowrap; }
-        .led-text { display: inline-block; padding-left: 100%; animation: led-scroll 25s linear infinite; }
+        .led-text { display: inline-block; padding-left: 100%; animation: led-scroll 60s linear infinite; }
         @keyframes led-scroll { to { transform: translateX(-100%); } }
     </style>
 </head>
@@ -542,13 +542,25 @@
             </div>
         </div>
 
-        <!-- Admin Panel -->
+        <!-- Admin Panel (accès : Ctrl+Shift+A) -->
         <div id="screen-admin" class="screen">
             <div class="flex items-center gap-3 mb-6">
                 <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
                     <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
                 </button>
                 <h2 class="text-xl font-semibold text-white">Administration</h2>
+            </div>
+            <!-- Réglage vitesse bandeau LED -->
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
+                <h3 class="font-semibold text-white mb-2">Vitesse du bandeau (message défilant)</h3>
+                <p class="text-sm text-slate-400 mb-3">Plus la valeur est grande, plus le défilement est lent. Actuel : <span id="admin-led-speed-value">60</span> secondes.</p>
+                <div class="flex gap-2 items-center flex-wrap">
+                    <input type="number" id="admin-led-speed" min="15" max="300" value="60" class="w-24 px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="60">
+                    <span class="text-slate-400 text-sm">secondes (15–300)</span>
+                    <button type="button" onclick="saveLedSpeed()" class="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/30">Enregistrer</button>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">Clé admin : <input type="password" id="admin-key-input" placeholder="ADMIN_SECRET_KEY" class="w-40 px-2 py-1 rounded bg-slate-800 border border-white/10 text-white text-xs" autocomplete="off"> <button type="button" onclick="loadAdminOrders()" class="ml-2 px-3 py-1 rounded bg-indigo-500/30 border border-indigo-500/50 text-indigo-300 text-xs font-medium">Charger les commandes</button></p>
+                <p class="text-xs text-slate-500 mt-1">Accès Admin : <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Ctrl</kbd>+<kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Shift</kbd>+<kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">A</kbd></p>
             </div>
             <div class="admin-tabs flex gap-2 mb-6">
                 <button type="button" class="tab-btn active flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-indigo-500/20 text-indigo-400 border-indigo-500/30" onclick="switchAdminTab('pending')">En attente</button>

@@ -403,6 +403,13 @@ function navigateTo(screen) {
         }
         if (screen === 'actualites') loadActualites(actualitesSort);
         if (screen === 'quests') loadQuests();
+        if (screen === 'admin') {
+            var speedVal = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
+            var speedInput = document.getElementById('admin-led-speed');
+            var speedSpan = document.getElementById('admin-led-speed-value');
+            if (speedInput) speedInput.value = speedVal;
+            if (speedSpan) speedSpan.textContent = speedVal;
+        }
     }
     
     document.querySelectorAll('.nav-bottom-btn').forEach(function (btn) {
@@ -986,89 +993,178 @@ function formatDate(dateString) {
 }
 
 // ==================== ADMIN FUNCTIONS ====================
+var adminOrdersFromServer = [];
+var currentAdminTab = 'pending';
+
+function getAdminKey() {
+    var keyInput = document.getElementById('admin-key-input');
+    return (keyInput && keyInput.value) ? keyInput.value.trim() : '';
+}
+
+function loadAdminOrders() {
+    var key = getAdminKey();
+    if (!key) {
+        showToast('Saisis la clé admin ci-dessous puis clique sur "Charger les commandes"', 'error');
+        return;
+    }
+    var status = currentAdminTab === 'validated' ? 'validated' : '';
+    var url = API_BASE + '/api/admin/orders' + (status ? '?status=' + status : '');
+    fetch(url, { headers: { 'X-Admin-Key': key } })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.error) {
+                showToast(data.error, 'error');
+                adminOrdersFromServer = [];
+            } else {
+                adminOrdersFromServer = data.orders || [];
+                showToast(adminOrdersFromServer.length + ' commande(s) chargée(s)', 'success');
+            }
+            renderAdminOrders(currentAdminTab);
+        })
+        .catch(function () {
+            showToast('Erreur réseau', 'error');
+            adminOrdersFromServer = [];
+            renderAdminOrders(currentAdminTab);
+        });
+}
+
 function switchAdminTab(tab) {
+    currentAdminTab = tab;
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
-    
-    renderAdminOrders(tab);
+    if (event && event.target) event.target.classList.add('active');
+    else document.querySelectorAll('.tab-btn')[tab === 'validated' ? 1 : 0].classList.add('active');
+    if (getAdminKey()) loadAdminOrders();
+    else renderAdminOrders(tab);
 }
 
 function renderAdminOrders(filter = 'pending') {
     const container = document.getElementById('admin-orders');
-    
-    const filteredOrders = orders.filter(o => {
+    if (!container) return;
+
+    var listToShow = adminOrdersFromServer.length ? adminOrdersFromServer : orders;
+    const filteredOrders = listToShow.filter(function (o) {
         if (filter === 'pending') {
             return o.status === 'pending' || o.status === 'proof_sent';
         }
         return o.status === 'validated';
     });
-    
-    if (filteredOrders.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <span class="empty-icon">📭</span>
-                <p>Aucune commande ${filter === 'pending' ? 'en attente' : 'validée'}</p>
-            </div>
-        `;
+
+    if (adminOrdersFromServer.length === 0 && !orders.length) {
+        container.innerHTML = '<div class="empty-state mb-4"><span class="empty-icon">🔑</span><p class="text-slate-400 text-sm">Saisis la clé admin (ADMIN_SECRET_KEY) ci-dessus puis clique sur le bouton pour charger les commandes du serveur.</p></div><button type="button" onclick="loadAdminOrders()" class="w-full py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30">Charger les commandes</button>';
         return;
     }
-    
-    container.innerHTML = filteredOrders.map(order => `
-        <div class="admin-order-card">
-            <div class="order-card-header">
-                <span class="order-id">#${order.id}</span>
-                <span class="order-status ${order.status === 'validated' ? 'validated' : 'pending'}">
-                    ${getStatusLabel(order.status)}
-                </span>
-            </div>
-            <div class="order-details">
-                <p><strong>👤 User ID:</strong> ${order.userId || 'N/A'}</p>
-                <p><strong>${CONFIG.OPERATORS[order.operator]?.icon || '📱'} Opérateur:</strong> ${order.operator}</p>
-                <p><strong>💰 Montant:</strong> ${formatNumber(order.amountTotal)} FCFA</p>
-                <p><strong>📞 Numéro:</strong> +225 ${order.phone}</p>
-                <p><strong>📅 Date:</strong> ${formatDate(order.createdAt)}</p>
-            </div>
-            ${order.proof ? `<img class="proof-img" src="${order.proof}" alt="Preuve">` : '<p style="color: var(--accent-warning);">⚠️ Pas de preuve</p>'}
-            ${filter === 'pending' ? `
-                <div class="admin-actions">
-                    <button class="btn-validate" onclick="validateOrder('${order.id}')">✅ Valider</button>
-                    <button class="btn-reject" onclick="rejectOrder('${order.id}')">❌ Rejeter</button>
-                </div>
-            ` : ''}
-        </div>
-    `).join('');
+
+    if (filteredOrders.length === 0) {
+        container.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><p>Aucune commande ' + (filter === 'pending' ? 'en attente' : 'validée') + '</p></div><p class="text-xs text-slate-500 mt-2">Les commandes viennent du serveur. <button type="button" onclick="loadAdminOrders()" class="underline text-amber-400">Actualiser</button></p>';
+        return;
+    }
+
+    container.innerHTML = filteredOrders.map(function (order) {
+        var proofSrc = order.proof ? (order.proof.indexOf('http') === 0 ? order.proof : API_BASE + order.proof) : '';
+        var proofHtml = proofSrc ? '<img class="proof-img" src="' + proofSrc + '" alt="Preuve">' : '<p style="color: var(--accent-warning);">⚠️ Pas de preuve</p>';
+        var actionsHtml = (filter === 'pending') ? '<div class="admin-actions"><button class="btn-validate" onclick="validateOrderServer(\'' + order.id + '\')">✅ Valider</button><button class="btn-reject" onclick="rejectOrderServer(\'' + order.id + '\')">❌ Rejeter</button></div>' : '';
+        return '<div class="admin-order-card">' +
+            '<div class="order-card-header"><span class="order-id">#' + order.id + '</span><span class="order-status ' + (order.status === 'validated' ? 'validated' : 'pending') + '">' + getStatusLabel(order.status) + '</span></div>' +
+            '<div class="order-details">' +
+            '<p><strong>👤 User ID:</strong> ' + (order.userId || 'N/A') + '</p>' +
+            '<p><strong>' + (CONFIG.OPERATORS[order.operator] ? CONFIG.OPERATORS[order.operator].icon : '📱') + ' Opérateur:</strong> ' + (order.operator || '') + '</p>' +
+            '<p><strong>💰 Montant:</strong> ' + formatNumber(order.amountTotal) + ' FCFA</p>' +
+            '<p><strong>📞 Numéro:</strong> +225 ' + (order.phone || '') + '</p>' +
+            '<p><strong>📅 Date:</strong> ' + formatDate(order.createdAt) + '</p></div>' +
+            proofHtml + actionsHtml + '</div>';
+    }).join('');
 }
 
 function validateOrder(orderId) {
-    const orderIndex = orders.findIndex(o => o.id === orderId);
+    var orderIndex = orders.findIndex(function (o) { return o.id === orderId; });
     if (orderIndex !== -1) {
         orders[orderIndex].status = 'validated';
         saveOrders();
-        
-        // Envoyer notification via Telegram
-        if (tg) {
-            tg.sendData(JSON.stringify({
-                action: 'order_validated',
-                orderId: orderId
-            }));
-        }
-        
+        if (tg) tg.sendData(JSON.stringify({ action: 'order_validated', orderId: orderId }));
         showToast('Commande validée !', 'success');
         renderAdminOrders('pending');
     }
 }
 
 function rejectOrder(orderId) {
-    const orderIndex = orders.findIndex(o => o.id === orderId);
+    var orderIndex = orders.findIndex(function (o) { return o.id === orderId; });
     if (orderIndex !== -1) {
         orders[orderIndex].status = 'rejected';
         saveOrders();
-        
         showToast('Commande rejetée', 'error');
         renderAdminOrders('pending');
     }
+}
+
+function validateOrderServer(orderId) {
+    var key = getAdminKey();
+    if (!key) { showToast('Saisis la clé admin', 'error'); return; }
+    fetch(API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key }
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.error) { showToast(data.error, 'error'); return; }
+        showToast('Commande validée !', 'success');
+        loadAdminOrders();
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+function rejectOrderServer(orderId) {
+    var key = getAdminKey();
+    if (!key) { showToast('Saisis la clé admin', 'error'); return; }
+    fetch(API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
+        body: JSON.stringify({ reason: 'Preuve invalide' })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.error) { showToast(data.error, 'error'); return; }
+        showToast('Commande rejetée', 'error');
+        loadAdminOrders();
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+function saveLedSpeed() {
+    var input = document.getElementById('admin-led-speed');
+    var keyInput = document.getElementById('admin-key-input');
+    var seconds = parseInt(input && input.value ? input.value : 60, 10);
+    if (seconds < 15 || seconds > 300) {
+        showToast('Entre 15 et 300 secondes', 'error');
+        return;
+    }
+    var adminKey = (keyInput && keyInput.value) ? keyInput.value.trim() : '';
+    if (!adminKey) {
+        showToast('Saisis la clé admin (ADMIN_SECRET_KEY du .env) pour enregistrer', 'error');
+        return;
+    }
+    fetch(API_BASE + '/api/admin/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+        body: JSON.stringify({ ledScrollSeconds: seconds })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+        serverConfig.ledScrollSeconds = seconds;
+        var ledEl = document.getElementById('led-text');
+        if (ledEl) ledEl.style.animation = 'led-scroll ' + seconds + 's linear infinite';
+        var valEl = document.getElementById('admin-led-speed-value');
+        if (valEl) valEl.textContent = seconds;
+        showToast('Vitesse bandeau enregistrée : ' + seconds + ' s', 'success');
+    })
+    .catch(function () {
+        showToast('Erreur réseau', 'error');
+    });
 }
 
 // ==================== KEYBOARD SHORTCUTS ====================
@@ -1086,9 +1182,14 @@ function loadServerConfig() {
         .then(function (data) {
             serverConfig.momoEnabled = !!data.momoEnabled;
             serverConfig.mtnMerchantPhone = data.mtnMerchantPhone || null;
+            serverConfig.ledScrollSeconds = Math.min(300, Math.max(15, parseInt(data.ledScrollSeconds, 10) || 60));
             var el = document.querySelector('.payment-method.mtn-money .payment-number');
             if (el && serverConfig.mtnMerchantPhone) {
                 el.textContent = serverConfig.mtnMerchantPhone.replace(/(\d{2})(?=\d)/g, '$1 ');
+            }
+            var ledEl = document.getElementById('led-text');
+            if (ledEl) {
+                ledEl.style.animation = 'led-scroll ' + serverConfig.ledScrollSeconds + 's linear infinite';
             }
         })
         .catch(function () {});

@@ -38,6 +38,31 @@ const ADMIN_CHAT_ID = getAdminChatIds()[0] || ''; // pour compatibilité
 const UPLOADS_DIR = './uploads';
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 
+// ==================== CONFIG APP (vitesse bandeau LED, etc.) ====================
+const DATA_DIR = './data';
+const APP_CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
+
+function readAppConfig() {
+    try {
+        if (fs.existsSync(APP_CONFIG_PATH)) {
+            const raw = fs.readFileSync(APP_CONFIG_PATH, 'utf8');
+            return JSON.parse(raw);
+        }
+    } catch (e) { /* ignore */ }
+    return { ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60 };
+}
+
+function writeAppConfig(obj) {
+    try {
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(APP_CONFIG_PATH, JSON.stringify(obj, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('writeAppConfig:', e);
+        return false;
+    }
+}
+
 // ==================== MIDDLEWARE ====================
 // CORS : comme v2 - en production, restreindre aux origines (CORS_ORIGIN) ou désactiver si non défini
 const corsOptions = NODE_ENV === 'production'
@@ -154,13 +179,31 @@ async function sendTelegramPhotoToAllAdmins(photoUrl, caption, options = {}) {
 
 // ==================== API ROUTES ====================
 
-// Config publique (numéro MoMo marchand pour affichage)
+// Config publique (MoMo, vitesse bandeau LED)
 app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();
+    const appConfig = readAppConfig();
     res.json({
         mtnMerchantPhone: mtnMerchantPhone || null,
-        momoEnabled: !!process.env.MTN_SUBSCRIPTION_KEY && !!process.env.MTN_API_USER
+        momoEnabled: !!process.env.MTN_SUBSCRIPTION_KEY && !!process.env.MTN_API_USER,
+        ledScrollSeconds: Math.min(300, Math.max(15, appConfig.ledScrollSeconds || 60))
     });
+});
+
+// Admin : mettre à jour la config (ex. vitesse bandeau)
+app.put('/api/admin/config', (req, res) => {
+    const secret = process.env.ADMIN_SECRET_KEY;
+    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
+    const key = req.headers['x-admin-key'];
+    if (key !== secret) return res.status(401).json({ error: 'Non autorisé' });
+    const body = req.body || {};
+    const current = readAppConfig();
+    if (body.ledScrollSeconds != null) {
+        const val = Math.min(300, Math.max(15, parseInt(body.ledScrollSeconds, 10) || 60));
+        current.ledScrollSeconds = val;
+    }
+    if (!writeAppConfig(current)) return res.status(500).json({ error: 'Erreur écriture config' });
+    res.json({ success: true, config: { ledScrollSeconds: current.ledScrollSeconds } });
 });
 
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)
@@ -334,8 +377,11 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
     }
 });
 
-// Admin: Valider une commande
+// Admin: Valider une commande (X-Admin-Key requis)
 app.post('/api/admin/orders/:id/validate', async (req, res) => {
+    const secret = process.env.ADMIN_SECRET_KEY;
+    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
+    if (req.headers['x-admin-key'] !== secret) return res.status(401).json({ error: 'Non autorisé' });
     try {
         const orderId = req.params.id;
         const order = await orderStorage.setOrderValidated(orderId);
@@ -364,6 +410,9 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
 
 // Admin: Rejeter une commande
 app.post('/api/admin/orders/:id/reject', async (req, res) => {
+    const secretR = process.env.ADMIN_SECRET_KEY;
+    if (!secretR) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
+    if (req.headers['x-admin-key'] !== secretR) return res.status(401).json({ error: 'Non autorisé' });
     try {
         const orderId = req.params.id;
         const { reason } = req.body;
@@ -391,8 +440,12 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
     }
 });
 
-// Admin: Liste des commandes
+// Admin: Liste des commandes (X-Admin-Key requis)
 app.get('/api/admin/orders', async (req, res) => {
+    const secret = process.env.ADMIN_SECRET_KEY;
+    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
+    const key = req.headers['x-admin-key'];
+    if (key !== secret) return res.status(401).json({ error: 'Non autorisé' });
     const { status } = req.query;
     const ordersList = status
         ? await orderStorage.getOrdersByStatus(status)
