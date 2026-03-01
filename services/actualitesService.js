@@ -32,15 +32,18 @@ async function createActualite(payload) {
     const supabase = db.getSupabase();
     if (!supabase) return { error: 'Base indisponible' };
     const slug = (payload.slug || payload.title || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'article-' + Date.now();
-    const ai_score = scoreActualite(payload.title, payload.content, payload.sources);
+    const ai_score = payload.ai_score != null ? payload.ai_score : scoreActualite(payload.title, payload.content, payload.sources);
+    const status = ['draft', 'pending', 'approved', 'rejected'].includes(payload.status) ? payload.status : 'pending';
+    const sourcesStr = payload.sources == null ? null : (typeof payload.sources === 'string' ? payload.sources : JSON.stringify(payload.sources));
     const { data, error } = await supabase.from('actualites').insert({
         title: payload.title,
         slug,
         content: payload.content || '',
         summary_short: payload.summary_short || null,
-        sources: payload.sources || null,
+        sources: sourcesStr,
         ai_score,
-        status: payload.status || 'pending',
+        status,
+        published_at: status === 'approved' ? new Date().toISOString() : null,
     }).select('id, slug, status').single();
     if (error) return { error: error.message };
     return { actualite: data };
