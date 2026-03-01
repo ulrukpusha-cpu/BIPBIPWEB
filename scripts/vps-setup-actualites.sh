@@ -27,6 +27,13 @@ else
     echo "    RSS_FEED_URLS déjà présent."
 fi
 
+if ! grep -q "^AUTO_APPROVE_RSS=" "$ENV_FILE" 2>/dev/null; then
+    echo "AUTO_APPROVE_RSS=true" >> "$ENV_FILE"
+    echo "    AUTO_APPROVE_RSS=true ajouté (les articles RSS s'affichent tout de suite)."
+else
+    echo "    AUTO_APPROVE_RSS déjà présent."
+fi
+
 if ! grep -q "^INGEST_SECRET_KEY=" "$ENV_FILE" 2>/dev/null; then
     if grep -q "^ADMIN_SECRET_KEY=" "$ENV_FILE" 2>/dev/null; then
         echo "    INGEST_SECRET_KEY non défini : la route /api/actualites/ingest utilisera ADMIN_SECRET_KEY (OK)."
