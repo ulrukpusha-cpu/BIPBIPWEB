@@ -68,10 +68,13 @@ http://localhost:3000
 4. Configurer l'URL de votre webapp
 
 ### Webhook (optionnel)
-Pour recevoir les callbacks Telegram :
+Pour recevoir les callbacks et les commandes (ex. /actualites), configure le webhook avec `allowed_updates` :
 ```bash
-curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://votre-domaine.com/api/telegram/webhook"
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://votre-domaine.com/api/telegram/webhook", "allowed_updates": ["message", "edited_message", "callback_query"]}'
 ```
+Voir **docs/TELEGRAM-ACTUALITES.md** pour le dépannage de la commande /actualites.
 
 ## 🎨 Personnalisation
 
@@ -143,8 +146,9 @@ pm2 save
 ## 📞 Support
 
 Pour toute question ou problème :
-- Email : support@bipbip.ci
+- Email : support_clients@bipbiprecharge.ci
 - WhatsApp : +225 07 XX XX XX XX
+- Telegram : https://t.me/bipbiprecharge_support
 
 ---
 

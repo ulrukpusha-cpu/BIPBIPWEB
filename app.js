@@ -33,7 +33,8 @@ let currentOrder = {
     phone: null,
     proof: null,
     status: 'pending',
-    createdAt: null
+    createdAt: null,
+    paymentMethod: null
 };
 
 let orders = JSON.parse(localStorage.getItem('bipbip_orders') || '[]');
@@ -43,6 +44,28 @@ let userPoints = parseInt(localStorage.getItem('bipbip_points') || '0', 10);
 var lastAnnonceId = null;
 var lastAnnoncePrix = null;
 var annoncePaymentRef = null;
+
+// Bannière pub (Actualités)
+// image: chemin relatif depuis la racine du site (ex: /img/recharge-banner.jpg)
+// url: lien à ouvrir au clic (optionnel)
+var PUB_BANNERS = [
+    {
+        text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.',
+        image: '/img/recharge-banner.jpg',
+        url: 'https://bipbiprecharge.ci'
+    },
+    {
+        text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.',
+        image: '/img/recharge-banner-2.jpg',
+        url: 'https://bipbiprecharge.ci'
+    },
+    {
+        text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.',
+        image: '/img/recharge-banner-3.jpg',
+        url: 'https://bipbiprecharge.ci'
+    }
+];
+var pubBannerInterval = null;
 
 // ==================== TELEGRAM WEBAPP ====================
 let tg = window.Telegram?.WebApp;
@@ -64,7 +87,51 @@ function initTelegram() {
         });
         
         console.log('Telegram WebApp initialisé', tg.initDataUnsafe);
+        
+        // Inscription automatique (photo + nom). fetchTelegramMe uniquement à l'ouverture du Profil pour ne pas écraser la photo.
+        if (tg.initData) {
+            registerTelegramUser();
+        } else {
+            setTimeout(function () { if (tg && tg.initData) registerTelegramUser(); }, 800);
+            setTimeout(function () { if (tg && tg.initData) registerTelegramUser(); }, 2000);
+        }
     }
+}
+
+function registerTelegramUser() {
+    if (!tg || !tg.initData) return;
+    var startParam = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) ? String(tg.initDataUnsafe.start_param) : '';
+    if (startParam && !startParam.startsWith('ref_')) startParam = 'ref_' + startParam;
+    console.log('[Bipbip] Inscription auto — envoi POST /api/telegram/register', startParam ? '(parrain: ' + startParam + ')' : '');
+    fetch(API_BASE + '/api/telegram/register', {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: JSON.stringify(startParam ? { referral_code: startParam } : {})
+    })
+    .then(function (res) {
+        return res.json().then(function (data) {
+            if (data.ok && data.user) {
+                window.__bipbipRegisteredUser = data.user;
+                if (typeof data.user.points === 'number' || (data.user.points != null)) {
+                    userPoints = Number(data.user.points);
+                    try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+                }
+                console.log('[Bipbip] Utilisateur enregistré:', data.user.telegram_id, data.user.photo_url ? '(avec photo)' : '');
+                updateProfilPhoto();
+                updateHeaderUserInfo();
+                updateHeaderPoints();
+                updateProfilPoints();
+            } else {
+                console.warn('[Bipbip] Register réponse:', res.status, data.error || data.code || data);
+            }
+            return data;
+        }).catch(function () {
+            console.warn('[Bipbip] Register réponse non-JSON:', res.status);
+        });
+    })
+    .catch(function (err) {
+        console.warn('[Bipbip] Register erreur réseau:', err);
+    });
 }
 
 // ==================== POINTS & PROFIL ====================
@@ -76,6 +143,205 @@ function updateHeaderPoints() {
 function updateProfilPoints() {
     var el = document.getElementById('profil-points-totale');
     if (el) el.textContent = userPoints;
+}
+
+function saveSocialLink() {
+    var input = document.getElementById('profil-social-link');
+    var link = input ? input.value.trim() : '';
+    if (!tg || !tg.initData) {
+        showToast('Connexion Telegram requise', 'error');
+        return;
+    }
+    fetch(API_BASE + '/api/telegram/profile', {
+        method: 'PATCH',
+        headers: getApiHeaders(),
+        body: JSON.stringify({ social_link: link || null })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.ok && data.user) {
+            window.__bipbipRegisteredUser = window.__bipbipRegisteredUser || {};
+            window.__bipbipRegisteredUser.social_link = data.user.social_link || '';
+            showToast('Lien enregistré', 'success');
+        } else {
+            showToast(data.error || 'Erreur', 'error');
+        }
+    })
+    .catch(function () {
+        showToast('Erreur réseau', 'error');
+    });
+}
+
+function requestPromoLikes() {
+    var input = document.getElementById('profil-social-link');
+    var link = input ? input.value.trim() : '';
+    if (!link) {
+        showToast('Ajoutez d\'abord votre lien YouTube ou X', 'error');
+        return;
+    }
+    if (!tg || !tg.initData) {
+        showToast('Connexion Telegram requise', 'error');
+        return;
+    }
+    var select = document.getElementById('profil-promo-formule');
+    var amount = 250;
+    var durationDays = 1;
+    if (select && select.options[select.selectedIndex]) {
+        var opt = select.options[select.selectedIndex];
+        amount = parseInt(opt.value, 10) || 250;
+        durationDays = parseInt(opt.getAttribute('data-days'), 10) || 1;
+    }
+    fetch(API_BASE + '/api/telegram/promo-likes', {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: JSON.stringify({ social_link: link, amount: amount, duration_days: durationDays })
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+        if (data.success && data.order) {
+            var orderAmount = data.order.amount || 250;
+            showToast('Demande créée — ' + orderAmount + ' F. Choisissez votre mode de paiement.', 'success');
+            currentOrder = {
+                id: data.order.id,
+                operator: data.order.operator || 'PROMO_LIKES',
+                amount: orderAmount,
+                amountTotal: orderAmount,
+                phone: '',
+                proof: null,
+                status: 'pending',
+                createdAt: data.order.createdAt,
+                paymentMethod: null
+            };
+            goToPaymentMethodScreen();
+        } else {
+            showToast(data.error || 'Erreur', 'error');
+        }
+    })
+    .catch(function () {
+        showToast('Erreur réseau', 'error');
+    });
+}
+
+function getDisplayUserId() {
+    var user = window.__bipbipRegisteredUser;
+    if (user && user.telegram_id) return String(user.telegram_id);
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) return String(tg.initDataUnsafe.user.id);
+    return null;
+}
+
+function getDisplayUserName() {
+    var user = window.__bipbipRegisteredUser;
+    if (user) {
+        var first = (user.first_name || '').trim();
+        var last = (user.last_name || '').trim();
+        var name = (first + ' ' + last).trim();
+        if (name) return name;
+        if (user.username) return '@' + user.username;
+        if (user.telegram_id) return 'ID: ' + user.telegram_id;
+    }
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+        var u = tg.initDataUnsafe.user;
+        var n = ((u.first_name || '') + ' ' + (u.last_name || '')).trim();
+        if (n) return n;
+        if (u.username) return '@' + u.username;
+        if (u.id) return 'ID: ' + u.id;
+    }
+    return '—';
+}
+
+function fetchTelegramMe() {
+    if (!tg || !tg.initData) return;
+    fetch(API_BASE + '/api/telegram/me', { method: 'GET', headers: getApiHeaders() })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.ok && data.user) {
+                var incoming = data.user;
+                var existing = window.__bipbipRegisteredUser;
+                if (existing && existing.photo_url && !incoming.photo_url) {
+                    incoming.photo_url = existing.photo_url;
+                }
+                window.__bipbipRegisteredUser = incoming;
+                if (typeof incoming.points === 'number' || (incoming.points !== undefined && incoming.points !== null)) {
+                    userPoints = Number(incoming.points);
+                    try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+                }
+                updateHeaderUserInfo();
+                updateHeaderPoints();
+                updateProfilPoints();
+                updateProfilPhoto();
+                var refInput = document.getElementById('profil-referral-link');
+                if (refInput && incoming.referral_link) refInput.value = incoming.referral_link;
+            }
+        })
+        .catch(function () {});
+}
+
+function setPlaceholderPhoto(container, isProfil) {
+    if (isProfil) {
+        container.innerHTML = '👤';
+        container.classList.add('flex', 'items-center', 'justify-center', 'text-4xl', 'text-slate-400');
+        container.classList.remove('overflow-hidden');
+    } else {
+        container.innerHTML = '👤';
+        container.classList.remove('overflow-hidden');
+    }
+}
+
+function loadAvatarInto(container, isProfil) {
+    if (!container || !tg || !tg.initData) {
+        if (container) setPlaceholderPhoto(container, isProfil);
+        return;
+    }
+    setPlaceholderPhoto(container, isProfil);
+    fetch(API_BASE + '/api/telegram/avatar', { method: 'GET', headers: getApiHeaders() })
+        .then(function (res) {
+            if (!res.ok) throw new Error();
+            return res.blob();
+        })
+        .then(function (blob) {
+            var url = URL.createObjectURL(blob);
+            var img = document.createElement('img');
+            img.alt = isProfil ? 'Photo profil' : '';
+            img.className = isProfil ? 'w-full h-full rounded-full object-cover' : 'w-full h-full object-cover';
+            img.onload = function () { URL.revokeObjectURL(url); };
+            img.onerror = function () {
+                URL.revokeObjectURL(url);
+                setPlaceholderPhoto(container, isProfil);
+            };
+            img.src = url;
+            container.innerHTML = '';
+            container.classList.remove('flex', 'items-center', 'justify-center', 'text-4xl', 'text-slate-400');
+            container.classList.add('overflow-hidden');
+            container.appendChild(img);
+        })
+        .catch(function () { setPlaceholderPhoto(container, isProfil); });
+}
+
+function updateProfilPhoto() {
+    var container = document.getElementById('profil-photo');
+    var nameEl = document.getElementById('profil-user-name');
+    var hintEl = document.getElementById('profil-telegram-hint');
+    var userName = getDisplayUserName();
+    if (nameEl) nameEl.textContent = userName;
+    if (hintEl) hintEl.style.display = (window.__bipbipRegisteredUser || (tg && tg.initDataUnsafe && tg.initDataUnsafe.user)) ? '' : 'none';
+    if (!container) return;
+    if (window.__bipbipRegisteredUser && tg && tg.initData) {
+        loadAvatarInto(container, true);
+    } else {
+        setPlaceholderPhoto(container, true);
+    }
+}
+
+function updateHeaderUserInfo() {
+    var nameEl = document.getElementById('header-user-name');
+    var photoEl = document.getElementById('header-photo');
+    if (nameEl) nameEl.textContent = getDisplayUserName();
+    if (!photoEl) return;
+    if (window.__bipbipRegisteredUser && tg && tg.initData) {
+        loadAvatarInto(photoEl, false);
+    } else {
+        setPlaceholderPhoto(photoEl, false);
+    }
 }
 
 function convertPointsToBip() {
@@ -123,25 +389,38 @@ function publierAnnonceLed() {
             showToast(data.error, 'error');
             return;
         }
-        showToast('Annonce envoyée. Modération IA OK.', 'success');
+        lastAnnonceId = data.annonce && data.annonce.id ? data.annonce.id : null;
+        lastAnnoncePrix = prix;
         textarea.value = '';
         var span = document.getElementById('annonce-char-count');
         if (span) span.textContent = '0';
-        lastAnnonceId = data.annonce && data.annonce.id ? data.annonce.id : null;
-        lastAnnoncePrix = prix;
-        annoncePaymentRef = null;
-        var block = document.getElementById('annonce-payment-block');
-        var amountEl = document.getElementById('annonce-payment-amount');
-        var waiting = document.getElementById('annonce-momo-waiting');
-        var statusMsg = document.getElementById('annonce-momo-status-msg');
-        if (lastAnnonceId && serverConfig.momoEnabled && block) {
-            if (amountEl) amountEl.textContent = prix;
-            block.classList.remove('hidden');
-            if (waiting) waiting.classList.add('hidden');
-            if (statusMsg) { statusMsg.classList.add('hidden'); statusMsg.textContent = ''; }
-        } else if (block && !serverConfig.momoEnabled) {
-            block.classList.add('hidden');
-        }
+        showToast('Annonce créée. Choisissez votre mode de paiement.', 'success');
+        fetch(API_BASE + '/api/annonces/' + encodeURIComponent(lastAnnonceId) + '/create-order', {
+            method: 'POST',
+            headers: getApiHeaders()
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (orderData) {
+            if (orderData.success && orderData.order) {
+                currentOrder = {
+                    id: orderData.order.id,
+                    operator: 'ANNONCE_LED',
+                    amount: orderData.order.amount || prix,
+                    amountTotal: orderData.order.amount || prix,
+                    phone: '',
+                    proof: null,
+                    status: 'pending',
+                    createdAt: orderData.order.createdAt,
+                    paymentMethod: null
+                };
+                goToPaymentMethodScreen();
+            } else {
+                showToast(orderData.error || 'Erreur création commande', 'error');
+            }
+        })
+        .catch(function () {
+            showToast('Erreur réseau. Réessayez.', 'error');
+        });
     })
     .catch(function () {
         showToast('Erreur réseau. Réessayez.', 'error');
@@ -224,11 +503,66 @@ function setActualitesSort(sort) {
     loadActualites(sort);
 }
 
+function initPubBanner() {
+    var container = document.getElementById('tendances-list');
+    if (!container) return;
+
+    // Créer le markup une seule fois
+    if (!container.dataset.initialized) {
+        container.dataset.initialized = '1';
+        container.innerHTML = '' +
+            '<button type="button" id="pub-banner-card" class="relative w-full text-left glass-panel rounded-xl border border-white/15 bg-slate-900/60 overflow-hidden hover:bg-white/5 transition-colors cursor-pointer">' +
+            '  <img id="pub-banner-img" src="" alt="Publicité" class="w-full h-24 md:h-28 object-cover block" />' +
+            '  <div class="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex items-center justify-between gap-2">' +
+            '    <p id="pub-banner-text" class="text-xs sm:text-sm text-slate-50 truncate"></p>' +
+            '    <span class="text-[9px] sm:text-[10px] uppercase tracking-wide text-slate-400 flex-shrink-0">Publicité</span>' +
+            '  </div>' +
+            '</button>';
+    }
+
+    if (!PUB_BANNERS.length) return;
+
+    var btnEl = document.getElementById('pub-banner-card');
+    var textEl = document.getElementById('pub-banner-text');
+    var imgEl = document.getElementById('pub-banner-img');
+    if (!textEl || !imgEl) return;
+
+    var index = 0;
+    function applyBanner(i) {
+        var b = PUB_BANNERS[i] || PUB_BANNERS[0];
+        textEl.textContent = b.text || '';
+        if (b.image) {
+            imgEl.src = b.image;
+            imgEl.classList.remove('hidden');
+        } else {
+            imgEl.classList.add('hidden');
+        }
+        if (btnEl) {
+            if (b.url) {
+                btnEl.onclick = function () {
+                    try {
+                        window.open(b.url, '_blank');
+                    } catch (_) {}
+                };
+            } else {
+                btnEl.onclick = null;
+            }
+        }
+    }
+
+    applyBanner(index);
+
+    if (pubBannerInterval) clearInterval(pubBannerInterval);
+    pubBannerInterval = setInterval(function () {
+        index = (index + 1) % PUB_BANNERS.length;
+        applyBanner(index);
+    }, 7000);
+}
+
 function loadActualites(sort) {
     sort = sort || actualitesSort;
     var actualitesList = document.getElementById('actualites-list');
     var annoncesList = document.getElementById('annonces-list');
-    var tendancesList = document.getElementById('tendances-list');
     if (!actualitesList) return;
 
     var sortActualites = (sort === 'premium') ? 'popularite' : sort;
@@ -273,9 +607,7 @@ function loadActualites(sort) {
             if (annoncesList) annoncesList.innerHTML = '<div class="glass-panel rounded-xl p-4 border border-white/15"><p class="text-slate-400 text-sm">Impossible de charger les annonces.</p></div>';
         });
 
-    if (tendancesList) {
-        tendancesList.innerHTML = '<div class="glass-panel rounded-xl p-5 border border-white/15"><p class="text-slate-400 text-sm">Les tendances seront affichées ici.</p></div>';
-    }
+    initPubBanner();
 }
 
 function openActualite(slug) {
@@ -325,22 +657,122 @@ function escapeHtml(s) {
 }
 
 // ==================== QUÊTES ====================
+var DJAMO_PAY_URL = 'https://pay.djamo.com/pkbyg';
+
+var dailyCheckinState = null;
+
+function loadDailyCheckin() {
+    var gridEl = document.getElementById('daily-checkin-grid');
+    var streakEl = document.getElementById('daily-checkin-streak');
+    var btnEl = document.getElementById('btn-daily-claim');
+    if (!gridEl) return;
+    fetch(API_BASE + '/api/telegram/daily-checkin', { headers: getApiHeaders() })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            dailyCheckinState = data;
+            var rewards = (data && data.rewards) ? data.rewards : [5, 10, 15, 20, 25, 30, 50];
+            if (streakEl) streakEl.textContent = (data && data.streak != null) ? data.streak + '/7' : '0/7';
+            gridEl.innerHTML = rewards.map(function (pts, i) {
+                var day = i + 1;
+                var claimed = data && data.streak != null && day <= data.streak;
+                var isNext = data && data.can_claim && data.next_streak === day;
+                var cls = 'rounded-lg p-2 text-center text-xs border ';
+                if (isNext) cls += 'border-amber-500/50 bg-amber-500/20 text-amber-400 font-semibold';
+                else if (claimed) cls += 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400';
+                else cls += 'border-white/15 bg-white/5 text-slate-500';
+                return '<div class="' + cls + '"><span class="block font-bold">' + day + '</span><span>+' + pts + '</span></div>';
+            }).join('');
+            if (btnEl) {
+                btnEl.disabled = !(data && data.can_claim);
+                btnEl.textContent = data && data.can_claim ? 'RÉCLAMER (+' + (data.reward_today || 0) + ' pts)' : 'Déjà réclamé';
+            }
+        })
+        .catch(function () {
+            if (streakEl) streakEl.textContent = '0/7';
+            if (btnEl) btnEl.disabled = true;
+        });
+}
+
+function claimDailyCheckin() {
+    var btnEl = document.getElementById('btn-daily-claim');
+    if (btnEl) btnEl.disabled = true;
+    fetch(API_BASE + '/api/telegram/daily-checkin/claim', { method: 'POST', headers: getApiHeaders() })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.success) {
+                if (data.total_points != null) {
+                    userPoints = data.total_points;
+                    try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+                }
+                updateHeaderPoints();
+                loadDailyCheckin();
+                /* Pas de toast : la mise à jour du bloc (série, bouton) suffit */
+            } else {
+                showToast(data.error || 'Impossible de réclamer', 'error');
+                loadDailyCheckin();
+            }
+        })
+        .catch(function () {
+            showToast('Erreur réseau', 'error');
+            if (btnEl) btnEl.disabled = false;
+            loadDailyCheckin();
+        });
+}
+
+function loadApprovedLinks() {
+    var listEl = document.getElementById('approved-links-list');
+    if (!listEl) return;
+    var userId = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : '';
+    var url = API_BASE + '/api/quests/approved-links' + (userId ? '?userId=' + encodeURIComponent(userId) : '');
+    fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            var items = (data && data.approved_links) ? data.approved_links : [];
+            var pointsPerClick = (data && data.points_per_click) ? data.points_per_click : 5;
+            if (items.length === 0) {
+                listEl.innerHTML = '';
+                return;
+            }
+            listEl.innerHTML = items.map(function (item) {
+                var clickUrl = API_BASE + '/api/quests/click-link/' + encodeURIComponent(item.id) + (userId ? '?userId=' + encodeURIComponent(userId) : '');
+                var label = escapeHtml(item.label || 'Lien');
+                if (item.already_clicked) {
+                    return '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between">' +
+                        '<div class="flex items-center gap-3"><span class="text-xl">🔗</span><span class="text-white font-medium">' + label + '</span></div>' +
+                        '<span class="text-slate-500 text-sm">Déjà cliqué ✓</span></div>';
+                }
+                return '<a href="' + escapeHtml(clickUrl) + '" target="_blank" rel="noopener" class="flex items-center justify-between glass-panel rounded-xl p-4 border border-white/15 hover:bg-white/10 transition-colors">' +
+                    '<div class="flex items-center gap-3 min-w-0"><span class="text-xl flex-shrink-0">🔗</span><div><span class="font-medium text-white block">' + label + '</span><span class="text-amber-400 text-sm">+' + pointsPerClick + ' pts</span></div></div>' +
+                    '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon></a>';
+            }).join('');
+        })
+        .catch(function () { listEl.innerHTML = ''; });
+}
+
 function loadQuests() {
-    var container = document.querySelector('#screen-quests .space-y-4');
+    loadDailyCheckin();
+    loadApprovedLinks();
+    var container = document.getElementById('quests-list-container');
     if (!container) return;
     fetch(API_BASE + '/api/quests')
         .then(function (res) { return res.json(); })
         .then(function (data) {
             var items = (data && data.quests) ? data.quests : [];
-            if (items.length === 0) return;
+            if (items.length === 0) {
+                container.innerHTML = '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-xl">🎬</span><div><span class="font-medium text-white block">Quête Vidéo</span><span class="text-slate-400 text-sm">Missions vidéo</span></div></div><iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon></div>' +
+                    '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-xl">📱</span><div><span class="font-medium text-white block">ProfitX, YouTube, Telegram</span><span class="text-slate-400 text-sm">Réseaux et plateformes</span></div></div><iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon></div>';
+                return;
+            }
             container.innerHTML = items.map(function (q) {
-                return '<div class="glass-panel rounded-xl p-5 border border-white/15">' +
-                    '<h3 class="font-semibold text-white flex items-center gap-2">🏆 ' + escapeHtml(q.titre || q.code || '') + '</h3>' +
-                    '<p class="text-sm text-slate-400 mt-2">' + escapeHtml(q.description || '') + '</p>' +
-                    '<p class="text-amber-400 text-sm mt-2">+' + (q.points_reward || 0) + ' points</p></div>';
+                var pts = q.points_reward || 0;
+                return '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between">' +
+                    '<div class="flex items-center gap-3 min-w-0"><span class="text-xl flex-shrink-0">🏆</span><div><span class="font-medium text-white block">' + escapeHtml(q.titre || q.code || '') + '</span><span class="text-slate-400 text-sm">' + escapeHtml((q.description || '').slice(0, 40)) + (q.description && q.description.length > 40 ? '…' : '') + '</span><span class="text-amber-400 text-sm block">+' + pts + ' pts</span></div></div>' +
+                    '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon></div>';
             }).join('');
         })
-        .catch(function () {});
+        .catch(function () {
+            container.innerHTML = '<p class="text-slate-400 text-sm">Impossible de charger les quêtes.</p>';
+        });
 }
 
 // ==================== LED BANDEAU ====================
@@ -385,6 +817,32 @@ function loadLedMessages() {
     });
 }
 
+// Météo accueil (bannière en haut de l'écran Home)
+function loadHomeWeather() {
+    var statusEl = document.getElementById('service-status-text');
+    if (!statusEl) return;
+    var baseText = 'Service disponible 24/7';
+    var city = (typeof localStorage !== 'undefined' && localStorage.getItem('bipbip_weather_city')) || '';
+    var url = API_BASE + '/api/weather' + (city ? ('?city=' + encodeURIComponent(city)) : '');
+    fetch(url)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (!data || !data.ok || data.fallback || !data.temp || data.temp === '--°C') {
+                // On garde le texte par défaut si la météo n'est pas vraiment disponible
+                statusEl.textContent = baseText;
+                return;
+            }
+            var temp = (data.temp || '').replace('+', '');
+            var condition = data.condition || '';
+            var txt = baseText + ' · ' + temp;
+            if (condition) txt += ' · ' + condition;
+            statusEl.textContent = txt;
+        })
+        .catch(function () {
+            statusEl.textContent = baseText;
+        });
+}
+
 // ==================== NAVIGATION ====================
 function navigateTo(screen) {
     document.querySelectorAll('.screen').forEach(s => {
@@ -396,13 +854,41 @@ function navigateTo(screen) {
         targetScreen.classList.add('active');
         currentScreen = screen;
         if (screen === 'status') renderOrdersList();
+        if (screen === 'home') {
+            updateHeaderUserInfo();
+            loadHomeWeather();
+        }
         if (screen === 'profil') {
+            fetchTelegramMe();
             updateProfilPoints();
+            updateProfilPhoto();
             updateHeaderPoints();
             initAnnonceCharCount();
+            var sl = document.getElementById('profil-social-link');
+            if (sl) sl.value = (window.__bipbipRegisteredUser && window.__bipbipRegisteredUser.social_link) || '';
+            var refInput = document.getElementById('profil-referral-link');
+            if (refInput && window.__bipbipRegisteredUser && window.__bipbipRegisteredUser.referral_link) refInput.value = window.__bipbipRegisteredUser.referral_link;
+            var wSel = document.getElementById('profil-weather-city');
+            if (wSel && typeof localStorage !== 'undefined') {
+                var storedCity = localStorage.getItem('bipbip_weather_city') || '';
+                if (storedCity) wSel.value = storedCity;
+            }
         }
         if (screen === 'actualites') loadActualites(actualitesSort);
         if (screen === 'quests') loadQuests();
+        if (screen === 'payment-method' && currentOrder.id) {
+            var pmEl = document.getElementById('payment-method-order-id');
+            if (pmEl) pmEl.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
+        }
+        if (screen === 'proof' && currentOrder.id) {
+            var odEl = document.getElementById('order-id-display');
+            if (odEl) odEl.textContent = 'Commande #' + currentOrder.id;
+            var hintEl = document.getElementById('proof-selected-method');
+            if (hintEl) {
+                hintEl.textContent = 'Paiement via Djamo';
+                hintEl.classList.remove('hidden');
+            }
+        }
         if (screen === 'admin') {
             var speedVal = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
             var speedInput = document.getElementById('admin-led-speed');
@@ -440,12 +926,13 @@ function verifyNetwork(operator, phone) {
 
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
+    if (!toast) return;
     toast.textContent = message;
     toast.className = `toast show ${type}`;
-    
-    setTimeout(() => {
+    var duration = type === 'success' ? 1500 : 3000;
+    setTimeout(function () {
         toast.classList.remove('show');
-    }, 3000);
+    }, duration);
 }
 
 function saveOrders() {
@@ -630,17 +1117,8 @@ function confirmOrder() {
         userPoints += Math.floor((currentOrder.amountTotal || 0) / 100);
         localStorage.setItem('bipbip_points', String(userPoints));
         updateHeaderPoints();
-
-        if (currentOrder.operator === 'MTN' && serverConfig.momoEnabled) {
-            return requestMomoPayment(data.order ? data.order.id : currentOrder.id);
-        }
-
-        document.getElementById('order-id-display').textContent = `Commande #${currentOrder.id}`;
-        document.getElementById('upload-area').style.display = 'block';
-        document.getElementById('preview-container').style.display = 'none';
-        document.getElementById('btn-send-proof').disabled = true;
-        showToast('Commande créée !', 'success');
-        navigateTo('proof');
+        showToast('Commande créée ! Choisissez votre mode de paiement.', 'success');
+        goToPaymentMethodScreen();
     })
     .catch(err => {
         console.error('Erreur API /api/orders:', err);
@@ -651,13 +1129,54 @@ function confirmOrder() {
         userPoints += Math.floor((currentOrder.amountTotal || 0) / 100);
         localStorage.setItem('bipbip_points', String(userPoints));
         updateHeaderPoints();
-        document.getElementById('order-id-display').textContent = `Commande #${currentOrder.id}`;
-        document.getElementById('upload-area').style.display = 'block';
-        document.getElementById('preview-container').style.display = 'none';
-        document.getElementById('btn-send-proof').disabled = true;
-        showToast('Commande créée (hors ligne)', 'info');
-        navigateTo('proof');
+        showToast('Commande créée (hors ligne). Choisissez votre mode de paiement.', 'info');
+        goToPaymentMethodScreen();
     });
+}
+
+function goToPaymentMethodScreen() {
+    var el = document.getElementById('payment-method-order-id');
+    if (el && currentOrder.id) {
+        var amount = (currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0;
+        el.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber(amount) + ' FCFA';
+    }
+    currentOrder.paymentMethod = null;
+    navigateTo('payment-method');
+}
+
+function choosePaymentMethod(method) {
+    currentOrder.paymentMethod = 'djamo';
+    var orderEl = document.getElementById('order-id-display');
+    if (orderEl) orderEl.textContent = 'Commande #' + currentOrder.id;
+    var uploadEl = document.getElementById('upload-area');
+    var previewEl = document.getElementById('preview-container');
+    var btnEl = document.getElementById('btn-send-proof');
+    if (uploadEl) uploadEl.style.display = 'block';
+    if (previewEl) previewEl.style.display = 'none';
+    if (btnEl) btnEl.disabled = true;
+    var hintEl = document.getElementById('proof-selected-method');
+    if (hintEl) {
+        hintEl.textContent = 'Paiement via Djamo';
+        hintEl.classList.remove('hidden');
+    }
+    if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
+    showToast('Ouvrez Djamo pour payer, puis envoyez la preuve.', 'info');
+    navigateTo('proof');
+}
+
+function djamoPaid() {
+    currentOrder.paymentMethod = 'djamo';
+    if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
+    var orderEl = document.getElementById('order-id-display');
+    if (orderEl) orderEl.textContent = 'Commande #' + currentOrder.id;
+    var uploadEl = document.getElementById('upload-area');
+    var previewEl = document.getElementById('preview-container');
+    var btnEl = document.getElementById('btn-send-proof');
+    if (uploadEl) uploadEl.style.display = 'block';
+    if (previewEl) previewEl.style.display = 'none';
+    if (btnEl) btnEl.disabled = true;
+    showToast('Envoyez la preuve de votre paiement Djamo', 'info');
+    navigateTo('proof');
 }
 
 function requestMomoPayment(orderId) {
@@ -1002,15 +1521,21 @@ function getAdminKey() {
 }
 
 function loadAdminOrders() {
+    var headers = {};
+    if (tg && tg.initData) headers['X-Telegram-Init-Data'] = tg.initData;
     var key = getAdminKey();
-    if (!key) {
-        showToast('Saisis la clé admin ci-dessous puis clique sur "Charger les commandes"', 'error');
+    if (key) headers['X-Admin-Key'] = key;
+    if (!headers['X-Telegram-Init-Data'] && !headers['X-Admin-Key']) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot Telegram', 'error');
         return;
     }
     var status = currentAdminTab === 'validated' ? 'validated' : '';
     var url = API_BASE + '/api/admin/orders' + (status ? '?status=' + status : '');
-    fetch(url, { headers: { 'X-Admin-Key': key } })
-        .then(function (res) { return res.json(); })
+    fetch(url, { headers: headers })
+        .then(function (res) {
+            if (res.status === 401) return res.json().then(function (d) { throw new Error(d && d.error ? d.error : 'Non autorisé'); });
+            return res.json();
+        })
         .then(function (data) {
             if (data.error) {
                 showToast(data.error, 'error');
@@ -1021,8 +1546,8 @@ function loadAdminOrders() {
             }
             renderAdminOrders(currentAdminTab);
         })
-        .catch(function () {
-            showToast('Erreur réseau', 'error');
+        .catch(function (err) {
+            showToast(err && err.message ? err.message : 'Erreur réseau', 'error');
             adminOrdersFromServer = [];
             renderAdminOrders(currentAdminTab);
         });
@@ -1035,7 +1560,7 @@ function switchAdminTab(tab) {
     });
     if (event && event.target) event.target.classList.add('active');
     else document.querySelectorAll('.tab-btn')[tab === 'validated' ? 1 : 0].classList.add('active');
-    if (getAdminKey()) loadAdminOrders();
+    if (getAdminKey() || (tg && tg.initData)) loadAdminOrders();
     else renderAdminOrders(tab);
 }
 
@@ -1052,7 +1577,7 @@ function renderAdminOrders(filter = 'pending') {
     });
 
     if (adminOrdersFromServer.length === 0 && !orders.length) {
-        container.innerHTML = '<div class="empty-state mb-4"><span class="empty-icon">🔑</span><p class="text-slate-400 text-sm">Saisis la clé admin (ADMIN_SECRET_KEY) ci-dessus puis clique sur le bouton pour charger les commandes du serveur.</p></div><button type="button" onclick="loadAdminOrders()" class="w-full py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30">Charger les commandes</button>';
+        container.innerHTML = '<div class="empty-state mb-4"><span class="empty-icon">🔑</span><p class="text-slate-400 text-sm">Ouvre l’app depuis le bot (menu du bot → Ouvrir l’app) puis clique ci-dessous, ou saisis la clé admin pour charger les commandes.</p></div><button type="button" onclick="loadAdminOrders()" class="w-full py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/30">Charger les commandes</button>';
         return;
     }
 
@@ -1099,36 +1624,61 @@ function rejectOrder(orderId) {
 }
 
 function validateOrderServer(orderId) {
+    var url = API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/validate';
+    var headers = { 'Content-Type': 'application/json' };
+    if (tg && tg.initData) headers['X-Telegram-Init-Data'] = tg.initData;
     var key = getAdminKey();
-    if (!key) { showToast('Saisis la clé admin', 'error'); return; }
-    fetch(API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key }
-    })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-        if (data.error) { showToast(data.error, 'error'); return; }
-        showToast('Commande validée !', 'success');
-        loadAdminOrders();
-    })
-    .catch(function () { showToast('Erreur réseau', 'error'); });
+    if (key) headers['X-Admin-Key'] = key;
+    if (!headers['X-Telegram-Init-Data'] && !headers['X-Admin-Key']) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot Telegram', 'error');
+        return;
+    }
+    fetch(url, { method: 'POST', headers: headers })
+        .then(function (res) {
+            if (res.status === 401) {
+                return res.json().then(function (data) {
+                    var msg = data && data.error ? data.error : 'Non autorisé. Ouvre l’app depuis le bot (compte admin) ou vérifie la clé.';
+                    showToast(msg, 'error');
+                });
+            }
+            return res.json();
+        })
+        .then(function (data) {
+            if (!data) return;
+            if (data.error) { showToast(data.error, 'error'); return; }
+            showToast('Commande validée !', 'success');
+            loadAdminOrders();
+        })
+        .catch(function () { showToast('Erreur réseau', 'error'); });
 }
 
 function rejectOrderServer(orderId) {
+    var url = API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/reject';
+    var headers = { 'Content-Type': 'application/json' };
+    if (tg && tg.initData) headers['X-Telegram-Init-Data'] = tg.initData;
     var key = getAdminKey();
-    if (!key) { showToast('Saisis la clé admin', 'error'); return; }
-    fetch(API_BASE + '/api/admin/orders/' + encodeURIComponent(orderId) + '/reject', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': key },
-        body: JSON.stringify({ reason: 'Preuve invalide' })
-    })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-        if (data.error) { showToast(data.error, 'error'); return; }
-        showToast('Commande rejetée', 'error');
-        loadAdminOrders();
-    })
-    .catch(function () { showToast('Erreur réseau', 'error'); });
+    if (key) headers['X-Admin-Key'] = key;
+    if (!headers['X-Telegram-Init-Data'] && !headers['X-Admin-Key']) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot Telegram', 'error');
+        return;
+    }
+    fetch(url, { method: 'POST', headers: headers, body: JSON.stringify({ reason: 'Preuve invalide' }) })
+        .then(function (res) {
+            if (res.status === 401) {
+                return res.json().then(function (data) {
+                    var msg = data && data.error ? data.error : 'Non autorisé. Ouvre l’app depuis le bot (compte admin) ou vérifie la clé.';
+                    showToast(msg, 'error');
+                });
+            }
+            return res.json();
+        })
+        .then(function (data) {
+            if (!data) return;
+            if (data.error) { showToast(data.error, 'error'); return; }
+            showToast('Commande rejetée', 'error');
+            loadAdminOrders();
+        })
+        .catch(function () { showToast('Erreur réseau', 'error'); });
 }
 
 function saveLedSpeed() {
@@ -1195,11 +1745,73 @@ function loadServerConfig() {
         .catch(function () {});
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function initApp() {
     initTelegram();
     loadServerConfig();
     loadLedMessages();
     updateHeaderPoints();
+    updateHeaderUserInfo();
     navigateTo('home');
-    console.log('🚀 Bipbip Recharge CI - WebApp initialisée');
-});
+
+    // Boutons Profil : liaison par addEventListener (obligatoire car script en fin de body, DOMContentLoaded deja passe)
+    var btnSaveLink = document.getElementById('btn-save-social-link');
+    if (btnSaveLink) btnSaveLink.addEventListener('click', function (e) { e.preventDefault(); saveSocialLink(); });
+    var btnPromoLikes = document.getElementById('btn-request-promo-likes');
+    if (btnPromoLikes) btnPromoLikes.addEventListener('click', function (e) { e.preventDefault(); requestPromoLikes(); });
+    var btnPublier = document.getElementById('btn-publier-annonce');
+    if (btnPublier) btnPublier.addEventListener('click', function (e) { e.preventDefault(); publierAnnonceLed(); });
+    var btnAnnonceMomo = document.getElementById('btn-annonce-momo-request');
+    if (btnAnnonceMomo) btnAnnonceMomo.addEventListener('click', function (e) { e.preventDefault(); requestAnnonceMomoPayment(); });
+    var btnAnnonceMomoCheck = document.getElementById('btn-annonce-momo-check');
+    if (btnAnnonceMomoCheck) btnAnnonceMomoCheck.addEventListener('click', function (e) { e.preventDefault(); checkAnnonceMomoStatus(); });
+    var btnConvertPoints = document.getElementById('btn-convert-points');
+    if (btnConvertPoints) btnConvertPoints.addEventListener('click', function (e) { e.preventDefault(); convertPointsToBip(); });
+
+    var btnDailyClaim = document.getElementById('btn-daily-claim');
+    if (btnDailyClaim) btnDailyClaim.addEventListener('click', function (e) { e.preventDefault(); claimDailyCheckin(); });
+
+    var weatherSelect = document.getElementById('profil-weather-city');
+    if (weatherSelect && typeof localStorage !== 'undefined') {
+        weatherSelect.addEventListener('change', function () {
+            var city = this.value || '';
+            localStorage.setItem('bipbip_weather_city', city);
+            loadHomeWeather();
+            showToast('Ville météo mise à jour', 'success');
+        });
+    }
+
+    var btnCopyReferral = document.getElementById('btn-copy-referral');
+    if (btnCopyReferral) btnCopyReferral.addEventListener('click', function (e) {
+        e.preventDefault();
+        var input = document.getElementById('profil-referral-link');
+        if (!input || !input.value) { showToast('Lien non disponible', 'error'); return; }
+        input.select();
+        input.setSelectionRange(0, 99999);
+        try {
+            navigator.clipboard.writeText(input.value);
+            showToast('Lien copié !', 'success');
+        } catch (err) {
+            showToast('Copie manuelle du lien', 'info');
+        }
+    });
+    var btnShareReferral = document.getElementById('btn-share-referral');
+    if (btnShareReferral) btnShareReferral.addEventListener('click', function (e) {
+        e.preventDefault();
+        var input = document.getElementById('profil-referral-link');
+        var link = input && input.value ? input.value : '';
+        if (!link) { showToast('Lien non disponible', 'error'); return; }
+        if (tg && tg.openTelegramLink) {
+            tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent('Rejoins Bipbip Recharge CI et gagne des points !'));
+        } else {
+            try { navigator.clipboard.writeText(link); showToast('Lien copié ! Partage-le à tes amis.', 'success'); } catch (err) { showToast('Copie le lien manuellement', 'info'); }
+        }
+    });
+
+    console.log('Bipbip Recharge CI - WebApp initialisee');
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
