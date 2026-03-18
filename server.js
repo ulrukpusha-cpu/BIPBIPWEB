@@ -18,6 +18,7 @@ const actualitesService = require('./services/actualitesService');
 const telegramUsersService = require('./services/telegramUsersService');
 const annoncesRoutes = require('./routes/annonces');
 const annoncesService = require('./services/annoncesService');
+const { moderateSocialLink } = require('./services/aiModeration');
 const questsRoutes = require('./routes/quests');
 const ledService = require('./services/ledService');
 
@@ -783,13 +784,18 @@ app.post('/api/telegram/daily-checkin/claim', async (req, res) => {
     }
 });
 
-// Mise à jour du profil (lien YouTube/X)
+// Mise à jour du profil (lien YouTube/X/Telegram)
 app.patch('/api/telegram/profile', async (req, res) => {
     if (!req.telegramUser || !req.userId) {
         return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
     }
     try {
         const socialLink = req.body && (req.body.social_link === '' || req.body.social_link) ? String(req.body.social_link).trim().slice(0, 500) : null;
+        // Modération IA du lien social (si non vide)
+        if (socialLink) {
+            const modResult = await moderateSocialLink(socialLink);
+            if (!modResult.ok) return res.status(400).json({ error: modResult.reason || 'Lien refusé par la modération' });
+        }
         const result = await telegramUsersService.updateSocialLink(req.userId, socialLink);
         if (result.error) return res.status(400).json({ error: result.error });
         return res.json({ ok: true, user: result.user });
@@ -799,20 +805,20 @@ app.patch('/api/telegram/profile', async (req, res) => {
     }
 });
 
-// Promo likes/vues : tarifs 25 F à 500 F, durée 1 à 7 jours
-const PROMO_LIKES_MIN = 25;
+// Promo likes/vues : tarifs 150 F à 500 F, durée 4 à 7 jours
+const PROMO_LIKES_MIN = 150;
 const PROMO_LIKES_MAX = 500;
 
-// Demande promo likes/vues — formules 1 jour (25 F) à 1 semaine (500 F)
+// Demande promo likes/vues — formules 4 jours (150 F) à 1 semaine (500 F)
 app.post('/api/telegram/promo-likes', async (req, res) => {
     if (!req.telegramUser || !req.userId) {
         return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
     }
     try {
         const socialLink = req.body && req.body.social_link ? String(req.body.social_link).trim().slice(0, 500) : '';
-        if (!socialLink) return res.status(400).json({ error: 'Lien YouTube ou X requis' });
+        if (!socialLink) return res.status(400).json({ error: 'Lien YouTube, X ou Telegram requis' });
         let amount = parseInt(req.body.amount, 10);
-        const durationDays = Math.max(1, Math.min(7, parseInt(req.body.duration_days, 10) || 1));
+        const durationDays = Math.max(4, Math.min(7, parseInt(req.body.duration_days, 10) || 4));
         if (!Number.isFinite(amount) || amount < PROMO_LIKES_MIN) amount = PROMO_LIKES_MIN;
         if (amount > PROMO_LIKES_MAX) amount = PROMO_LIKES_MAX;
         const orderId = ('PROMO' + Date.now().toString(36).slice(-7) + Math.random().toString(36).slice(2, 6)).slice(0, 20);

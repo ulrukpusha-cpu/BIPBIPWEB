@@ -6,8 +6,6 @@ const { moderateAnnonce } = require('./aiModeration');
 const momoRepo = require('../database/momo-repository');
 
 const GRILLE = {
-    50:  { nombre_diffusion: 5,  position_actualite: 'normal' },
-    100: { nombre_diffusion: 10, position_actualite: 'remonte' },
     150: { nombre_diffusion: 15, position_actualite: 'prioritaire' },
     300: { nombre_diffusion: 30, position_actualite: 'haut' },
     500: { nombre_diffusion: 50, position_actualite: 'premium' },
@@ -18,9 +16,9 @@ function getGrille() {
 }
 
 async function createAnnonce(userId, contenu, prix) {
-    const mod = moderateAnnonce(contenu);
+    const mod = await moderateAnnonce(contenu);
     if (!mod.ok) return { error: mod.reason };
-    if (!GRILLE[prix]) return { error: 'Prix invalide (50, 100, 150, 300, 500)' };
+    if (!GRILLE[prix]) return { error: 'Prix invalide (150, 300 ou 500)' };
     const supabase = db.getSupabase();
     if (!supabase) return { error: 'Base indisponible' };
     const { nombre_diffusion, position_actualite } = GRILLE[prix];
@@ -62,23 +60,36 @@ async function getAnnonceById(id) {
     return data;
 }
 
-async function validateAnnonce(id) {
+async function validateAnnonce(id, options = {}) {
+    const { viaOrderProof } = options;
     const supabase = db.getSupabase();
     if (!supabase) return null;
     const { data: ann } = await supabase.from('annonces').select('*').eq('id', id).single();
     if (!ann || ann.statut !== 'en_attente') return null;
-    if (momoRepo.isAvailable()) {
+    if (!viaOrderProof && momoRepo.isAvailable()) {
         const paid = await momoRepo.getSuccessfulTransactionForAnnonce(id);
         if (!paid) return { error: 'Paiement MoMo requis avant validation' };
     }
-    const { data: led } = await supabase.from('led_messages').insert({
+    const now = new Date().toISOString();
+    await supabase.from('led_messages').insert({
         content: ann.contenu,
         priority: ann.prix,
         annonce_id: id,
-    }).select('id').single();
+    });
+    const slugBase = (ann.contenu || '').slice(0, 50).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'annonce';
+    const slug = slugBase + '-' + id.slice(0, 8);
+    await supabase.from('actualites').insert({
+        title: (ann.contenu || '').slice(0, 255),
+        slug,
+        content: ann.contenu || '',
+        summary_short: (ann.contenu || '').slice(0, 500),
+        status: 'approved',
+        published_at: now,
+        updated_at: now,
+    });
     await supabase.from('annonces').update({
         statut: 'valide',
-        date_validation: new Date().toISOString(),
+        date_validation: now,
     }).eq('id', id);
     return { ...ann, statut: 'valide' };
 }

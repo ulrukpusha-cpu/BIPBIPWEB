@@ -176,7 +176,7 @@ function requestPromoLikes() {
     var input = document.getElementById('profil-social-link');
     var link = input ? input.value.trim() : '';
     if (!link) {
-        showToast('Ajoutez d\'abord votre lien YouTube ou X', 'error');
+        showToast('Ajoutez d\'abord votre lien YouTube, X ou Telegram', 'error');
         return;
     }
     if (!tg || !tg.initData) {
@@ -184,12 +184,12 @@ function requestPromoLikes() {
         return;
     }
     var select = document.getElementById('profil-promo-formule');
-    var amount = 250;
-    var durationDays = 1;
+    var amount = 150;
+    var durationDays = 4;
     if (select && select.options[select.selectedIndex]) {
         var opt = select.options[select.selectedIndex];
-        amount = parseInt(opt.value, 10) || 250;
-        durationDays = parseInt(opt.getAttribute('data-days'), 10) || 1;
+        amount = parseInt(opt.value, 10) || 150;
+        durationDays = parseInt(opt.getAttribute('data-days'), 10) || 4;
     }
     fetch(API_BASE + '/api/telegram/promo-likes', {
         method: 'POST',
@@ -199,8 +199,8 @@ function requestPromoLikes() {
     .then(function (res) { return res.json(); })
     .then(function (data) {
         if (data.success && data.order) {
-            var orderAmount = data.order.amount || 250;
-            showToast('Demande créée — ' + orderAmount + ' F. Choisissez votre mode de paiement.', 'success');
+            var orderAmount = data.order.amount || 150;
+            showToast('Demande créée — ' + orderAmount + ' F. Redirection vers Djamo pour payer.', 'success');
             currentOrder = {
                 id: data.order.id,
                 operator: data.order.operator || 'PROMO_LIKES',
@@ -210,9 +210,10 @@ function requestPromoLikes() {
                 proof: null,
                 status: 'pending',
                 createdAt: data.order.createdAt,
-                paymentMethod: null
+                paymentMethod: 'djamo'
             };
-            goToPaymentMethodScreen();
+            if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
+            navigateTo('proof');
         } else {
             showToast(data.error || 'Erreur', 'error');
         }
@@ -376,7 +377,7 @@ function publierAnnonceLed() {
         showToast('Écrivez un message pour le bandeau LED (200 car. max)', 'error');
         return;
     }
-    var prix = select ? parseInt(select.value, 10) : 50;
+    var prix = select ? parseInt(select.value, 10) : 150;
     var userId = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) ? String(tg.initDataUnsafe.user.id) : 'web';
     fetch(API_BASE + '/api/annonces', {
         method: 'POST',
@@ -394,7 +395,7 @@ function publierAnnonceLed() {
         textarea.value = '';
         var span = document.getElementById('annonce-char-count');
         if (span) span.textContent = '0';
-        showToast('Annonce créée. Choisissez votre mode de paiement.', 'success');
+        showToast('Annonce créée — ' + prix + ' F. Redirection vers Djamo pour payer.', 'success');
         fetch(API_BASE + '/api/annonces/' + encodeURIComponent(lastAnnonceId) + '/create-order', {
             method: 'POST',
             headers: getApiHeaders()
@@ -411,9 +412,10 @@ function publierAnnonceLed() {
                     proof: null,
                     status: 'pending',
                     createdAt: orderData.order.createdAt,
-                    paymentMethod: null
+                    paymentMethod: 'djamo'
                 };
-                goToPaymentMethodScreen();
+                if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
+                navigateTo('proof');
             } else {
                 showToast(orderData.error || 'Erreur création commande', 'error');
             }
@@ -1114,9 +1116,7 @@ function confirmOrder() {
         }
         orders.push({...currentOrder});
         saveOrders();
-        userPoints += Math.floor((currentOrder.amountTotal || 0) / 100);
-        localStorage.setItem('bipbip_points', String(userPoints));
-        updateHeaderPoints();
+        // Points attribués uniquement après validation admin (pas à la création)
         showToast('Commande créée ! Choisissez votre mode de paiement.', 'success');
         goToPaymentMethodScreen();
     })
@@ -1126,9 +1126,7 @@ function confirmOrder() {
         currentOrder.createdAt = new Date().toISOString();
         orders.push({...currentOrder});
         saveOrders();
-        userPoints += Math.floor((currentOrder.amountTotal || 0) / 100);
-        localStorage.setItem('bipbip_points', String(userPoints));
-        updateHeaderPoints();
+        // Points attribués uniquement après validation admin (pas à la création)
         showToast('Commande créée (hors ligne). Choisissez votre mode de paiement.', 'info');
         goToPaymentMethodScreen();
     });
