@@ -1314,7 +1314,7 @@ async function handleTelegramUpdate(body) {
                     state.amount = amount;
                     state.amountTotal = amount + frais;
                     state.step = 'phone';
-                    await sendTelegramMessage(chatId, `✅ ${amount} FCFA + ${frais} F frais = <b>${state.amountTotal} FCFA</b> total.\n\nEnvoie ton numéro ${state.operator} (ex: ${BOT_OPERATORS[state.operator].prefix} 12 34 56 78)`);
+                    await sendTelegramMessage(chatId, `✅ ${amount} FCFA + ${frais} F frais = <b>${state.amountTotal} FCFA</b> total.\n\n💳 Paiement via <b>Djamo</b>\n\nEnvoie ton numéro ${state.operator} (ex: ${BOT_OPERATORS[state.operator].prefix} 12 34 56 78)`);
                     return;
                 }
                 if (state.step === 'phone') {
@@ -1349,7 +1349,15 @@ async function handleTelegramUpdate(body) {
                             `🔔 <b>NOUVELLE COMMANDE #${orderId}</b> (Bot)\n\n👤 ${order.username ? '@' + order.username : chatId}\n📲 ${order.operator}\n💰 ${order.amountTotal} FCFA\n📞 ${order.phone}\n📅 ${new Date().toLocaleString('fr-FR')}`
                         );
                     }
-                    await sendTelegramMessage(chatId, `✅ <b>Commande #${orderId} créée</b>\n\n📲 ${order.operator} — ${order.amountTotal} FCFA\n📞 ${order.phone}\n\nEnvoie ta <b>preuve de paiement</b> (photo ou capture).`);
+                    const DJAMO_PAY_URL = 'https://pay.djamo.com/pkbyg';
+                    await sendTelegramMessage(chatId, `✅ <b>Commande #${orderId} créée</b>\n\n📲 ${order.operator} — ${order.amountTotal} FCFA\n📞 ${order.phone}\n\n💳 <b>Paye via Djamo :</b>\n👉 ${DJAMO_PAY_URL}\n\nAprès paiement, envoie ta <b>preuve</b> (capture d'écran) ici.`, {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [{ text: '💳 Payer via Djamo', url: DJAMO_PAY_URL }],
+                                [{ text: '❌ Annuler', callback_data: 'bot_annuler' }]
+                            ]
+                        }
+                    });
                     return;
                 }
             }
@@ -1457,7 +1465,7 @@ async function handleTelegramUpdate(body) {
                 state.step = 'phone';
                 buyState.set(chatId, state);
                 await answerTelegramCallback(callbackId);
-                await sendTelegramMessage(chatId, `✅ ${amount} FCFA + ${frais} F frais = <b>${state.amountTotal} FCFA</b> total.\n\nEnvoie ton numéro ${state.operator} (ex: ${BOT_OPERATORS[state.operator].prefix} 12 34 56 78)`);
+                await sendTelegramMessage(chatId, `✅ ${amount} FCFA + ${frais} F frais = <b>${state.amountTotal} FCFA</b> total.\n\n💳 Paiement via <b>Djamo</b>\n\nEnvoie ton numéro ${state.operator} (ex: ${BOT_OPERATORS[state.operator].prefix} 12 34 56 78)`);
                 return;
             }
             if (data === 'bot_amount_other') {
@@ -1466,7 +1474,7 @@ async function handleTelegramUpdate(body) {
                 state.step = 'amount_custom';
                 buyState.set(chatId, state);
                 await answerTelegramCallback(callbackId);
-                await sendTelegramMessage(chatId, `Envoie le montant en FCFA (ex: 2500).\nFrais: ${BOT_FRAIS_PERCENT}%.`, {
+                await sendTelegramMessage(chatId, `Envoie le montant en FCFA (ex: 2500).\nFrais: ${BOT_FRAIS_PERCENT}%.\n💳 Paiement via Djamo.`, {
                     reply_markup: { inline_keyboard: [[{ text: '❌ Annuler', callback_data: 'bot_annuler' }]] }
                 });
                 return;
@@ -1482,7 +1490,7 @@ async function handleTelegramUpdate(body) {
             }
             if (data === 'bot_aide') {
                 await answerTelegramCallback(callbackId);
-                await sendTelegramMessage(chatId, '📌 <b>Aide</b>\n\n💳 <b>Acheter</b> : recharge MTN, Orange ou Moov directement ici.\n📱 <b>Ouvrir l’app</b> : actualités, quêtes, annonces LED.\n\n/demarrer — Accueil\n/annuler — Annuler');
+                await sendTelegramMessage(chatId, ‘📌 <b>Aide</b>\n\n💳 <b>Acheter</b> : recharge MTN, Orange ou Moov.\n💰 <b>Paiement</b> : via Djamo (lien envoyé après commande).\n📸 <b>Preuve</b> : envoie une capture après paiement.\n📱 <b>Ouvrir l\’app</b> : actualités, quêtes, annonces LED.\n\n/demarrer — Accueil\n/annuler — Annuler’);
                 return;
             }
             if (data === 'bot_annuler') {
