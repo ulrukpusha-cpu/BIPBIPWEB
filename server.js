@@ -530,7 +530,7 @@ function isAdminRequest(req) {
 
 // Admin: Valider une commande (X-Admin-Key OU Telegram admin)
 app.post('/api/admin/orders/:id/validate', async (req, res) => {
-    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l’app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
     try {
         const orderId = req.params.id;
         const order = await orderStorage.setOrderValidated(orderId);
@@ -565,7 +565,7 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
     const adminIds = getAdminChatIds();
     const chatId = req.userId; // id Telegram depuis authTelegram (initData)
     if (!chatId || !adminIds.includes(String(chatId))) {
-        return res.status(401).json({ error: 'Non autorisé (ouvre l’app depuis le bot avec un compte admin)' });
+        return res.status(401).json({ error: 'Non autorisé (ouvre l\'app depuis le bot avec un compte admin)' });
     }
     try {
         const orderId = req.params.id;
@@ -598,7 +598,7 @@ app.post('/api/admin/orders/:id/reject-by-telegram', async (req, res) => {
     const adminIds = getAdminChatIds();
     const chatId = req.userId;
     if (!chatId || !adminIds.includes(String(chatId))) {
-        return res.status(401).json({ error: 'Non autorisé (ouvre l’app depuis le bot avec un compte admin)' });
+        return res.status(401).json({ error: 'Non autorisé (ouvre l\'app depuis le bot avec un compte admin)' });
     }
     try {
         const orderId = req.params.id;
@@ -622,7 +622,7 @@ app.post('/api/admin/orders/:id/reject-by-telegram', async (req, res) => {
 
 // Admin: Rejeter une commande (X-Admin-Key OU Telegram admin)
 app.post('/api/admin/orders/:id/reject', async (req, res) => {
-    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l’app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
     try {
         const orderId = req.params.id;
         const { reason } = req.body;
@@ -652,7 +652,7 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
 
 // Admin: Liste des commandes (X-Admin-Key OU Telegram admin)
 app.get('/api/admin/orders', async (req, res) => {
-    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l’app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
     const { status } = req.query;
     const ordersList = status
         ? await orderStorage.getOrdersByStatus(status)
@@ -1113,7 +1113,7 @@ async function handleTelegramUpdateAdmin(body) {
                 const result = await telegramUsersService.approveSocialLink(telegramId);
                 const ok = result && !result.error;
                 await answerTelegramCallback(callbackId, ok ? 'Lien approuvé → Quêtes' : (result && result.error) || 'Erreur', botToken);
-                if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l’espace Quêtes (clic = points).', {}, botToken);
+                if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l\'espace Quetes (clic = points).', {}, botToken);
                 return;
             }
             if (data.startsWith('validate_')) {
@@ -1193,7 +1193,7 @@ async function handleTelegramUpdate(body) {
                 const isCancel = cmd === '/cancel' || cmd === '/annuler';
                 const welcome = isCancel
                     ? '✅ Annulé. Choisis une action 👋'
-                    : '👋 <b>Bipbip Recharge CI</b>\n\nTu peux <b>acheter du crédit ici</b> sans ouvrir l’app, ou ouvrir l’app pour plus de fonctionnalités.\n\nChoisis une action 👋';
+                    : '👋 <b>Bipbip Recharge CI</b>\n\nTu peux <b>acheter du crédit ici</b> sans ouvrir l\'app, ou ouvrir l\'app pour plus de fonctionnalités.\n\nChoisis une action 👋';
                 await sendTelegramMessage(chatId, welcome, {
                     reply_markup: {
                         inline_keyboard: [
@@ -1203,7 +1203,7 @@ async function handleTelegramUpdate(body) {
                                 { text: '❓ Aide', callback_data: 'bot_aide' }
                             ],
                             [
-                                { text: '📱 Ouvrir l’app', web_app: { url: appUrl } }
+                                { text: '📱 Ouvrir l\'app', web_app: { url: appUrl } }
                             ]
                         ]
                     }
@@ -1398,7 +1398,7 @@ async function handleTelegramUpdate(body) {
                         if (TELEGRAM_BOT_TOKEN_ADMIN) {
                             await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard3, TELEGRAM_BOT_TOKEN_ADMIN);
                         }
-                        await sendTelegramMessage(chatId, '✅ Preuve reçue. En attente de validation par l’admin.');
+                        await sendTelegramMessage(chatId, '✅ Preuve reçue. En attente de validation par l\'admin.');
                     } else {
                         await sendTelegramMessage(chatId, '❌ Impossible de récupérer la photo. Réessaie.');
                     }
@@ -1422,7 +1422,7 @@ async function handleTelegramUpdate(body) {
             if (data === 'bot_acheter') {
                 buyState.set(chatId, { step: 'operator' });
                 await answerTelegramCallback(callbackId);
-                await sendTelegramMessage(chatId, '📲 Choisis l’opérateur :', {
+                await sendTelegramMessage(chatId, '📲 Choisis l\'operateur :', {
                     reply_markup: {
                         inline_keyboard: [
                             [
@@ -1490,7 +1490,7 @@ async function handleTelegramUpdate(body) {
             }
             if (data === 'bot_aide') {
                 await answerTelegramCallback(callbackId);
-                await sendTelegramMessage(chatId, ‘📌 <b>Aide</b>\n\n💳 <b>Acheter</b> : recharge MTN, Orange ou Moov.\n💰 <b>Paiement</b> : via Djamo (lien envoyé après commande).\n📸 <b>Preuve</b> : envoie une capture après paiement.\n📱 <b>Ouvrir l\’app</b> : actualités, quêtes, annonces LED.\n\n/demarrer — Accueil\n/annuler — Annuler’);
+                await sendTelegramMessage(chatId, '📌 <b>Aide</b>\n\n💳 <b>Acheter</b> : recharge MTN, Orange ou Moov.\n💰 <b>Paiement</b> : via Djamo (lien envoye apres commande).\n📸 <b>Preuve</b> : envoie une capture apres paiement.\n📱 <b>Ouvrir l\'app</b> : actualites, quetes, annonces LED.\n\n/demarrer — Accueil\n/annuler — Annuler');
                 return;
             }
             if (data === 'bot_annuler') {
@@ -1569,7 +1569,7 @@ async function handleTelegramUpdate(body) {
                 const result = await telegramUsersService.approveSocialLink(telegramId);
                 const ok = result && !result.error;
                 await answerTelegramCallback(callbackId, ok ? 'Lien approuvé → Quêtes' : (result && result.error) || 'Erreur');
-                if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l’espace Quêtes (clic = points).');
+                if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l\'espace Quetes (clic = points).');
             } else {
                 await answerTelegramCallback(callbackId);
             }
