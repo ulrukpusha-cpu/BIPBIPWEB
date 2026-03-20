@@ -1,0 +1,549 @@
+/* ============================================
+   BipbipDynamicScene v4 — Premium WAOUH Edition
+   GPU-only animations, effets premium
+   ============================================ */
+
+.bds-container {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  border-radius: 20px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  contain: strict;
+  background: #0a0e27;
+  transform: translateZ(0);
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    black 8%,
+    black 70%,
+    transparent 100%
+  ),
+  linear-gradient(
+    90deg,
+    transparent 0%,
+    black 5%,
+    black 95%,
+    transparent 100%
+  );
+  -webkit-mask-composite: destination-in;
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    black 8%,
+    black 70%,
+    transparent 100%
+  ),
+  linear-gradient(
+    90deg,
+    transparent 0%,
+    black 5%,
+    black 95%,
+    transparent 100%
+  );
+  mask-composite: intersect;
+}
+
+/* Border glow removed — edges fade via mask */
+
+/* ── SCENE LAYERS (crossfade images) ── */
+.bds-scene-layer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 2.5s ease;
+  contain: strict;
+}
+.bds-scene-layer--active { opacity: 1; }
+.bds-scene-day    { background-image: url('assets/scene-day.png'); z-index: 2; }
+.bds-scene-sunset { background-image: url('assets/scene-sunset.png'); z-index: 3; }
+.bds-scene-night  { background-image: url('assets/scene-night.png'); z-index: 4; }
+
+/* ── PARALLAX on touch/gyro (controlled via JS) ── */
+.bds-scene-layer--active {
+  transition: opacity 2.5s ease, transform 0.3s ease-out;
+}
+
+/* ── LENS FLARE (jour) ── */
+.bds-lens-flare {
+  position: absolute;
+  top: 8%;
+  right: 20%;
+  width: 120px;
+  height: 120px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2s ease;
+  background: radial-gradient(circle, rgba(255,255,220,0.4) 0%, rgba(255,200,50,0.15) 30%, transparent 70%);
+  animation: bds-flarePulse 8s ease-in-out infinite;
+}
+.bds-lens-flare--visible { opacity: 1; }
+
+.bds-lens-flare::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -60px;
+  right: -60px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,220,100,0.3) 30%, rgba(255,255,200,0.5) 50%, rgba(255,220,100,0.3) 70%, transparent);
+  transform: translateY(-50%);
+}
+
+.bds-lens-flare::after {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  left: 20px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(100,200,255,0.3), transparent 70%);
+}
+
+@keyframes bds-flarePulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ── SHOOTING STAR (nuit) ── */
+.bds-shooting-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+.bds-shooting-stars--visible { opacity: 1; }
+
+.bds-shooting-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0;
+}
+.bds-shooting-star::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6));
+  transform-origin: right center;
+  transform: rotate(-35deg);
+}
+
+.bds-shooting-star--1 {
+  animation: bds-shoot 8s ease-in-out infinite;
+  animation-delay: 2s;
+}
+.bds-shooting-star--2 {
+  animation: bds-shoot 12s ease-in-out infinite;
+  animation-delay: 6s;
+}
+
+@keyframes bds-shoot {
+  0%   { opacity: 0; transform: translate3d(0, 0, 0); }
+  2%   { opacity: 1; }
+  8%   { opacity: 0; transform: translate3d(-180px, 100px, 0); }
+  100% { opacity: 0; transform: translate3d(-180px, 100px, 0); }
+}
+
+/* ── DUST PARTICLES (jour — poussières dorées) ── */
+.bds-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+.bds-particles--visible { opacity: 1; }
+
+.bds-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 220, 120, 0.7);
+  animation: bds-float var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes bds-float {
+  0%   { transform: translate3d(0, 0, 0) scale(0.5); opacity: 0; }
+  25%  { opacity: 0.8; }
+  50%  { transform: translate3d(var(--dx), var(--dy), 0) scale(1); opacity: 0.6; }
+  75%  { opacity: 0.3; }
+  100% { transform: translate3d(calc(var(--dx) * 2), calc(var(--dy) * 0.5), 0) scale(0.3); opacity: 0; }
+}
+
+/* ── FIREFLIES (sunset) ── */
+.bds-fireflies {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+.bds-fireflies--visible { opacity: 1; }
+
+.bds-firefly {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe082 30%, rgba(255, 224, 130, 0) 70%);
+  width: 10px;
+  height: 10px;
+  animation: bds-fireflyMove var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes bds-fireflyMove {
+  0%   { transform: translate3d(0, 0, 0); opacity: 0; }
+  15%  { opacity: 1; }
+  50%  { transform: translate3d(var(--fx), var(--fy), 0); opacity: 0.8; }
+  85%  { opacity: 1; }
+  100% { transform: translate3d(calc(var(--fx) * -0.5), calc(var(--fy) * 0.3), 0); opacity: 0; }
+}
+
+/* ── AURORA BOREALIS (nuit — subtle) ── */
+.bds-aurora {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 3s ease;
+  overflow: hidden;
+}
+.bds-aurora--visible { opacity: 1; }
+
+.bds-aurora-wave {
+  position: absolute;
+  width: 200%;
+  height: 100%;
+  left: -50%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(80, 200, 120, 0.06) 20%,
+    rgba(60, 140, 220, 0.08) 40%,
+    rgba(120, 80, 220, 0.05) 60%,
+    transparent 80%
+  );
+  animation: bds-auroraWave 15s ease-in-out infinite;
+}
+.bds-aurora-wave:nth-child(2) {
+  animation-delay: -5s;
+  animation-duration: 18s;
+  opacity: 0.7;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(100, 220, 160, 0.05) 25%,
+    rgba(80, 160, 240, 0.07) 50%,
+    transparent 75%
+  );
+}
+
+@keyframes bds-auroraWave {
+  0%, 100% { transform: translate3d(-10%, 0, 0) scaleY(0.8); }
+  50% { transform: translate3d(10%, -5%, 0) scaleY(1.2); }
+}
+
+/* ── STARS (opacity-only animation = cheap) ── */
+.bds-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2s ease;
+  contain: strict;
+}
+.bds-stars--visible { opacity: 1; }
+
+.bds-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+  animation: bds-twinkle var(--dur) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+.bds-star--big {
+  width: 4px;
+  height: 4px;
+  background: radial-gradient(circle, #fff 40%, rgba(255,255,255,0) 70%);
+}
+
+@keyframes bds-twinkle {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 1; }
+}
+
+/* ── CLOUDS (transform-only = GPU) ── */
+.bds-clouds {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.bds-cloud {
+  position: absolute;
+  border-radius: 50px;
+  background: rgba(255, 255, 255, 0.6);
+  transition: background 2s ease;
+}
+.bds-cloud::before,
+.bds-cloud::after {
+  content: '';
+  position: absolute;
+  background: inherit;
+  border-radius: 50%;
+}
+
+.bds-cloud--1 {
+  width: 90px; height: 28px;
+  top: 8%;
+  animation: bds-cloudMove 55s linear infinite;
+}
+.bds-cloud--1::before { width: 40px; height: 40px; top: -18px; left: 16px; }
+.bds-cloud--1::after  { width: 28px; height: 28px; top: -12px; left: 46px; }
+
+.bds-cloud--2 {
+  width: 70px; height: 22px;
+  top: 16%;
+  animation: bds-cloudMove 70s linear infinite;
+  animation-delay: -25s;
+  opacity: 0.45;
+}
+.bds-cloud--2::before { width: 30px; height: 30px; top: -14px; left: 10px; }
+.bds-cloud--2::after  { width: 22px; height: 22px; top: -10px; left: 34px; }
+
+.bds-container[data-phase="night"] .bds-cloud  { background: rgba(50, 60, 100, 0.35); }
+.bds-container[data-phase="sunset"] .bds-cloud { background: rgba(255, 170, 120, 0.45); }
+
+@keyframes bds-cloudMove {
+  from { transform: translate3d(-140px, 0, 0); }
+  to   { transform: translate3d(calc(100vw + 140px), 0, 0); }
+}
+
+/* ── RAIN (transform-only = GPU) ── */
+.bds-rain {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  contain: strict;
+}
+.bds-rain--active { opacity: 1; }
+
+.bds-raindrop {
+  position: absolute;
+  width: 1px;
+  height: 14px;
+  background: rgba(174, 194, 224, 0.5);
+  animation: bds-rainFall var(--dur) linear infinite;
+  animation-delay: var(--delay);
+  left: var(--x);
+}
+
+@keyframes bds-rainFall {
+  from { transform: translate3d(0, -20px, 0); }
+  to   { transform: translate3d(-8px, 300px, 0); }
+}
+
+/* ── NIGHT GLOW ── */
+.bds-night-glow {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2s ease;
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 150, 30, 0.06) 100%);
+}
+.bds-night-glow--active { opacity: 1; }
+
+/* ── LIGHT DOTS ── */
+.bds-light-dots {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 2s ease;
+  contain: strict;
+}
+.bds-light-dots--visible { opacity: 1; }
+
+.bds-light-dot {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #ffd54f;
+  animation: bds-lightFlicker 4s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes bds-lightFlicker {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* ── SHIMMER OVERLAY (premium gloss — runs once then pauses) ── */
+.bds-shimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.bds-shimmer--active { opacity: 0.4; }
+.bds-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 55%,
+    transparent 60%
+  );
+  animation: bds-shimmerMove 1.5s ease-in-out forwards;
+}
+
+@keyframes bds-shimmerMove {
+  0%   { transform: translate3d(-40%, -40%, 0) rotate(25deg); }
+  100% { transform: translate3d(40%, 40%, 0) rotate(25deg); }
+}
+
+/* ── TRIGGER BADGE (upgraded) ── */
+.bds-trigger-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(0, -8px, 0);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  font-family: 'Inter', sans-serif;
+}
+.bds-trigger-badge--visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+.bds-trigger-badge--morning {
+  background: linear-gradient(135deg, rgba(246,211,101,0.95), rgba(253,160,133,0.95));
+  color: #5a3200;
+}
+.bds-trigger-badge--evening {
+  background: linear-gradient(135deg, rgba(161,140,209,0.95), rgba(251,194,235,0.95));
+  color: #3d1a5c;
+}
+.bds-trigger-badge--night {
+  background: rgba(20, 30, 60, 0.9);
+  color: #a0b4e0;
+  border: 1px solid rgba(160, 180, 224, 0.2);
+}
+
+/* ── VIGNETTE (subtle, edges handled by mask) ── */
+.bds-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.2);
+  border-radius: 20px;
+}
+
+/* ── TIME (glass pill) ── */
+.bds-time {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  z-index: 20;
+  font-family: 'Inter', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* ── LOW-END OVERRIDE (via JS data-attr) ── */
+.bds-container[data-perf="low"] .bds-shimmer,
+.bds-container[data-perf="low"] .bds-aurora,
+.bds-container[data-perf="low"] .bds-lens-flare,
+.bds-container[data-perf="low"] .bds-particles,
+.bds-container[data-perf="low"] .bds-firefly { background: #ffe082; width: 4px; height: 4px; }
+.bds-container[data-perf="low"] .bds-vignette { box-shadow: none; }
+
+/* ── REDUCED MOTION ── */
+@media (prefers-reduced-motion: reduce) {
+  .bds-star, .bds-cloud, .bds-raindrop, .bds-light-dot,
+  .bds-shooting-star, .bds-particle, .bds-firefly,
+  .bds-aurora-wave, .bds-shimmer::after { animation: none !important; }
+  .bds-scene-layer { transition: opacity 0.5s ease; }
+  .bds-star { opacity: 0.6; }
+  .bds-light-dot { opacity: 0.7; }
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 380px) {
+  .bds-container { height: 260px; }
+  .bds-lens-flare { width: 80px; height: 80px; }
+}
+@media (min-width: 768px) {
+  .bds-container { height: 360px; }
+}

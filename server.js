@@ -21,6 +21,7 @@ const annoncesService = require('./services/annoncesService');
 const { moderateSocialLink } = require('./services/aiModeration');
 const questsRoutes = require('./routes/quests');
 const ledService = require('./services/ledService');
+const actualitesService = require('./services/actualitesService');
 
 // ==================== CONFIG ====================
 const app = express();
@@ -1116,6 +1117,27 @@ async function handleTelegramUpdateAdmin(body) {
                 if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l\'espace Quetes (clic = points).', {}, botToken);
                 return;
             }
+
+            if (data.startsWith('approve_actu_')) {
+                const id = data.replace('approve_actu_', '');
+                const updated = await actualitesService.approveActualite(id);
+                const answerUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`;
+                await fetch(answerUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback_query.id }) });
+                if (updated) {
+                    const editUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`;
+                    await fetch(editUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            message_id: messageId,
+                            text: '✅ Article approuvé : ' + (updated.title || id).slice(0, 80)
+                        })
+                    });
+                }
+                return;
+            }
+
             if (data.startsWith('validate_')) {
                 const orderId = data.replace('validate_', '');
                 const order = await orderStorage.setOrderValidated(orderId);

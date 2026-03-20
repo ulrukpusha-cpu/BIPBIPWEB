@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css">
     <style>
         body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 6px; }
@@ -63,20 +64,22 @@
         
         <!-- Home Screen -->
         <div id="screen-home" class="screen active">
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-medium mb-4 text-blue-300">
-                    <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-blue-400"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                    </span>
-                    <span id="service-status-text">Service disponible 24/7</span>
+            <!-- Hero Scene Dynamique -->
+            <div class="mb-6 relative">
+                <div id="bipbip-scene"></div>
+                <!-- Overlay content on scene -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none" style="border-radius:20px;">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/20 bg-black/30 text-xs font-medium mb-3 text-blue-200 pointer-events-auto" style="backdrop-filter:blur(4px);">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-blue-400"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        <span id="service-status-text">Service disponible 24/7</span>
+                    </div>
+                    <img src="assets/logo%202.PNG" alt="Bipbip" class="w-20 h-20 rounded-2xl object-contain mb-2" style="filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5));" onerror="this.style.display='none';">
+                    <h1 class="text-2xl font-bold tracking-tight text-white" style="text-shadow:0 2px 8px rgba(0,0,0,0.5);">Bienvenue !</h1>
+                    <p class="text-xs text-white/70 mt-1" style="text-shadow:0 1px 4px rgba(0,0,0,0.4);">Rechargez votre crédit mobile en quelques clics</p>
                 </div>
-                <div class="mb-4">
-                    <img src="assets/logo%202.PNG" alt="Bipbip" class="w-24 h-24 mx-auto rounded-2xl object-contain shadow-xl" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
-                    <div class="welcome-icon-fallback hidden w-24 h-24 mx-auto rounded-2xl bg-white/10 flex items-center justify-center text-4xl">👋</div>
-                </div>
-                <h1 class="text-2xl md:text-3xl font-semibold tracking-tight mb-2 gradient-text text-white">Bienvenue !</h1>
-                <p class="text-sm text-slate-400">Rechargez votre crédit mobile en quelques clics</p>
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <button type="button" onclick="navigateTo('buy')" class="glass-panel rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:bg-white/15 border-white/15">
@@ -672,12 +675,12 @@
     <div id="toast" class="toast fixed bottom-24 left-1/2 -translate-x-1/2 translate-y-8 px-4 py-2 rounded-lg font-medium text-xs shadow-xl opacity-0 transition-all duration-300 z-[1000] bg-slate-800/95 text-slate-300 border border-white/10"></div>
 
     <script src="app.js"></script>
+    <script src="bipbip-dynamic-scene.js"></script>
     <script>
-        document.querySelector('img[src="assets/logo%202.PNG"]')?.addEventListener('error', function() {
-            this.style.display = 'none';
-            const fallback = document.querySelector('.welcome-icon-fallback');
-            if (fallback) fallback.classList.remove('hidden');
-        });
+        // Init dynamic scene on home
+        if (document.getElementById('bipbip-scene')) {
+            new BipbipDynamicScene('#bipbip-scene');
+        }
     </script>
 </body>
 </html>
