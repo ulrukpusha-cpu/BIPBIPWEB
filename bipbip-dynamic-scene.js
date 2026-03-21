@@ -1,6 +1,6 @@
 /* ============================================
-   BipbipDynamicScene v4.1 — Battery Optimized
-   Premium effects + aggressive power saving
+   BipbipDynamicScene v5.0 — Premium 16:9
+   Battery ultra-optimized, GPU-only
    ============================================ */
 
 (function () {
@@ -14,16 +14,18 @@
   })();
 
   const CFG = {
-    STAR_COUNT:      IS_LOW_END ? 12 : 25,
-    RAIN_COUNT:      IS_LOW_END ? 12 : 25,
-    LIGHT_DOT_COUNT: IS_LOW_END ? 6  : 12,
+    STAR_COUNT:      IS_LOW_END ? 10 : 20,
+    RAIN_COUNT:      IS_LOW_END ? 10 : 20,
+    LIGHT_DOT_COUNT: IS_LOW_END ? 5  : 10,
     CLOUD_COUNT:     IS_LOW_END ? 1  : 2,
-    PARTICLE_COUNT:  IS_LOW_END ? 0  : 10,
-    FIREFLY_COUNT:   IS_LOW_END ? 3  : 6,
-    UPDATE_INTERVAL: 60000, // 1 min always (no need to check more)
+    PARTICLE_COUNT:  IS_LOW_END ? 0  : 8,
+    FIREFLY_COUNT:   IS_LOW_END ? 2  : 5,
+    UPDATE_INTERVAL: 60000,
     SUNRISE: 6,
     SUNSET_START: 17,
     SUNSET_END: 19,
+    CHAR_START: 6,
+    CHAR_END: 10,
   };
 
   const el = (tag, cls, parent) => {
@@ -69,7 +71,7 @@
       this._visible = true;
       this._parallaxX = 0;
       this._parallaxY = 0;
-      this._animEls = []; // cached animated elements
+      this._animEls = [];
 
       this._build();
       this._preloadImages();
@@ -87,32 +89,31 @@
       this._visHandler = () => this._onVisibility(!document.hidden);
       document.addEventListener('visibilitychange', this._visHandler);
 
-      // Parallax (not on low-end)
+      // Parallax (skip on low-end to save battery)
       if (!IS_LOW_END) this._initParallax();
 
-      if (IS_LOW_END) console.log('[BipbipScene] Mode basse consommation');
+      if (IS_LOW_END) console.log('[BipbipScene] Mode basse consommation actif');
     }
 
     _preloadImages() {
-      ['scene-day.png', 'scene-sunset.png', 'scene-night.png'].forEach(src => {
+      ['scene-day1.jpg', 'scene-sunset2.jpg', 'scene-night2.jpg'].forEach(src => {
         const img = new Image();
         img.src = 'assets/' + src;
       });
     }
 
-    // ── PARALLAX (throttled) ──
+    // ── PARALLAX ──
     _initParallax() {
       let lastGyro = 0;
-      const GYRO_THROTTLE = 100; // ms
 
       if (window.DeviceOrientationEvent) {
         window.addEventListener('deviceorientation', (e) => {
           const now = Date.now();
-          if (now - lastGyro < GYRO_THROTTLE || !this._visible) return;
+          if (now - lastGyro < 120 || !this._visible) return;
           lastGyro = now;
           if (!e.gamma && !e.beta) return;
-          const x = Math.max(-6, Math.min(6, e.gamma * 0.12));
-          const y = Math.max(-4, Math.min(4, (e.beta - 45) * 0.08));
+          const x = Math.max(-5, Math.min(5, e.gamma * 0.1));
+          const y = Math.max(-3, Math.min(3, (e.beta - 45) * 0.06));
           this._applyParallax(x, y);
         }, { passive: true });
       }
@@ -124,7 +125,7 @@
           const rect = this.root.getBoundingClientRect();
           const cx = (e.clientX - rect.left) / rect.width - 0.5;
           const cy = (e.clientY - rect.top) / rect.height - 0.5;
-          this._applyParallax(cx * 6, cy * 4);
+          this._applyParallax(cx * 5, cy * 3);
           mouseRAF = null;
         });
       }, { passive: true });
@@ -139,7 +140,7 @@
       this._parallaxY = y;
       const active = this._layers[this._phase];
       if (active) {
-        active.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.05)`;
+        active.style.transform = `translate3d(${x}px, ${y}px, 0) scale(1.06)`;
       }
     }
 
@@ -148,7 +149,6 @@
       if (this._visible === visible) return;
       this._visible = visible;
       const state = visible ? 'running' : 'paused';
-      // Use cached list instead of querySelectorAll
       for (let i = 0; i < this._animEls.length; i++) {
         this._animEls[i].style.animationPlayState = state;
       }
@@ -162,38 +162,38 @@
       this._layers = {};
       ['day', 'sunset', 'night'].forEach(p => {
         const layer = el('div', `bds-scene-layer bds-scene-${p}`, frag);
-        layer.style.transform = 'scale(1.05)';
+        layer.style.transform = 'scale(1.06)';
         this._layers[p] = layer;
       });
 
-      // Lens flare (jour) — skipped on low-end via CSS
+      // Lens flare (day)
       this._flare = el('div', 'bds-lens-flare', frag);
 
-      // Shooting stars (nuit) — only 2 elements, very light
+      // Shooting stars (night)
       this._shootingStars = el('div', 'bds-shooting-stars', frag);
       const s1 = el('div', 'bds-shooting-star bds-shooting-star--1', this._shootingStars);
-      s1.style.cssText = 'top:12%;right:25%';
+      s1.style.cssText = 'top:10%;right:22%';
       this._animEls.push(s1);
       if (!IS_LOW_END) {
         const s2 = el('div', 'bds-shooting-star bds-shooting-star--2', this._shootingStars);
-        s2.style.cssText = 'top:22%;right:40%';
+        s2.style.cssText = 'top:20%;right:38%';
         this._animEls.push(s2);
       }
 
-      // Aurora (nuit) — skipped on low-end via CSS
+      // Aurora (night)
       this._aurora = el('div', 'bds-aurora', frag);
       const aw1 = el('div', 'bds-aurora-wave', this._aurora);
       const aw2 = el('div', 'bds-aurora-wave', this._aurora);
       this._animEls.push(aw1, aw2);
 
-      // Dust particles (jour) — 0 on low-end
+      // Dust particles (day)
       this._particles = el('div', 'bds-particles', frag);
       for (let i = 0; i < CFG.PARTICLE_COUNT; i++) {
         const p = el('div', 'bds-particle', this._particles);
         p.style.cssText =
-          `left:${rand(10,90)}%;top:${rand(15,70)}%;` +
-          `--dur:${rand(7,14).toFixed(0)}s;--delay:${rand(0,7).toFixed(0)}s;` +
-          `--dx:${rand(-25,25).toFixed(0)}px;--dy:${rand(-15,10).toFixed(0)}px`;
+          `left:${rand(10,90)}%;top:${rand(15,65)}%;` +
+          `--dur:${rand(8,15).toFixed(0)}s;--delay:${rand(0,8).toFixed(0)}s;` +
+          `--dx:${rand(-20,20).toFixed(0)}px;--dy:${rand(-12,8).toFixed(0)}px`;
         this._animEls.push(p);
       }
 
@@ -202,17 +202,17 @@
       for (let i = 0; i < CFG.FIREFLY_COUNT; i++) {
         const f = el('div', 'bds-firefly', this._fireflies);
         f.style.cssText =
-          `left:${rand(10,85)}%;top:${rand(30,75)}%;` +
-          `--dur:${rand(6,12).toFixed(0)}s;--delay:${rand(0,6).toFixed(0)}s;` +
-          `--fx:${rand(-35,35).toFixed(0)}px;--fy:${rand(-25,15).toFixed(0)}px`;
+          `left:${rand(10,85)}%;top:${rand(30,70)}%;` +
+          `--dur:${rand(7,13).toFixed(0)}s;--delay:${rand(0,7).toFixed(0)}s;` +
+          `--fx:${rand(-30,30).toFixed(0)}px;--fy:${rand(-20,12).toFixed(0)}px`;
         this._animEls.push(f);
       }
 
       // Stars
       this._stars = el('div', 'bds-stars', frag);
       for (let i = 0; i < CFG.STAR_COUNT; i++) {
-        const s = el('div', `bds-star${Math.random() > 0.88 ? ' bds-star--big' : ''}`, this._stars);
-        s.style.cssText = `left:${rand(3,97)}%;top:${rand(3,42)}%;--dur:${rand(2.5,6).toFixed(0)}s;--delay:${rand(0,5).toFixed(0)}s`;
+        const s = el('div', `bds-star${Math.random() > 0.85 ? ' bds-star--big' : ''}`, this._stars);
+        s.style.cssText = `left:${rand(3,97)}%;top:${rand(3,40)}%;--dur:${rand(3,6).toFixed(0)}s;--delay:${rand(0,5).toFixed(0)}s`;
         this._animEls.push(s);
       }
 
@@ -232,7 +232,7 @@
       this._dots = el('div', 'bds-light-dots', frag);
       for (let i = 0; i < CFG.LIGHT_DOT_COUNT; i++) {
         const d = el('div', 'bds-light-dot', this._dots);
-        d.style.cssText = `left:${rand(15,90)}%;bottom:${rand(15,55)}%;--delay:${rand(0,4).toFixed(0)}s`;
+        d.style.cssText = `left:${rand(15,90)}%;bottom:${rand(12,50)}%;--delay:${rand(0,4).toFixed(0)}s`;
         this._animEls.push(d);
       }
 
@@ -240,11 +240,18 @@
       this._rain = el('div', 'bds-rain', frag);
       this._rainBuilt = false;
 
-      // Shimmer (triggered on phase change, not continuous)
+      // Character placeholder (no image available)
+      this._char = el('div', 'bds-character', frag);
+      this._charEnabled = false;
+
+      // Shimmer
       this._shimmer = el('div', 'bds-shimmer', frag);
 
       // Vignette
       el('div', 'bds-vignette', frag);
+
+      // Glow ring (phase-colored edge glow)
+      this._glowRing = el('div', 'bds-glow-ring', frag);
 
       // Time
       this._timeEl = el('div', 'bds-time', frag);
@@ -267,21 +274,19 @@
       this._rainBuilt = true;
     }
 
-    // ── SHIMMER (fires once per phase change) ──
+    // ── SHIMMER (one-shot per phase change) ──
     _triggerShimmer() {
       if (IS_LOW_END) return;
       this._shimmer.classList.remove('bds-shimmer--active');
-      // Force reflow to restart animation
       void this._shimmer.offsetWidth;
       this._shimmer.classList.add('bds-shimmer--active');
-      // Remove after animation completes (1.5s)
       clearTimeout(this._shimmerTimeout);
       this._shimmerTimeout = setTimeout(() => {
         this._shimmer.classList.remove('bds-shimmer--active');
       }, 2000);
     }
 
-    // ── UPDATE ──
+    // ── UPDATE (runs every 60s) ──
     _update() {
       if (!this._visible) return;
 
@@ -292,6 +297,13 @@
       this._timeEl.textContent =
         now.getHours().toString().padStart(2, '0') + ':' +
         now.getMinutes().toString().padStart(2, '0');
+
+      // Character visibility (disabled — no image)
+      if (this._charEnabled) {
+        const showChar = hour >= CFG.CHAR_START && hour < CFG.CHAR_END;
+        this._char.classList.toggle('bds-character--visible', showChar);
+        this._char.classList.toggle('bds-character--idle', showChar);
+      }
 
       if (phase !== this._phase) {
         this._applyPhase(phase);
@@ -320,8 +332,8 @@
         const active = p === phase;
         this._layers[p].classList.toggle('bds-scene-layer--active', active);
         this._layers[p].style.transform = active
-          ? `translate3d(${this._parallaxX}px, ${this._parallaxY}px, 0) scale(1.05)`
-          : 'scale(1.05)';
+          ? `translate3d(${this._parallaxX}px, ${this._parallaxY}px, 0) scale(1.06)`
+          : 'scale(1.06)';
       }
 
       const isNight = phase === 'night';
@@ -336,10 +348,12 @@
       this._flare.classList.toggle('bds-lens-flare--visible', isDay);
       this._particles.classList.toggle('bds-particles--visible', isDay);
       this._fireflies.classList.toggle('bds-fireflies--visible', isSunset);
+
+      // Glow ring color by phase
+      this._glowRing.className = 'bds-glow-ring bds-glow-ring--' + phase;
     }
 
     // ── PUBLIC API ──
-
     setPhase(phase) {
       if (!['day', 'sunset', 'night'].includes(phase)) return;
       this._applyPhase(phase);
@@ -352,7 +366,13 @@
         this._badge.classList.add(`bds-trigger-badge--${trigger.type}`, 'bds-trigger-badge--visible');
         this._badge.textContent = trigger.label;
       }
-      console.log(`[BipbipScene] Phase forcée: ${phase}`);
+      // Toggle character for demo (if enabled)
+      if (this._charEnabled) {
+        const showChar = fakeH[phase] >= CFG.CHAR_START && fakeH[phase] < CFG.CHAR_END;
+        this._char.classList.toggle('bds-character--visible', showChar);
+        this._char.classList.toggle('bds-character--idle', showChar);
+      }
+      console.log(`[BipbipScene] Phase forcee: ${phase}`);
     }
 
     setRain(active) {

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BipbipDynamicScene — Demo</title>
+  <title>BipbipDynamicScene v5 — Demo 16:9</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="bipbip-dynamic-scene.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Inter', sans-serif;
-      background: #0f172a;
+      background: #0a0e1a;
       color: #e2e8f0;
       min-height: 100vh;
       display: flex;
@@ -29,10 +29,7 @@
     }
     #scene {
       width: 100%;
-      max-width: 480px;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      max-width: 520px;
     }
     .controls {
       display: flex;
@@ -40,13 +37,13 @@
       gap: 8px;
       margin-top: 20px;
       justify-content: center;
-      max-width: 480px;
+      max-width: 520px;
     }
     .controls button {
       padding: 8px 16px;
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 8px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.06);
       color: #cbd5e1;
       font-size: 13px;
       font-family: 'Inter', sans-serif;
@@ -54,25 +51,20 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-    .controls button:hover {
-      background: rgba(255,255,255,0.15);
-      color: #fff;
-    }
-    .controls button:active {
-      transform: scale(0.96);
-    }
+    .controls button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .controls button:active { transform: scale(0.96); }
     .info {
       margin-top: 16px;
       font-size: 12px;
       color: #64748b;
       text-align: center;
-      max-width: 480px;
+      max-width: 520px;
       line-height: 1.6;
     }
   </style>
 </head>
 <body>
-  <h1>Bipbip Dynamic Scene</h1>
+  <h1>Bipbip Dynamic Scene v5</h1>
   <div id="scene"></div>
 
   <div class="controls">
@@ -80,19 +72,20 @@
     <button onclick="scene.setPhase('sunset')">Coucher</button>
     <button onclick="scene.setPhase('night')">Nuit</button>
     <button onclick="scene.setRain(!rainOn); rainOn=!rainOn;">Pluie</button>
+    <button onclick="scene.setPhase('day')">Personnage (Jour)</button>
   </div>
 
   <div class="info">
-    Le cycle s'adapte automatiquement a l'heure locale.<br>
-    Utilisez les boutons pour tester chaque phase.<br>
-    Ouvrez la console pour voir les triggers business.
+    Format 16:9 avec contours fondus dans le background.<br>
+    Personnage visible de 6h a 10h (testez "Jour").<br>
+    Console ouverte = triggers business visibles.
   </div>
 
   <script src="bipbip-dynamic-scene.js"></script>
   <script>
     let rainOn = false;
     const scene = new BipbipDynamicScene('#scene');
-    console.log('[Demo] Scene initialisee. API: scene.setPhase(), scene.setRain()');
+    console.log('[Demo v5] Scene 16:9 initialisee. API: scene.setPhase(), scene.setRain()');
   </script>
 </body>
 </html>
