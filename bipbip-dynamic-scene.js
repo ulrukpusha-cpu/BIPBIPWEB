@@ -20,12 +20,17 @@
     CLOUD_COUNT:     IS_LOW_END ? 1  : 2,
     PARTICLE_COUNT:  IS_LOW_END ? 0  : 8,
     FIREFLY_COUNT:   IS_LOW_END ? 2  : 5,
+    BIRD_COUNT:      IS_LOW_END ? 2  : 4,
     UPDATE_INTERVAL: 60000,
     SUNRISE: 6,
     SUNSET_START: 17,
     SUNSET_END: 19,
     CHAR_START: 6,
     CHAR_END: 10,
+    BIRD_START_1: 7,  // oiseaux matin 7h-11h
+    BIRD_END_1: 11,
+    BIRD_START_2: 15, // oiseaux après-midi 15h-17h
+    BIRD_END_2: 17,
   };
 
   const el = (tag, cls, parent) => {
@@ -236,6 +241,20 @@
         this._animEls.push(d);
       }
 
+      // Birds
+      this._birds = el('div', 'bds-birds', frag);
+      for (let i = 0; i < CFG.BIRD_COUNT; i++) {
+        const b = el('div', 'bds-bird', this._birds);
+        const size = rand(0.4, 1);
+        b.style.cssText =
+          `top:${rand(5, 35)}%;` +
+          `--dur:${rand(8, 16).toFixed(0)}s;` +
+          `--delay:${rand(0, 10).toFixed(0)}s;` +
+          `--scale:${size.toFixed(2)};` +
+          `--y:${rand(-15, 15).toFixed(0)}px`;
+        this._animEls.push(b);
+      }
+
       // Rain (lazy)
       this._rain = el('div', 'bds-rain', frag);
       this._rainBuilt = false;
@@ -253,11 +272,7 @@
       // Glow ring (phase-colored edge glow)
       this._glowRing = el('div', 'bds-glow-ring', frag);
 
-      // Time
-      this._timeEl = el('div', 'bds-time', frag);
-
-      // Badge
-      this._badge = el('div', 'bds-trigger-badge', frag);
+      // Time and badge removed per user request
 
       this.root.appendChild(frag);
     }
@@ -294,10 +309,6 @@
       const hour = now.getHours() + now.getMinutes() / 60;
       const phase = getPhase(hour);
 
-      this._timeEl.textContent =
-        now.getHours().toString().padStart(2, '0') + ':' +
-        now.getMinutes().toString().padStart(2, '0');
-
       // Character visibility (disabled — no image)
       if (this._charEnabled) {
         const showChar = hour >= CFG.CHAR_START && hour < CFG.CHAR_END;
@@ -305,22 +316,30 @@
         this._char.classList.toggle('bds-character--idle', showChar);
       }
 
+      // Birds visibility (7h-11h and 15h-17h)
+      const h = now.getHours();
+      const showBirds = (h >= CFG.BIRD_START_1 && h < CFG.BIRD_END_1) ||
+                        (h >= CFG.BIRD_START_2 && h < CFG.BIRD_END_2);
+      this._birds.classList.toggle('bds-birds--visible', showBirds);
+
+      // Auto-rain from weather API
+      this._checkWeatherRain();
+
       if (phase !== this._phase) {
         this._applyPhase(phase);
         this._triggerShimmer();
-        console.log(`[BipbipScene] Phase: ${phase} (${this._timeEl.textContent})`);
+        console.log(`[BipbipScene] Phase: ${phase}`);
       }
+    }
 
-      const trigger = getTrigger(now.getHours());
-      const tType = trigger ? trigger.type : null;
-      if (tType !== this._lastTrigger) {
-        this._lastTrigger = tType;
-        this._badge.className = 'bds-trigger-badge';
-        if (trigger) {
-          this._badge.classList.add(`bds-trigger-badge--${trigger.type}`, 'bds-trigger-badge--visible');
-          this._badge.textContent = trigger.label;
-          console.log(`[BipbipScene] Trigger: ${trigger.label}`);
-        }
+    _checkWeatherRain() {
+      const statusEl = document.getElementById('service-status-text');
+      if (!statusEl) return;
+      const txt = (statusEl.textContent || '').toLowerCase();
+      const isRain = /pluie|rain|averse|orage|thunder|drizzle/.test(txt);
+      if (isRain !== this._isRaining) {
+        this._isRaining = isRain;
+        this.setRain(isRain);
       }
     }
 
@@ -358,20 +377,6 @@
       if (!['day', 'sunset', 'night'].includes(phase)) return;
       this._applyPhase(phase);
       this._triggerShimmer();
-      const fakeH = { day: 8, sunset: 18, night: 22 };
-      const trigger = getTrigger(fakeH[phase]);
-      this._lastTrigger = trigger ? trigger.type : null;
-      this._badge.className = 'bds-trigger-badge';
-      if (trigger) {
-        this._badge.classList.add(`bds-trigger-badge--${trigger.type}`, 'bds-trigger-badge--visible');
-        this._badge.textContent = trigger.label;
-      }
-      // Toggle character for demo (if enabled)
-      if (this._charEnabled) {
-        const showChar = fakeH[phase] >= CFG.CHAR_START && fakeH[phase] < CFG.CHAR_END;
-        this._char.classList.toggle('bds-character--visible', showChar);
-        this._char.classList.toggle('bds-character--idle', showChar);
-      }
       console.log(`[BipbipScene] Phase forcee: ${phase}`);
     }
 

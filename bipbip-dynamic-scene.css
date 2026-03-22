@@ -3,33 +3,42 @@
    GPU-only, battery-friendly, edge-blended
    ============================================ */
 
-/* ── CONTAINER 16:9 with soft radial fade ── */
+/* ── CONTAINER — edges fully dissolved into bg ── */
 .bds-container {
   position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 260px;
+  width: calc(100% + 40px);
+  margin-left: -20px;
+  margin-right: -20px;
+  aspect-ratio: 16 / 10;
+  max-height: 320px;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: 0;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   contain: layout style paint;
   background: transparent;
   transform: translateZ(0);
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent 0%, #000 18%, #000 75%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    linear-gradient(to bottom, transparent 0%, #000 18%, #000 75%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  mask-composite: intersect;
 }
 
-/* Soft radial edge blend — seamless into dark bg */
+/* Fallback blend for browsers without mask-composite */
 .bds-container::after {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -4px;
   z-index: 11;
   pointer-events: none;
-  border-radius: 22px;
-  box-shadow:
-    inset 0 0 30px 15px rgba(10, 14, 30, 0.7),
-    inset 0 0 60px 30px rgba(10, 14, 30, 0.4);
+  background:
+    linear-gradient(to bottom, rgba(15,23,42,1) 0%, transparent 20%, transparent 78%, rgba(15,23,42,1) 100%),
+    linear-gradient(to right, rgba(15,23,42,1) 0%, transparent 14%, transparent 86%, rgba(15,23,42,1) 100%);
 }
 
 /* ── SCENE LAYERS (crossfade backgrounds) ── */
@@ -337,6 +346,71 @@
   to   { transform: translate3d(calc(100vw + 130px), 0, 0); }
 }
 
+/* ── BIRDS (fly across sky at specific hours) ── */
+.bds-birds {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.bds-birds--visible { opacity: 1; }
+
+.bds-bird {
+  position: absolute;
+  left: -30px;
+  width: 18px;
+  height: 6px;
+  transform: scale(var(--scale, 1));
+  animation: bds-birdFly var(--dur) linear infinite var(--delay);
+}
+/* Bird shape: two flapping wings using pseudo-elements */
+.bds-bird::before,
+.bds-bird::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 9px;
+  height: 2px;
+  background: rgba(30, 30, 50, 0.7);
+  border-radius: 1px;
+  transform-origin: center bottom;
+  animation: bds-birdFlap 0.4s ease-in-out infinite alternate;
+}
+.bds-bird::before {
+  left: 0;
+  transform: rotate(-25deg);
+}
+.bds-bird::after {
+  right: 0;
+  transform: rotate(25deg);
+  animation-delay: 0.1s;
+}
+
+/* Lighter birds at night */
+.bds-container[data-phase="night"] .bds-bird::before,
+.bds-container[data-phase="night"] .bds-bird::after {
+  background: rgba(180, 190, 220, 0.5);
+}
+.bds-container[data-phase="sunset"] .bds-bird::before,
+.bds-container[data-phase="sunset"] .bds-bird::after {
+  background: rgba(60, 30, 20, 0.6);
+}
+
+@keyframes bds-birdFly {
+  0%   { transform: translate3d(0, 0, 0) scale(var(--scale, 1)); opacity: 0; }
+  5%   { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translate3d(calc(100vw + 60px), var(--y), 0) scale(var(--scale, 1)); opacity: 0; }
+}
+
+@keyframes bds-birdFlap {
+  0%   { transform: rotate(-25deg); }
+  100% { transform: rotate(25deg); }
+}
+
 /* ── RAIN (transform-only = GPU) ── */
 .bds-rain {
   position: absolute;
@@ -437,31 +511,8 @@
   100% { transform: translate3d(40%, 40%, 0) rotate(25deg); }
 }
 
-/* ── PREMIUM GLOW RING (pulse on edges) ── */
-.bds-glow-ring {
-  position: absolute;
-  inset: -1px;
-  z-index: 12;
-  pointer-events: none;
-  border-radius: 22px;
-  opacity: 0;
-  transition: opacity 2s ease;
-}
-.bds-glow-ring--day {
-  box-shadow: 0 0 20px 4px rgba(255,200,60,0.15),
-              inset 0 0 20px 4px rgba(255,200,60,0.08);
-  opacity: 1;
-}
-.bds-glow-ring--sunset {
-  box-shadow: 0 0 20px 4px rgba(255,120,60,0.15),
-              inset 0 0 20px 4px rgba(255,100,60,0.08);
-  opacity: 1;
-}
-.bds-glow-ring--night {
-  box-shadow: 0 0 20px 4px rgba(80,120,255,0.12),
-              inset 0 0 20px 4px rgba(80,120,255,0.06);
-  opacity: 1;
-}
+/* ── GLOW RING — disabled (no visible edges) ── */
+.bds-glow-ring { display: none; }
 
 /* ── TRIGGER BADGE ── */
 .bds-trigger-badge {
@@ -499,15 +550,8 @@
   border: 1px solid rgba(160,180,224,0.15);
 }
 
-/* ── VIGNETTE ── */
-.bds-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
-  pointer-events: none;
-  box-shadow: inset 0 0 35px rgba(0,0,0,0.2);
-  border-radius: 22px;
-}
+/* ── VIGNETTE — disabled (mask handles edges) ── */
+.bds-vignette { display: none; }
 
 /* ── TIME PILL ── */
 .bds-time {
@@ -541,24 +585,24 @@
 @media (prefers-reduced-motion: reduce) {
   .bds-star, .bds-cloud, .bds-raindrop, .bds-light-dot,
   .bds-shooting-star, .bds-particle, .bds-firefly,
-  .bds-aurora-wave, .bds-shimmer::after, .bds-character { animation: none !important; }
+  .bds-aurora-wave, .bds-shimmer::after, .bds-character,
+  .bds-bird, .bds-bird::before, .bds-bird::after { animation: none !important; }
   .bds-scene-layer { transition: opacity 0.5s ease; }
   .bds-star { opacity: 0.6; }
   .bds-light-dot { opacity: 0.7; }
 }
 
-/* ── RESPONSIVE 16:9 ── */
+/* ── RESPONSIVE ── */
 @media (max-width: 360px) {
-  .bds-container { max-height: 200px; border-radius: 18px; }
-  .bds-container::after { box-shadow: inset 0 0 20px 10px rgba(10,14,30,0.7); }
+  .bds-container { max-height: 240px; }
   .bds-character { width: 60px; }
   .bds-lens-flare { width: 70px; height: 70px; }
 }
 @media (min-width: 768px) {
-  .bds-container { max-height: 360px; border-radius: 24px; }
+  .bds-container { max-height: 400px; }
   .bds-character { width: 100px; }
 }
 @media (min-width: 1024px) {
-  .bds-container { max-height: 440px; }
+  .bds-container { max-height: 480px; }
   .bds-character { width: 120px; }
 }
