@@ -3,6 +3,30 @@
     --accent-warning: #fbbf24;
 }
 
+/* ── Hero Scene Layout ── */
+.hero-scene-shell { position: relative; }
+.hero-status-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+.scene-status-pill {
+    max-width: 95%;
+}
+.hero-scene-stage { position: relative; }
+.scene-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.scene-main-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
 /* Écrans : un seul visible à la fois */
 .screen {
     display: none;

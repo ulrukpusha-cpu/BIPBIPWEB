@@ -22,6 +22,7 @@ function rowToOrder(row) {
         phone: row.phone,
         proof: row.proof,
         status: row.status,
+        notes: row.notes || null,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         validatedAt: row.validated_at ? new Date(row.validated_at).toISOString() : null,
         rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
@@ -30,7 +31,7 @@ function rowToOrder(row) {
 }
 
 function orderToRow(order) {
-    return {
+    const row = {
         id: order.id,
         user_id: order.userId || null,
         username: order.username || null,
@@ -41,6 +42,8 @@ function orderToRow(order) {
         proof: order.proof || null,
         status: order.status || 'pending'
     };
+    if (order.notes !== undefined) row.notes = order.notes || null;
+    return row;
 }
 
 async function getOrderById(orderId) {
