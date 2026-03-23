@@ -2,14 +2,29 @@
 <html lang="fr" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
+    <script>
+    (function () {
+        try {
+            var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var save = navigator.connection && navigator.connection.saveData;
+            var mem = navigator.deviceMemory;
+            var cores = navigator.hardwareConcurrency || 0;
+            var smallMobile = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+            var coarse = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+            var lite = reduced || save || (mem && mem <= 2) || (cores && cores <= 2);
+            if (!lite && smallMobile && coarse && mem && mem <= 4 && cores && cores <= 4) lite = true;
+            if (lite) document.documentElement.classList.add('bipbip-lite');
+        } catch (e) {}
+    })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bipbip Recharge CI - Recharge Rapide</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="bipbip-dynamic-scene.css">
+    <link rel="stylesheet" href="styles.css?v=20260323a">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260323a">
     <style>
         body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 6px; }
@@ -28,14 +43,15 @@
         }
         body { background-color: #0f172a; }
         .led-wrap { overflow: hidden; white-space: nowrap; }
-        .led-text { display: inline-block; padding-left: 100%; animation: led-scroll 60s linear infinite; }
-        @keyframes led-scroll { to { transform: translateX(-100%); } }
+        /* Durée d'animation appliquée par app.js (réglage admin), pas de 60s figé ici */
+        .led-text { display: inline-block; padding-left: 100%; }
+        @keyframes led-scroll { to { transform: translate3d(-100%, 0, 0); } }
     </style>
 </head>
 <body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200 text-slate-300" style="background-color: #0f172a;">
 
-    <!-- Background Decoration - plus de lumière -->
-    <div class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+    <!-- Background Decoration (désactivé en mode bas de gamme : gros flous GPU) -->
+    <div id="page-ambient-blur" class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0" aria-hidden="true">
         <div class="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full blur-[120px] bg-sky-400/25"></div>
         <div class="absolute bottom-[-10%] right-[20%] w-[400px] h-[400px] rounded-full blur-[100px] bg-indigo-400/20"></div>
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] bg-cyan-300/10"></div>
@@ -44,7 +60,7 @@
     <!-- Navigation -->
     <nav class="fixed w-full z-50 top-0 border-b backdrop-blur-md border-white/10 bg-slate-900/80">
         <div class="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-            <a href="#" onclick="navigateTo('home'); return false;" class="flex items-center gap-2">
+            <a href="#" onclick="navigateTo('home'); return false;" class="flex items-center gap-2" id="app-logo-admin-trigger">
                 <img src="assets/logo%202.PNG" alt="Bipbip Recharge Pro" class="h-10 w-auto object-contain rounded-lg" />
             </a>
             <div class="flex items-center gap-2">
@@ -78,11 +94,11 @@
                 <div class="hero-scene-stage relative">
                     <div id="bipbip-scene"></div>
                     <!-- Overlay content on scene -->
-                    <div class="scene-overlay absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none" style="border-radius:22px;">
+                    <div class="scene-overlay absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
                         <div class="scene-main-content">
-                            <img src="assets/logo%202.PNG" alt="Bipbip" class="w-20 h-20 rounded-2xl object-contain mb-2" style="filter:drop-shadow(0 4px 12px rgba(0,0,0,0.5));" onerror="this.style.display='none';">
-                            <h1 class="scene-hero-title text-2xl font-bold tracking-tight text-white" style="text-shadow:0 2px 8px rgba(0,0,0,0.5);">Bienvenue !</h1>
-                            <p class="scene-hero-subtitle text-xs text-white/70 mt-1" style="text-shadow:0 1px 4px rgba(0,0,0,0.4);">Rechargez votre crédit mobile en quelques clics</p>
+                            <img src="assets/logo%202.PNG" alt="Bipbip" class="w-24 h-24 rounded-2xl object-contain mb-1" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));" onerror="this.style.display='none';">
+                            <h1 class="scene-hero-title font-bold tracking-tight text-white" style="text-shadow:0 2px 12px rgba(0,0,0,0.6);">Bienvenue !</h1>
+                            <p class="scene-hero-subtitle text-white/70" style="text-shadow:0 1px 6px rgba(0,0,0,0.5);">Rechargez votre crédit mobile en quelques clics</p>
                         </div>
                     </div>
                 </div>
@@ -527,9 +543,11 @@
                 <h2 class="text-xl font-semibold text-white">Actualités</h2>
             </div>
             <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
-                <button type="button" data-sort="date" onclick="setActualitesSort('date')" class="sort-btn active px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/10 text-white whitespace-nowrap">Date</button>
-                <button type="button" data-sort="popularite" onclick="setActualitesSort('popularite')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">Popularité</button>
-                <button type="button" data-sort="premium" onclick="setActualitesSort('premium')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">Premium</button>
+                <button type="button" data-sort="all" onclick="setActualitesSort('all')" class="sort-btn active px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/10 text-white whitespace-nowrap">🌍 Tout</button>
+                <button type="button" data-sort="region" onclick="setActualitesSort('region')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🏛️ Région</button>
+                <button type="button" data-sort="finance" onclick="setActualitesSort('finance')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">💰 Finance</button>
+                <button type="button" data-sort="tech" onclick="setActualitesSort('tech')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🚀 Tech</button>
+                <button type="button" data-sort="mode" onclick="setActualitesSort('mode')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🎤 Mode</button>
             </div>
             <!-- Annonces sponsorisées en premier -->
             <div id="actualites-section-annonces" class="mb-6">
@@ -537,7 +555,7 @@
                 <div id="annonces-list" class="space-y-3"></div>
             </div>
             <div id="actualites-section-ia" class="mb-6">
-                <h3 class="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2"><iconify-icon icon="solar:document-text-linear" width="18"></iconify-icon> Actualités IA</h3>
+                <h3 id="actualites-section-title" class="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2"><iconify-icon icon="solar:document-text-linear" width="18"></iconify-icon> Actualités IA</h3>
                 <div id="actualites-list" class="space-y-3"></div>
             </div>
             <div id="actualites-section-tendances" class="mb-6">
@@ -628,7 +646,7 @@
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Contact support</h3>
-                    <p class="text-sm text-slate-400 leading-relaxed">📱 WhatsApp: <a href="https://wa.me/2250707070707" class="text-indigo-400 hover:underline">+225 07 XX XX XX XX</a><br>📧 Email: <a href="mailto:support_clients@bipbiprecharge.ci" class="text-indigo-400 hover:underline">support_clients@bipbiprecharge.ci</a><br>💬 Telegram: <a href="https://t.me/bipbiprecharge_support" target="_blank" rel="noopener" class="text-indigo-400 hover:underline">@bipbiprecharge_support</a></p>
+                    <p class="text-sm text-slate-400 leading-relaxed">📱 WhatsApp: <a href="https://wa.me/22552597408" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">Envoyez un message à Bipbip Labs sur WhatsApp.</a><br>📧 Email: <a href="mailto:support_clients@bipbiprecharge.ci" class="text-indigo-400 hover:underline">support_clients@bipbiprecharge.ci</a><br>💬 Telegram: <a href="https://t.me/bipbiprecharge_support" target="_blank" rel="noopener" class="text-indigo-400 hover:underline">@bipbiprecharge_support</a></p>
                 </div>
             </div>
         </div>
@@ -644,14 +662,23 @@
             <!-- Réglage vitesse bandeau LED -->
             <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
                 <h3 class="font-semibold text-white mb-2">Vitesse du bandeau (message défilant)</h3>
-                <p class="text-sm text-slate-400 mb-3">Plus la valeur est grande, plus le défilement est lent. Actuel : <span id="admin-led-speed-value">60</span> secondes.</p>
+                <p class="text-sm text-slate-400 mb-3">Durée d’un passage complet du texte (un cycle). Plus le nombre est élevé, plus c’est lent. Réglage actuel : <span id="admin-led-speed-value">60</span> s.</p>
                 <div class="flex gap-2 items-center flex-wrap">
                     <input type="number" id="admin-led-speed" min="15" max="300" value="60" class="w-24 px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="60">
                     <span class="text-slate-400 text-sm">secondes (15–300)</span>
                     <button type="button" onclick="saveLedSpeed()" class="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/30">Enregistrer</button>
                 </div>
                 <p class="text-xs text-slate-400 mt-2">Clé admin : <input type="password" id="admin-key-input" placeholder="ADMIN_SECRET_KEY" class="w-40 px-2 py-1 rounded bg-slate-800 border border-white/10 text-white text-xs" autocomplete="off"> <button type="button" onclick="loadAdminOrders()" class="ml-2 px-3 py-1 rounded bg-indigo-500/30 border border-indigo-500/50 text-indigo-300 text-xs font-medium">Charger les commandes</button></p>
-                <p class="text-xs text-slate-500 mt-1">Accès Admin : <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Ctrl</kbd>+<kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Shift</kbd>+<kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">A</kbd></p>
+                <p class="text-xs text-slate-500 mt-1">Accès : <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Ctrl+Shift+A</kbd> · Appui long sur le logo · 5 taps rapides · <code class="px-1 py-0.5 rounded bg-white/10 text-slate-400">?admin</code></p>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
+                <h3 class="font-semibold text-white mb-2">Bannières publicitaires</h3>
+                <p class="text-sm text-slate-400 mb-3">Affichées sur l’écran Actualités (rotation ~7 s). Image : URL, chemin <code class="text-slate-500">/img/...</code> ou envoi fichier vers <code class="text-slate-500">/uploads/</code>.</p>
+                <div id="admin-pub-banners-rows" class="space-y-3 mb-3"></div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="addAdminPubBannerRow()" class="px-4 py-2 rounded-lg bg-white/10 border border-white/15 text-white text-sm hover:bg-white/15">+ Ajouter une bannière</button>
+                    <button type="button" onclick="savePubBanners()" class="px-4 py-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-sm font-medium hover:bg-rose-500/30">Enregistrer les bannières</button>
+                </div>
             </div>
             <div class="admin-tabs flex gap-2 mb-6">
                 <button type="button" class="tab-btn active flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-indigo-500/20 text-indigo-400 border-indigo-500/30" onclick="switchAdminTab('pending')">En attente</button>
@@ -662,19 +689,21 @@
     </main>
 
     <!-- Navigation bas: Recharge / Actualités / Quêtes -->
-    <nav class="fixed bottom-0 left-0 right-0 z-40 h-16 border-t border-white/10 bg-slate-900/95 backdrop-blur flex items-center justify-around max-w-lg mx-auto">
-        <button type="button" onclick="navigateTo('home')" class="nav-bottom-btn flex flex-col items-center gap-1 py-2 text-slate-400 hover:text-white transition-colors">
-            <iconify-icon icon="solar:card-linear" width="22"></iconify-icon>
-            <span class="text-xs font-medium">Recharge</span>
-        </button>
-        <button type="button" onclick="navigateTo('actualites')" class="nav-bottom-btn flex flex-col items-center gap-1 py-2 text-slate-400 hover:text-white transition-colors">
-            <iconify-icon icon="solar:document-text-linear" width="22"></iconify-icon>
-            <span class="text-xs font-medium">Actualités</span>
-        </button>
-        <button type="button" onclick="navigateTo('quests')" class="nav-bottom-btn flex flex-col items-center gap-1 py-2 text-slate-400 hover:text-white transition-colors">
-            <iconify-icon icon="solar:medal-ribbons-star-linear" width="22"></iconify-icon>
-            <span class="text-xs font-medium">Quêtes</span>
-        </button>
+    <nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-slate-900/95 backdrop-blur-md max-w-lg mx-auto" style="padding-bottom:env(safe-area-inset-bottom, 0px);">
+        <div class="flex items-center justify-around h-[60px]">
+            <button type="button" onclick="navigateTo('home')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:card-linear" width="24"></iconify-icon>
+                <span class="text-[11px] font-semibold">Recharge</span>
+            </button>
+            <button type="button" onclick="navigateTo('actualites')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:document-text-linear" width="24"></iconify-icon>
+                <span class="text-[11px] font-semibold">Actualités</span>
+            </button>
+            <button type="button" onclick="navigateTo('quests')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:medal-ribbons-star-linear" width="24"></iconify-icon>
+                <span class="text-[11px] font-semibold">Quêtes</span>
+            </button>
+        </div>
     </nav>
 
     <!-- Toast : notification discrète (courte, style sobre) -->

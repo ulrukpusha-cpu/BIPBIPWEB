@@ -19,25 +19,52 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 1rem 1rem 1.5rem;
 }
 .scene-main-content {
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
+    gap: 2px;
+}
+.scene-hero-title {
+    font-size: 1.65rem;
+    letter-spacing: -0.02em;
+}
+.scene-hero-subtitle {
+    font-size: 0.8rem;
+    opacity: 0.75;
+    max-width: 260px;
+}
+
+/* ── Bottom Navigation ── */
+.nav-bottom-btn.text-amber-400 {
+    color: #fbbf24 !important;
+}
+.nav-bottom-btn.text-amber-400::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: #fbbf24;
 }
 
 /* Écrans : un seul visible à la fois */
 .screen {
     display: none;
-    animation: slideIn 0.3s ease;
+    animation: slideIn 0.28s ease;
 }
 .screen.active {
     display: block;
 }
 @keyframes slideIn {
-    from { opacity: 0; transform: translateX(12px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { opacity: 0; transform: translate3d(12px, 0, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* Toast */
@@ -232,5 +259,45 @@
 }
 .order-status-info p:last-child {
     border-bottom: none;
+}
+
+/* ========== Mobile bas de gamme & accessibilité mouvement ========== */
+html.bipbip-lite #page-ambient-blur {
+    display: none;
+}
+html.bipbip-lite .glass-panel {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(30, 41, 59, 0.92);
+}
+html.bipbip-lite nav.backdrop-blur-md,
+html.bipbip-lite nav[class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(15, 23, 42, 0.97) !important;
+}
+html.bipbip-lite .scene-status-pill {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html.bipbip-lite .nav-bottom-btn {
+    transition-duration: 0.12s !important;
+}
+html.bipbip-lite .screen {
+    animation-duration: 0.16s;
+}
+html.bipbip-lite .order-card,
+html.bipbip-lite .btn-validate,
+html.bipbip-lite .btn-reject {
+    transition-duration: 0.12s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .screen {
+        animation: none !important;
+    }
+    .toast {
+        transition-duration: 0.12s !important;
+    }
 }
 

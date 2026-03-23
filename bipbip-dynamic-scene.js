@@ -6,21 +6,26 @@
 (function () {
   'use strict';
 
-  // ── PERF DETECTION ──
+  // ── PERF DETECTION (aligné sur <html class="bipbip-lite"> dans index.html) ──
   const IS_LOW_END = (function () {
+    try {
+      if (typeof document !== 'undefined' && document.documentElement.classList.contains('bipbip-lite')) {
+        return true;
+      }
+    } catch (e) { /* ignore */ }
     const mem = navigator.deviceMemory || 4;
     const cores = navigator.hardwareConcurrency || 4;
     return mem <= 2 || cores <= 2;
   })();
 
   const CFG = {
-    STAR_COUNT:      IS_LOW_END ? 10 : 20,
-    RAIN_COUNT:      IS_LOW_END ? 10 : 20,
-    LIGHT_DOT_COUNT: IS_LOW_END ? 5  : 10,
-    CLOUD_COUNT:     IS_LOW_END ? 1  : 2,
+    STAR_COUNT:      IS_LOW_END ? 6  : 20,
+    RAIN_COUNT:      IS_LOW_END ? 8  : 20,
+    LIGHT_DOT_COUNT: IS_LOW_END ? 3  : 10,
+    CLOUD_COUNT:     IS_LOW_END ? 0  : 2,
     PARTICLE_COUNT:  IS_LOW_END ? 0  : 8,
-    FIREFLY_COUNT:   IS_LOW_END ? 2  : 5,
-    BIRD_COUNT:      IS_LOW_END ? 2  : 4,
+    FIREFLY_COUNT:   IS_LOW_END ? 0  : 5,
+    BIRD_COUNT:      IS_LOW_END ? 0  : 4,
     UPDATE_INTERVAL: 60000,
     SUNRISE: 6,
     SUNSET_START: 17,
@@ -223,8 +228,10 @@
 
       // Clouds
       const clouds = el('div', 'bds-clouds', frag);
-      const c1 = el('div', 'bds-cloud bds-cloud--1', clouds);
-      this._animEls.push(c1);
+      if (CFG.CLOUD_COUNT >= 1) {
+        const c1 = el('div', 'bds-cloud bds-cloud--1', clouds);
+        this._animEls.push(c1);
+      }
       if (CFG.CLOUD_COUNT >= 2) {
         const c2 = el('div', 'bds-cloud bds-cloud--2', clouds);
         this._animEls.push(c2);

@@ -4,10 +4,53 @@
 const db = require('../database/supabase-client');
 const { scoreActualite } = require('./scoring');
 
-async function listApproved(limit = 20, offset = 0, sort = 'date') {
+const CATEGORY_KEYWORDS = {
+    region: ['afrique', 'côte d\'ivoire', 'abidjan', 'cameroun', 'sénégal', 'mali', 'burkina', 'guinée', 'togo', 'bénin', 'niger', 'congo', 'gabon', 'tchad', 'maroc', 'algérie', 'tunisie', 'kenya', 'nigeria', 'soudan', 'uemoa', 'cedeao', 'gouvernement', 'président', 'politique', 'élection', 'ministre', 'diplomatie'],
+    finance: ['crypto', 'bitcoin', 'ethereum', 'solana', 'blockchain', 'nft', 'token', 'bourse', 'trading', 'finance', 'banque', 'inflation', 'fmi', 'dette', 'fintech', 'minage', 'airdrop', 'staking', 'binance', 'wallet', 'investiss'],
+    tech: ['technologie', 'innovation', 'intelligence artificielle', 'startup', 'smartphone', 'logiciel', 'robot', 'spacex', 'tesla', 'apple', 'google', 'microsoft', 'openai', 'chatgpt', 'satellite', 'cybersécurité', 'nvidia', 'samsung', 'processeur', 'android', 'iphone'],
+    mode: ['artiste', 'musique', 'concert', 'festival', 'célébrité', 'fashion', 'film', 'cinéma', 'série', 'album', 'rap', 'afrobeat', 'grammy', 'football', 'champion', 'ballon d\'or', 'ligue des champions', 'acteur', 'actrice', 'chanteur', 'sport', 'coupe'],
+};
+
+function buildCategoryFilter(category) {
+    const kw = CATEGORY_KEYWORDS[category];
+    if (!kw) return null;
+    return kw.map(k => `title.ilike.%${k}%`).join(',');
+}
+
+async function listApproved(limit = 20, offset = 0, sort = 'date', category = null) {
     const supabase = db.getSupabase();
     if (!supabase) return [];
-    let q = supabase.from('actualites').select('id, title, slug, summary_short, published_at, ai_score').eq('status', 'approved');
+
+    const cols = 'id, title, slug, summary_short, published_at, ai_score';
+
+    if (category && CATEGORY_KEYWORDS[category]) {
+        let hasCol = true;
+        try {
+            const { error: testErr } = await supabase.from('actualites').select('category').limit(0);
+            if (testErr) hasCol = false;
+        } catch { hasCol = false; }
+
+        if (hasCol) {
+            const { data } = await supabase.from('actualites')
+                .select(cols)
+                .eq('status', 'approved')
+                .eq('category', category)
+                .order('published_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+            if (data && data.length > 0) return data;
+        }
+
+        const filter = buildCategoryFilter(category);
+        const { data } = await supabase.from('actualites')
+            .select(cols)
+            .eq('status', 'approved')
+            .or(filter)
+            .order('published_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+        return data || [];
+    }
+
+    let q = supabase.from('actualites').select(cols).eq('status', 'approved');
     if (sort === 'date') q = q.order('published_at', { ascending: false });
     else if (sort === 'popularite') q = q.order('ai_score', { ascending: false });
     const { data } = await q.range(offset, offset + limit - 1);
@@ -35,7 +78,7 @@ async function createActualite(payload) {
     const ai_score = payload.ai_score != null ? payload.ai_score : scoreActualite(payload.title, payload.content, payload.sources);
     const status = ['draft', 'pending', 'approved', 'rejected'].includes(payload.status) ? payload.status : 'pending';
     const sourcesStr = payload.sources == null ? null : (typeof payload.sources === 'string' ? payload.sources : JSON.stringify(payload.sources));
-    const { data, error } = await supabase.from('actualites').insert({
+    const row = {
         title: payload.title,
         slug,
         content: payload.content || '',
@@ -44,7 +87,13 @@ async function createActualite(payload) {
         ai_score,
         status,
         published_at: status === 'approved' ? new Date().toISOString() : null,
-    }).select('id, slug, status').single();
+    };
+    if (payload.category) row.category = payload.category;
+    let { data, error } = await supabase.from('actualites').insert(row).select('id, slug, status').single();
+    if (error && error.message && error.message.includes('category')) {
+        delete row.category;
+        ({ data, error } = await supabase.from('actualites').insert(row).select('id, slug, status').single());
+    }
     if (error) return { error: error.message };
     return { actualite: data };
 }

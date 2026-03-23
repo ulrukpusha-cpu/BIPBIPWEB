@@ -18,13 +18,16 @@ cp -a "$ENV_FILE" "${ENV_FILE}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
 
 echo ">>> Ajout des variables actualités dans .env (si absentes)..."
 
-if ! grep -q "^RSS_FEED_URLS=" "$ENV_FILE" 2>/dev/null; then
+if ! grep -q "^RSS_FEEDS_REGION=" "$ENV_FILE" 2>/dev/null; then
     echo "" >> "$ENV_FILE"
-    echo "# Flux RSS actualités (max 6) - lu par cron/fetchNewsRss.js" >> "$ENV_FILE"
-    echo "RSS_FEED_URLS=https://www.rfi.fr/fr/rss,https://www.rfi.fr/fr/afrique/rss,https://www.fratmat.info/feed/,https://feeds.bbci.co.uk/french/rss.xml,https://www.lemonde.fr/afrique/rss_full.xml,https://www.jeuneafrique.com/feed/" >> "$ENV_FILE"
-    echo "    RSS_FEED_URLS ajouté."
+    echo "# Flux RSS par catégorie - lu par cron/fetchNewsRss.js" >> "$ENV_FILE"
+    echo "RSS_FEEDS_REGION=https://www.jeuneafrique.com/feed/,https://www.rfi.fr/fr/afrique/rss,https://feeds.bbci.co.uk/afrique/rss.xml" >> "$ENV_FILE"
+    echo "RSS_FEEDS_FINANCE=https://fr.cointelegraph.com/rss,https://journalducoin.com/feed/,https://cryptoast.fr/feed/" >> "$ENV_FILE"
+    echo "RSS_FEEDS_TECH=https://www.numerama.com/feed/,https://www.frandroid.com/feed,https://www.01net.com/rss/info/flux-rss/flux-toutes-les-actualites/" >> "$ENV_FILE"
+    echo "RSS_FEEDS_MODE=https://www.rfi.fr/fr/culture/rss,https://www.france24.com/fr/culture/rss,https://www.france24.com/fr/sport/rss" >> "$ENV_FILE"
+    echo "    RSS_FEEDS_REGION/FINANCE/TECH/MODE ajoutés."
 else
-    echo "    RSS_FEED_URLS déjà présent."
+    echo "    RSS_FEEDS_REGION déjà présent."
 fi
 
 if ! grep -q "^AUTO_APPROVE_RSS=" "$ENV_FILE" 2>/dev/null; then

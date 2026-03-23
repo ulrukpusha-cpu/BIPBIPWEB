@@ -22,7 +22,8 @@ router.get('/', (req, res) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
     const sort = ['date', 'popularite'].includes(req.query.sort) ? req.query.sort : 'date';
-    actualitesService.listApproved(limit, offset, sort)
+    const category = ['region', 'finance', 'tech', 'mode'].includes(req.query.category) ? req.query.category : null;
+    actualitesService.listApproved(limit, offset, sort, category)
         .then(list => res.json({ actualites: list }))
         .catch(err => {
             console.error('actualites list:', err);

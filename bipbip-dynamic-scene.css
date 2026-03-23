@@ -3,46 +3,43 @@
    GPU-only, battery-friendly, edge-blended
    ============================================ */
 
-/* ── CONTAINER 16:10 — variables = fond page, fondu sans bord net ── */
+/* ── CONTAINER — fondu rectangulaire doux, comme la ref ── */
 .bds-container {
   --bds-page-bg: #0f172a;
   --bds-page-rgb: 15, 23, 42;
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 260px;
+  aspect-ratio: 16 / 10;
+  max-height: 300px;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: 18px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   contain: layout style paint;
   background: transparent;
   transform: translateZ(0);
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, black 10%, black 90%, transparent),
+    linear-gradient(to bottom, transparent, black 6%, black 65%, transparent);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    linear-gradient(to right, transparent, black 10%, black 90%, transparent),
+    linear-gradient(to bottom, transparent, black 6%, black 65%, transparent);
+  mask-composite: intersect;
 }
 
-/* Dégradés multi-directionnels → fond page, pas de contour tranché */
+/* Pas de pseudo-élément overlay — le mask-image gère tout */
 .bds-container::after {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  z-index: 11;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    linear-gradient(to right, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(28%, 5.5rem)),
-    linear-gradient(to left, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(28%, 5.5rem)),
-    linear-gradient(to bottom, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(28%, 5rem)),
-    linear-gradient(to top, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(22%, 5rem)),
-    radial-gradient(ellipse 95% 90% at 50% 45%, rgba(var(--bds-page-rgb), 0) 0%, rgba(var(--bds-page-rgb), 0) 58%, rgba(var(--bds-page-rgb), 0.55) 88%, var(--bds-page-bg) 100%);
+  display: none;
 }
 
 /* ── SCENE LAYERS (crossfade backgrounds) ── */
 .bds-scene-layer {
   position: absolute;
-  inset: -8px;
+  inset: -6px;
   background-size: cover;
-  background-position: center 40%;
+  background-position: center 38%;
   background-repeat: no-repeat;
   opacity: 0;
   transition: opacity 2.5s ease;
@@ -507,27 +504,9 @@
   100% { transform: translate3d(40%, 40%, 0) rotate(25deg); }
 }
 
-/* ── PREMIUM GLOW RING — halo très léger ── */
+/* ── PREMIUM GLOW RING — désactivé, le mask-image gère le fondu ── */
 .bds-glow-ring {
-  position: absolute;
-  inset: -1px;
-  z-index: 12;
-  pointer-events: none;
-  border-radius: inherit;
-  opacity: 0;
-  transition: opacity 2s ease;
-}
-.bds-glow-ring--day {
-  box-shadow: 0 0 28px 14px rgba(255, 200, 60, 0.08);
-  opacity: 0.5;
-}
-.bds-glow-ring--sunset {
-  box-shadow: 0 0 28px 14px rgba(255, 120, 60, 0.08);
-  opacity: 0.5;
-}
-.bds-glow-ring--night {
-  box-shadow: 0 0 28px 14px rgba(80, 120, 255, 0.07);
-  opacity: 0.45;
+  display: none;
 }
 
 /* ── TRIGGER BADGE ── */
@@ -566,13 +545,13 @@
   border: 1px solid rgba(160,180,224,0.15);
 }
 
-/* ── VIGNETTE — couleur page, pas un cadre noir dur ── */
+/* ── VIGNETTE — légère, le mask gère l'essentiel ── */
 .bds-vignette {
   position: absolute;
   inset: 0;
   z-index: 9;
   pointer-events: none;
-  box-shadow: inset 0 0 50px 28px rgba(var(--bds-page-rgb), 0.25);
+  box-shadow: inset 0 0 40px 15px rgba(var(--bds-page-rgb), 0.2);
   border-radius: inherit;
 }
 
@@ -604,37 +583,69 @@
 .bds-container[data-perf="low"] .bds-vignette { box-shadow: none; }
 .bds-container[data-perf="low"] .bds-character { animation: none !important; }
 
+/* Masques CSS + grosses transitions = coûteux sur GPU intégré faible */
+.bds-container[data-perf="low"] {
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  mask-composite: unset;
+  -webkit-mask-composite: unset;
+  contain: layout style;
+}
+.bds-container[data-perf="low"] .bds-scene-layer {
+  transition: opacity 1s ease !important;
+  will-change: auto;
+}
+.bds-container[data-perf="low"] .bds-scene-layer--active {
+  transition: opacity 1s ease, transform 0.25s ease-out !important;
+  will-change: auto;
+}
+.bds-container[data-perf="low"] .bds-star {
+  animation: none !important;
+  opacity: 0.5;
+}
+.bds-container[data-perf="low"] .bds-cloud {
+  animation: none !important;
+  opacity: 0.3;
+  transform: translate3d(12vw, 0, 0);
+}
+.bds-container[data-perf="low"] .bds-birds {
+  display: none !important;
+}
+.bds-container[data-perf="low"] .bds-light-dot {
+  animation: none !important;
+  opacity: 0.6;
+}
+.bds-container[data-perf="low"] .bds-shooting-stars {
+  display: none !important;
+}
+
 /* ── REDUCED MOTION ── */
 @media (prefers-reduced-motion: reduce) {
   .bds-star, .bds-cloud, .bds-raindrop, .bds-light-dot,
   .bds-shooting-star, .bds-particle, .bds-firefly,
   .bds-aurora-wave, .bds-shimmer::after, .bds-character,
   .bds-bird, .bds-bird::before, .bds-bird::after { animation: none !important; }
-  .bds-scene-layer { transition: opacity 0.5s ease; }
+  .bds-scene-layer,
+  .bds-scene-layer--active { transition: opacity 0.45s ease !important; }
   .bds-star { opacity: 0.6; }
   .bds-light-dot { opacity: 0.7; }
+  .bds-container {
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+  }
 }
 
 /* ── RESPONSIVE ── */
 @media (max-width: 360px) {
-  .bds-container { max-height: 200px; border-radius: 18px; }
-  .bds-container::after {
-    inset: -4px;
-    background:
-      linear-gradient(to right, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(32%, 4rem)),
-      linear-gradient(to left, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(32%, 4rem)),
-      linear-gradient(to bottom, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(30%, 3.5rem)),
-      linear-gradient(to top, var(--bds-page-bg) 0%, rgba(var(--bds-page-rgb), 0) min(26%, 3rem)),
-      radial-gradient(ellipse 98% 92% at 50% 45%, rgba(var(--bds-page-rgb), 0) 0%, rgba(var(--bds-page-rgb), 0) 55%, rgba(var(--bds-page-rgb), 0.5) 88%, var(--bds-page-bg) 100%);
-  }
+  .bds-container { max-height: 220px; }
   .bds-character { width: 60px; }
   .bds-lens-flare { width: 70px; height: 70px; }
 }
 @media (min-width: 768px) {
-  .bds-container { max-height: 360px; border-radius: 24px; }
+  .bds-container { max-height: 400px; }
   .bds-character { width: 100px; }
 }
 @media (min-width: 1024px) {
-  .bds-container { max-height: 440px; }
+  .bds-container { max-height: 480px; }
   .bds-character { width: 120px; }
 }

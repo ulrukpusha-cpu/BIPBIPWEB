@@ -21,7 +21,6 @@ const annoncesService = require('./services/annoncesService');
 const { moderateSocialLink } = require('./services/aiModeration');
 const questsRoutes = require('./routes/quests');
 const ledService = require('./services/ledService');
-const actualitesService = require('./services/actualitesService');
 
 // ==================== CONFIG ====================
 const app = express();
@@ -58,14 +57,46 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 const DATA_DIR = './data';
 const APP_CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
 
+const DEFAULT_PUB_BANNERS = [
+    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci' },
+    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci' },
+    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci' }
+];
+
+function sanitizePubBanners(arr) {
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    for (const x of arr.slice(0, 12)) {
+        if (!x || typeof x !== 'object') continue;
+        const text = String(x.text || '').slice(0, 200);
+        const image = String(x.image || '').trim().slice(0, 512);
+        const url = String(x.url || '').trim().slice(0, 512);
+        if (!image) continue;
+        if (!/^https?:\/\//i.test(image) && !image.startsWith('/')) continue;
+        const row = { text, image };
+        if (url && (/^https?:\/\//i.test(url) || url.startsWith('/'))) row.url = url;
+        out.push(row);
+    }
+    return out;
+}
+
 function readAppConfig() {
+    const defaults = {
+        ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60,
+        pubBanners: DEFAULT_PUB_BANNERS
+    };
     try {
         if (fs.existsSync(APP_CONFIG_PATH)) {
-            const raw = fs.readFileSync(APP_CONFIG_PATH, 'utf8');
-            return JSON.parse(raw);
+            const raw = JSON.parse(fs.readFileSync(APP_CONFIG_PATH, 'utf8'));
+            const led = Math.min(300, Math.max(15, parseInt(raw.ledScrollSeconds, 10) || defaults.ledScrollSeconds));
+            let pubBanners = defaults.pubBanners;
+            if (Array.isArray(raw.pubBanners)) {
+                pubBanners = sanitizePubBanners(raw.pubBanners);
+            }
+            return { ledScrollSeconds: led, pubBanners };
         }
     } catch (e) { /* ignore */ }
-    return { ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60 };
+    return { ...defaults };
 }
 
 function writeAppConfig(obj) {
@@ -94,7 +125,18 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('.'));
+app.use(express.static('.', {
+    etag: false,
+    lastModified: false,
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+        if (/\.(html|css|js)$/.test(filePath)) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.use('/api', authTelegram);
@@ -269,14 +311,16 @@ async function downloadTelegramFile(fileId) {
 
 // ==================== API ROUTES ====================
 
-// Config publique (MoMo, vitesse bandeau LED)
+// Config publique (MoMo, vitesse bandeau LED, bannières pub)
 app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();
     const appConfig = readAppConfig();
+    const banners = Array.isArray(appConfig.pubBanners) ? appConfig.pubBanners : DEFAULT_PUB_BANNERS;
     res.json({
         mtnMerchantPhone: mtnMerchantPhone || null,
         momoEnabled: !!process.env.MTN_SUBSCRIPTION_KEY && !!process.env.MTN_API_USER,
-        ledScrollSeconds: Math.min(300, Math.max(15, appConfig.ledScrollSeconds || 60))
+        ledScrollSeconds: Math.min(300, Math.max(15, appConfig.ledScrollSeconds || 60)),
+        pubBanners: banners
     });
 });
 
@@ -333,7 +377,7 @@ app.get('/api/weather', async (req, res) => {
     }
 });
 
-// Admin : mettre à jour la config (ex. vitesse bandeau)
+// Admin : mettre à jour la config (ex. vitesse bandeau, bannières pub)
 app.put('/api/admin/config', (req, res) => {
     const secret = process.env.ADMIN_SECRET_KEY;
     if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
@@ -345,8 +389,31 @@ app.put('/api/admin/config', (req, res) => {
         const val = Math.min(300, Math.max(15, parseInt(body.ledScrollSeconds, 10) || 60));
         current.ledScrollSeconds = val;
     }
+    if (body.pubBanners != null) {
+        if (!Array.isArray(body.pubBanners)) {
+            return res.status(400).json({ error: 'pubBanners doit être un tableau' });
+        }
+        current.pubBanners = sanitizePubBanners(body.pubBanners);
+    }
     if (!writeAppConfig(current)) return res.status(500).json({ error: 'Erreur écriture config' });
-    res.json({ success: true, config: { ledScrollSeconds: current.ledScrollSeconds } });
+    res.json({
+        success: true,
+        config: {
+            ledScrollSeconds: current.ledScrollSeconds,
+            pubBanners: current.pubBanners
+        }
+    });
+});
+
+// Admin : image bannière pub → /uploads/...
+app.post('/api/admin/pub-banner-image', upload.single('image'), (req, res) => {
+    const secret = process.env.ADMIN_SECRET_KEY;
+    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
+    const key = req.headers['x-admin-key'];
+    if (key !== secret) return res.status(401).json({ error: 'Non autorisé' });
+    if (!req.file) return res.status(400).json({ error: 'Fichier image manquant (champ "image")' });
+    const url = '/uploads/' + req.file.filename;
+    res.json({ success: true, url });
 });
 
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)
@@ -539,7 +606,15 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
         if (!order) {
             return res.status(404).json({ error: 'Commande introuvable' });
         }
-        if (order.operator !== 'ANNONCE_LED' && order.phone) {
+        if (order.operator === 'PROMO_LIKES') {
+            if (order.userId) {
+                const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
+                if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
+                await telegramUsersService.approveSocialLink(order.userId);
+                await sendTelegramMessage(order.userId,
+                    '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
+            }
+        } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
             const ussdResult = await executeUssdTransfer(order);
             if (order.userId) {
                 const txt = ussdResult.success
@@ -572,7 +647,15 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
         const orderId = req.params.id;
         const order = await orderStorage.setOrderValidated(orderId);
         if (!order) return res.status(404).json({ error: 'Commande introuvable' });
-        if (order.operator !== 'ANNONCE_LED' && order.phone) {
+        if (order.operator === 'PROMO_LIKES') {
+            if (order.userId) {
+                const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
+                if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
+                await telegramUsersService.approveSocialLink(order.userId);
+                await sendTelegramMessage(order.userId,
+                    '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
+            }
+        } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
             const ussdResult = await executeUssdTransfer(order);
             if (order.userId) {
                 const txt = ussdResult.success
@@ -818,6 +901,7 @@ app.post('/api/telegram/promo-likes', async (req, res) => {
     try {
         const socialLink = req.body && req.body.social_link ? String(req.body.social_link).trim().slice(0, 500) : '';
         if (!socialLink) return res.status(400).json({ error: 'Lien YouTube, X ou Telegram requis' });
+        await telegramUsersService.updateSocialLink(req.userId, socialLink);
         let amount = parseInt(req.body.amount, 10);
         const durationDays = Math.max(4, Math.min(7, parseInt(req.body.duration_days, 10) || 4));
         if (!Number.isFinite(amount) || amount < PROMO_LIKES_MIN) amount = PROMO_LIKES_MIN;
@@ -1144,7 +1228,16 @@ async function handleTelegramUpdateAdmin(body) {
                 if (order) {
                     await answerTelegramCallback(callbackId, 'Commande validée', botToken);
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`, {}, botToken);
-                    if (order.operator !== 'ANNONCE_LED' && order.phone) {
+                    if (order.operator === 'PROMO_LIKES') {
+                        if (order.userId) {
+                            const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
+                            if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
+                            await telegramUsersService.approveSocialLink(order.userId);
+                            await sendTelegramMessage(order.userId,
+                                '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !', {}, botToken);
+                            if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).', {}, botToken);
+                        }
+                    } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
                         const ussdResult = await executeUssdTransfer(order);
                         if (order.userId) {
                             const txt = ussdResult.success
@@ -1527,7 +1620,16 @@ async function handleTelegramUpdate(body) {
                 if (order) {
                     await answerTelegramCallback(callbackId, 'Commande validée');
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`);
-                    if (order.operator !== 'ANNONCE_LED' && order.phone) {
+                    if (order.operator === 'PROMO_LIKES') {
+                        if (order.userId) {
+                            const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
+                            if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
+                            await telegramUsersService.approveSocialLink(order.userId);
+                            await sendTelegramMessage(order.userId,
+                                '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
+                            if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).');
+                        }
+                    } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
                         const ussdResult = await executeUssdTransfer(order);
                         if (order.userId) {
                             const txt = ussdResult.success

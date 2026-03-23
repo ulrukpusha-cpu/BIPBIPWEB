@@ -2,6 +2,13 @@
 // Base URL de l'API (même origine que la page pour éviter "erreur réseau" en Mini App Telegram)
 const API_BASE = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
 
+function isBipbipLite() {
+    return typeof document !== 'undefined' && document.documentElement.classList.contains('bipbip-lite');
+}
+function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
 const CONFIG = {
     FRAIS_PERCENT: 5,
     ADMIN_ID: '6735995998',
@@ -13,8 +20,8 @@ const CONFIG = {
     AMOUNTS: [500, 1000, 2000, 5000, 10000, 15000, 20000, 25000]
 };
 
-// Config serveur (MoMo activé, numéro marchand)
-let serverConfig = { momoEnabled: false, mtnMerchantPhone: null };
+// Config serveur (MoMo activé, numéro marchand, bandeau LED, bannières pub)
+let serverConfig = { momoEnabled: false, mtnMerchantPhone: null, ledScrollSeconds: 60, pubBanners: null };
 
 // En-têtes API avec initData Telegram pour validation côté serveur (sécurité comme v2)
 function getApiHeaders(extra) {
@@ -45,27 +52,18 @@ var lastAnnonceId = null;
 var lastAnnoncePrix = null;
 var annoncePaymentRef = null;
 
-// Bannière pub (Actualités)
-// image: chemin relatif depuis la racine du site (ex: /img/recharge-banner.jpg)
-// url: lien à ouvrir au clic (optionnel)
-var PUB_BANNERS = [
-    {
-        text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.',
-        image: '/img/recharge-banner.jpg',
-        url: 'https://bipbiprecharge.ci'
-    },
-    {
-        text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.',
-        image: '/img/recharge-banner-2.jpg',
-        url: 'https://bipbiprecharge.ci'
-    },
-    {
-        text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.',
-        image: '/img/recharge-banner-3.jpg',
-        url: 'https://bipbiprecharge.ci'
-    }
+// Bannières pub par défaut (tant que /api/config n’a pas répondu ou si le tableau serveur est vide côté config — le serveur renvoie toujours une liste)
+var DEFAULT_PUB_BANNERS = [
+    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci' },
+    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci' },
+    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci' }
 ];
 var pubBannerInterval = null;
+
+function getPubBannerList() {
+    if (Array.isArray(serverConfig.pubBanners)) return serverConfig.pubBanners;
+    return DEFAULT_PUB_BANNERS;
+}
 
 // ==================== TELEGRAM WEBAPP ====================
 let tg = window.Telegram?.WebApp;
@@ -358,7 +356,7 @@ function convertPointsToBip() {
     showToast('Conversion effectuée : ' + bip + ' BIP', 'success');
 }
 
-var actualitesSort = 'date';
+var actualitesSort = 'all';
 
 function initAnnonceCharCount() {
     var ta = document.getElementById('annonce-led-text');
@@ -492,6 +490,14 @@ function checkAnnonceMomoStatus() {
 }
 
 // ==================== ACTUALITÉS ====================
+var CATEGORY_LABELS = {
+    all:     '📰 Actualités IA',
+    region:  '🏛️ Actualités du pays',
+    finance: '💰 Finance — Crypto & Marchés',
+    tech:    '🚀 Tech — Innovation',
+    mode:    '🎤 Mode — Stars & Events'
+};
+
 function setActualitesSort(sort) {
     actualitesSort = sort;
     document.querySelectorAll('#screen-actualites .sort-btn').forEach(function (btn) {
@@ -502,14 +508,30 @@ function setActualitesSort(sort) {
         btn.classList.toggle('bg-white/5', !isActive);
         btn.classList.toggle('text-slate-400', !isActive);
     });
+    var titleEl = document.getElementById('actualites-section-title');
+    if (titleEl) titleEl.innerHTML = '<iconify-icon icon="solar:document-text-linear" width="18"></iconify-icon> ' + (CATEGORY_LABELS[sort] || CATEGORY_LABELS.all);
     loadActualites(sort);
 }
 
 function initPubBanner() {
     var container = document.getElementById('tendances-list');
+    var section = document.getElementById('actualites-section-tendances');
     if (!container) return;
 
-    // Créer le markup une seule fois
+    var list = getPubBannerList();
+    if (pubBannerInterval) {
+        clearInterval(pubBannerInterval);
+        pubBannerInterval = null;
+    }
+
+    if (!list.length) {
+        if (section) section.classList.add('hidden');
+        container.innerHTML = '';
+        delete container.dataset.initialized;
+        return;
+    }
+    if (section) section.classList.remove('hidden');
+
     if (!container.dataset.initialized) {
         container.dataset.initialized = '1';
         container.innerHTML = '' +
@@ -522,8 +544,6 @@ function initPubBanner() {
             '</button>';
     }
 
-    if (!PUB_BANNERS.length) return;
-
     var btnEl = document.getElementById('pub-banner-card');
     var textEl = document.getElementById('pub-banner-text');
     var imgEl = document.getElementById('pub-banner-img');
@@ -531,7 +551,9 @@ function initPubBanner() {
 
     var index = 0;
     function applyBanner(i) {
-        var b = PUB_BANNERS[i] || PUB_BANNERS[0];
+        var banners = getPubBannerList();
+        if (!banners.length) return;
+        var b = banners[i % banners.length];
         textEl.textContent = b.text || '';
         if (b.image) {
             imgEl.src = b.image;
@@ -552,13 +574,15 @@ function initPubBanner() {
         }
     }
 
-    applyBanner(index);
+    applyBanner(0);
 
-    if (pubBannerInterval) clearInterval(pubBannerInterval);
+    var slideMs = (prefersReducedMotion() || isBipbipLite()) ? 12000 : 7000;
     pubBannerInterval = setInterval(function () {
-        index = (index + 1) % PUB_BANNERS.length;
+        var banners = getPubBannerList();
+        if (banners.length < 2) return;
+        index = (index + 1) % banners.length;
         applyBanner(index);
-    }, 7000);
+    }, slideMs);
 }
 
 function loadActualites(sort) {
@@ -567,8 +591,11 @@ function loadActualites(sort) {
     var annoncesList = document.getElementById('annonces-list');
     if (!actualitesList) return;
 
-    var sortActualites = (sort === 'premium') ? 'popularite' : sort;
-    fetch(API_BASE + '/api/actualites?limit=15&sort=' + encodeURIComponent(sortActualites))
+    var apiUrl = API_BASE + '/api/actualites?limit=15&sort=date';
+    if (sort && sort !== 'all') {
+        apiUrl += '&category=' + encodeURIComponent(sort);
+    }
+    fetch(apiUrl)
         .then(function (res) { return res.json(); })
         .then(function (data) {
             var items = (data && data.actualites) ? data.actualites : [];
@@ -737,18 +764,70 @@ function loadApprovedLinks() {
             }
             listEl.innerHTML = items.map(function (item) {
                 var clickUrl = API_BASE + '/api/quests/click-link/' + encodeURIComponent(item.id) + (userId ? '?userId=' + encodeURIComponent(userId) : '');
-                var label = escapeHtml(item.label || 'Lien');
+                var icon = item.icon || '🔗';
+                var title = escapeHtml(item.label || 'Découvre ce lien');
+                var desc = escapeHtml(item.desc || '');
+                var by = item.by ? '<span class="text-slate-500 text-xs">par ' + escapeHtml(item.by) + '</span>' : '';
                 if (item.already_clicked) {
-                    return '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between">' +
-                        '<div class="flex items-center gap-3"><span class="text-xl">🔗</span><span class="text-white font-medium">' + label + '</span></div>' +
-                        '<span class="text-slate-500 text-sm">Déjà cliqué ✓</span></div>';
+                    return '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between opacity-60">' +
+                        '<div class="flex items-center gap-3 min-w-0"><span class="text-2xl flex-shrink-0">' + icon + '</span><div>' +
+                        '<span class="font-medium text-white block">' + title + '</span>' +
+                        (desc ? '<span class="text-slate-400 text-sm">' + desc + '</span>' : '') +
+                        by + '</div></div>' +
+                        '<span class="text-green-400 text-sm flex-shrink-0">✓ Fait</span></div>';
                 }
                 return '<a href="' + escapeHtml(clickUrl) + '" target="_blank" rel="noopener" class="flex items-center justify-between glass-panel rounded-xl p-4 border border-white/15 hover:bg-white/10 transition-colors">' +
-                    '<div class="flex items-center gap-3 min-w-0"><span class="text-xl flex-shrink-0">🔗</span><div><span class="font-medium text-white block">' + label + '</span><span class="text-amber-400 text-sm">+' + pointsPerClick + ' pts</span></div></div>' +
+                    '<div class="flex items-center gap-3 min-w-0"><span class="text-2xl flex-shrink-0">' + icon + '</span><div>' +
+                    '<span class="font-medium text-white block">' + title + '</span>' +
+                    (desc ? '<span class="text-slate-400 text-sm block">' + desc + '</span>' : '') +
+                    '<span class="text-amber-400 text-sm">+' + pointsPerClick + ' pts</span>' +
+                    by + '</div></div>' +
                     '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon></a>';
             }).join('');
         })
         .catch(function () { listEl.innerHTML = ''; });
+}
+
+function getQuestMeta(type) {
+    var meta = {
+        referral:  { icon: '👥', action: 'quest_referral',  cta: 'Partager mon lien' },
+        recharge:  { icon: '📲', action: 'quest_recharge',  cta: 'Faire une recharge' },
+        annonce:   { icon: '📢', action: 'quest_annonce',   cta: 'Publier une annonce' },
+        reading:   { icon: '📰', action: 'quest_reading',   cta: 'Lire les articles' }
+    };
+    return meta[type] || { icon: '🏆', action: '', cta: '' };
+}
+
+function handleQuestAction(type) {
+    if (type === 'quest_referral') {
+        var refLink = (window.__bipbipRegisteredUser && window.__bipbipRegisteredUser.referral_link) || '';
+        if (!refLink) {
+            var refInput = document.getElementById('profil-referral-link');
+            refLink = refInput && refInput.value ? refInput.value : '';
+        }
+        if (!refLink) {
+            showToast('Ouvre ton profil pour obtenir ton lien de parrainage', 'info');
+            navigateTo('profil');
+            return;
+        }
+        if (tg && tg.openTelegramLink) {
+            tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(refLink) + '&text=' + encodeURIComponent('🎁 Rejoins Bipbip Recharge CI et gagne 20 points offerts !\nRecharge ton crédit mobile et accumule des récompenses.'));
+        } else if (navigator.share) {
+            navigator.share({ title: 'Bipbip Recharge CI', text: 'Rejoins Bipbip Recharge CI et gagne des points !', url: refLink }).catch(function () {});
+        } else {
+            try { navigator.clipboard.writeText(refLink); showToast('Lien copié ! Partage-le à tes amis.', 'success'); } catch (e) { showToast('Copie le lien manuellement', 'info'); }
+        }
+    } else if (type === 'quest_recharge') {
+        navigateTo('home');
+    } else if (type === 'quest_annonce') {
+        navigateTo('profil');
+        setTimeout(function () {
+            var section = document.getElementById('profil-annonce-section');
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+    } else if (type === 'quest_reading') {
+        navigateTo('actualites');
+    }
 }
 
 function loadQuests() {
@@ -761,15 +840,25 @@ function loadQuests() {
         .then(function (data) {
             var items = (data && data.quests) ? data.quests : [];
             if (items.length === 0) {
-                container.innerHTML = '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-xl">🎬</span><div><span class="font-medium text-white block">Quête Vidéo</span><span class="text-slate-400 text-sm">Missions vidéo</span></div></div><iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon></div>' +
-                    '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-xl">📱</span><div><span class="font-medium text-white block">ProfitX, YouTube, Telegram</span><span class="text-slate-400 text-sm">Réseaux et plateformes</span></div></div><iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon></div>';
+                container.innerHTML = '<p class="text-slate-400 text-sm">Aucune quête disponible.</p>';
                 return;
             }
             container.innerHTML = items.map(function (q) {
                 var pts = q.points_reward || 0;
-                return '<div class="glass-panel rounded-xl p-4 border border-white/15 flex items-center justify-between">' +
-                    '<div class="flex items-center gap-3 min-w-0"><span class="text-xl flex-shrink-0">🏆</span><div><span class="font-medium text-white block">' + escapeHtml(q.titre || q.code || '') + '</span><span class="text-slate-400 text-sm">' + escapeHtml((q.description || '').slice(0, 40)) + (q.description && q.description.length > 40 ? '…' : '') + '</span><span class="text-amber-400 text-sm block">+' + pts + ' pts</span></div></div>' +
-                    '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon></div>';
+                var m = getQuestMeta(q.type);
+                return '<div class="glass-panel rounded-xl p-4 border border-white/15 hover:bg-white/10 transition-colors cursor-pointer" onclick="handleQuestAction(\'' + escapeHtml(m.action) + '\')">' +
+                    '<div class="flex items-center justify-between">' +
+                    '<div class="flex items-center gap-3 min-w-0">' +
+                    '<span class="text-2xl flex-shrink-0">' + m.icon + '</span>' +
+                    '<div>' +
+                    '<span class="font-medium text-white block">' + escapeHtml(q.titre || q.code || '') + '</span>' +
+                    '<span class="text-slate-400 text-sm block">' + escapeHtml((q.description || '').slice(0, 50)) + (q.description && q.description.length > 50 ? '…' : '') + '</span>' +
+                    '<span class="text-amber-400 text-sm block">+' + pts + ' pts</span>' +
+                    '</div></div>' +
+                    '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon>' +
+                    '</div>' +
+                    (m.cta ? '<button class="mt-3 w-full py-2 rounded-lg text-sm font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">' + escapeHtml(m.cta) + '</button>' : '') +
+                    '</div>';
             }).join('');
         })
         .catch(function () {
@@ -789,6 +878,27 @@ function firstPhrase(text, maxLen) {
     var ends = [i1, i2, i3].filter(function (i) { return i > 0; });
     var end = ends.length ? Math.min.apply(null, ends) + 1 : max;
     return t.slice(0, end).trim();
+}
+
+function applyLedAnimation() {
+    var el = document.getElementById('led-text');
+    if (!el) return;
+    if (prefersReducedMotion()) {
+        el.style.animation = 'none';
+        el.style.paddingLeft = '0';
+        el.style.whiteSpace = 'normal';
+        el.style.textAlign = 'center';
+        return;
+    }
+    el.style.paddingLeft = '';
+    el.style.whiteSpace = '';
+    el.style.textAlign = '';
+    // Durée = réglage admin (secondes pour un cycle)
+    var duration = Math.min(300, Math.max(15, parseInt(serverConfig.ledScrollSeconds, 10) || 60));
+    if (isBipbipLite()) duration = Math.min(300, Math.round(duration * 1.15));
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'led-scroll ' + duration + 's linear infinite';
 }
 
 function loadLedMessages() {
@@ -813,9 +923,11 @@ function loadLedMessages() {
         ledMessages.forEach(function (m) { if (m) parts.push(m); });
 
         el.textContent = parts.join('  ·  ') || welcome + ' — Rechargez en un clic';
+        applyLedAnimation();
     })
     .catch(function () {
         el.textContent = welcome + ' — Rechargez en un clic';
+        applyLedAnimation();
     });
 }
 
@@ -846,6 +958,35 @@ function loadHomeWeather() {
 }
 
 // ==================== NAVIGATION ====================
+var SCREEN_SESSION_KEY = 'bipbip_last_screen';
+
+function canRestoreScreen(screen) {
+    var need = {
+        amount: function () { return !!currentOrder.operator; },
+        phone: function () { return !!currentOrder.operator && currentOrder.amount != null; },
+        confirm: function () { return !!currentOrder.operator && !!currentOrder.phone && currentOrder.amount != null; },
+        'payment-method': function () { return !!currentOrder.id; },
+        momo: function () { return !!currentOrder.id; },
+        proof: function () { return !!currentOrder.id; },
+        success: function () { return false; }
+    };
+    var fn = need[screen];
+    if (typeof fn === 'function') return fn();
+    return true;
+}
+
+function getRestorableScreen() {
+    try {
+        if (typeof sessionStorage === 'undefined') return 'home';
+        var s = sessionStorage.getItem(SCREEN_SESSION_KEY);
+        if (!s) return 'home';
+        if (!document.getElementById('screen-' + s)) return 'home';
+        return canRestoreScreen(s) ? s : 'home';
+    } catch (e) {
+        return 'home';
+    }
+}
+
 function navigateTo(screen) {
     document.querySelectorAll('.screen').forEach(s => {
         s.classList.remove('active');
@@ -897,7 +1038,13 @@ function navigateTo(screen) {
             var speedSpan = document.getElementById('admin-led-speed-value');
             if (speedInput) speedInput.value = speedVal;
             if (speedSpan) speedSpan.textContent = speedVal;
+            renderAdminPubBanners();
         }
+        try {
+            if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem(SCREEN_SESSION_KEY, screen);
+            }
+        } catch (e) { /* quota / mode privé */ }
     }
     
     document.querySelectorAll('.nav-bottom-btn').forEach(function (btn) {
@@ -1679,6 +1826,117 @@ function rejectOrderServer(orderId) {
         .catch(function () { showToast('Erreur réseau', 'error'); });
 }
 
+function renderAdminPubBanners() {
+    var wrap = document.getElementById('admin-pub-banners-rows');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var list = Array.isArray(serverConfig.pubBanners) ? serverConfig.pubBanners.slice() : DEFAULT_PUB_BANNERS.slice();
+    if (list.length === 0) list.push({ text: '', image: '', url: '' });
+    list.forEach(function (b) { addAdminPubBannerRow(b); });
+}
+
+function addAdminPubBannerRow(b) {
+    var wrap = document.getElementById('admin-pub-banners-rows');
+    if (!wrap) return;
+    b = b || { text: '', image: '', url: '' };
+    var row = document.createElement('div');
+    row.className = 'admin-pub-row glass-panel rounded-lg p-3 border border-white/10 space-y-2';
+    row.innerHTML =
+        '<input type="text" class="pub-text w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Texte sous la bannière" value="' + escapeHtml(b.text || '') + '">' +
+        '<input type="text" class="pub-image w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Image : /img/... ou https://..." value="' + escapeHtml(b.image || '') + '">' +
+        '<div class="flex flex-wrap gap-2 items-center">' +
+        '  <input type="file" accept="image/*" class="pub-file text-xs text-slate-400 max-w-[200px]">' +
+        '  <button type="button" class="pub-upload-btn px-3 py-1.5 rounded-lg bg-slate-700 border border-white/15 text-slate-200 text-xs">Uploader image</button>' +
+        '</div>' +
+        '<input type="text" class="pub-url w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Lien au clic (https://...)" value="' + escapeHtml(b.url || '') + '">' +
+        '<button type="button" class="pub-remove w-full py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs">Retirer cette ligne</button>';
+    row.querySelector('.pub-remove').addEventListener('click', function () {
+        row.remove();
+        var w = document.getElementById('admin-pub-banners-rows');
+        if (w && !w.querySelector('.admin-pub-row')) addAdminPubBannerRow({ text: '', image: '', url: '' });
+    });
+    row.querySelector('.pub-upload-btn').addEventListener('click', function () {
+        uploadAdminPubBannerForRow(row);
+    });
+    wrap.appendChild(row);
+}
+
+function uploadAdminPubBannerForRow(row) {
+    var fileInput = row.querySelector('.pub-file');
+    var imgInput = row.querySelector('.pub-image');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        showToast('Choisis une image', 'error');
+        return;
+    }
+    var adminKey = getAdminKey();
+    if (!adminKey) {
+        showToast('Saisis la clé admin pour uploader', 'error');
+        return;
+    }
+    var fd = new FormData();
+    fd.append('image', fileInput.files[0]);
+    fetch(API_BASE + '/api/admin/pub-banner-image', {
+        method: 'POST',
+        headers: { 'X-Admin-Key': adminKey },
+        body: fd
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.error) {
+                showToast(data.error, 'error');
+                return;
+            }
+            if (data.url && imgInput) imgInput.value = data.url;
+            showToast('Image enregistrée : ' + (data.url || ''), 'success');
+            fileInput.value = '';
+        })
+        .catch(function () { showToast('Erreur réseau (upload)', 'error'); });
+}
+
+function collectAdminPubBannersFromForm() {
+    var rows = document.querySelectorAll('#admin-pub-banners-rows .admin-pub-row');
+    var arr = [];
+    rows.forEach(function (row) {
+        var text = (row.querySelector('.pub-text') && row.querySelector('.pub-text').value) || '';
+        var image = (row.querySelector('.pub-image') && row.querySelector('.pub-image').value) || '';
+        var url = (row.querySelector('.pub-url') && row.querySelector('.pub-url').value) || '';
+        if (String(image).trim()) {
+            arr.push({ text: String(text).trim(), image: String(image).trim(), url: String(url).trim() });
+        }
+    });
+    return arr;
+}
+
+function savePubBanners() {
+    var adminKey = getAdminKey();
+    if (!adminKey) {
+        showToast('Saisis la clé admin pour enregistrer les bannières', 'error');
+        return;
+    }
+    var arr = collectAdminPubBannersFromForm();
+    fetch(API_BASE + '/api/admin/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+        body: JSON.stringify({ pubBanners: arr })
+    })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            if (data.error) {
+                showToast(data.error, 'error');
+                return;
+            }
+            if (data.config && Array.isArray(data.config.pubBanners)) {
+                serverConfig.pubBanners = data.config.pubBanners;
+            } else {
+                serverConfig.pubBanners = arr;
+            }
+            initPubBanner();
+            renderAdminPubBanners();
+            showToast(arr.length ? arr.length + ' bannière(s) enregistrée(s)' : 'Bannières désactivées (liste vide)', 'success');
+        })
+        .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
 function saveLedSpeed() {
     var input = document.getElementById('admin-led-speed');
     var keyInput = document.getElementById('admin-key-input');
@@ -1704,8 +1962,7 @@ function saveLedSpeed() {
             return;
         }
         serverConfig.ledScrollSeconds = seconds;
-        var ledEl = document.getElementById('led-text');
-        if (ledEl) ledEl.style.animation = 'led-scroll ' + seconds + 's linear infinite';
+        applyLedAnimation();
         var valEl = document.getElementById('admin-led-speed-value');
         if (valEl) valEl.textContent = seconds;
         showToast('Vitesse bandeau enregistrée : ' + seconds + ' s', 'success');
@@ -1715,13 +1972,41 @@ function saveLedSpeed() {
     });
 }
 
-// ==================== KEYBOARD SHORTCUTS ====================
+// ==================== ADMIN ACCESS ====================
 document.addEventListener('keydown', (e) => {
-    // Admin access: Ctrl + Shift + A
     if (e.ctrlKey && e.shiftKey && e.key === 'A') {
         navigateTo('admin');
     }
 });
+
+(function () {
+    if (window.location.search.indexOf('admin') !== -1) {
+        setTimeout(function () { navigateTo('admin'); }, 300);
+    }
+
+    var logoEl = document.getElementById('app-logo-admin-trigger');
+    if (!logoEl) return;
+    var pressTimer = null;
+    var tapCount = 0;
+    var tapTimer = null;
+    logoEl.addEventListener('touchstart', function (e) {
+        pressTimer = setTimeout(function () {
+            navigateTo('admin');
+            tapCount = 0;
+        }, 2000);
+    }, { passive: true });
+    logoEl.addEventListener('touchend', function () { clearTimeout(pressTimer); });
+    logoEl.addEventListener('touchcancel', function () { clearTimeout(pressTimer); });
+    logoEl.addEventListener('click', function () {
+        tapCount++;
+        clearTimeout(tapTimer);
+        if (tapCount >= 5) {
+            tapCount = 0;
+            navigateTo('admin');
+        }
+        tapTimer = setTimeout(function () { tapCount = 0; }, 1500);
+    });
+})();
 
 // ==================== INIT ====================
 function loadServerConfig() {
@@ -1731,25 +2016,27 @@ function loadServerConfig() {
             serverConfig.momoEnabled = !!data.momoEnabled;
             serverConfig.mtnMerchantPhone = data.mtnMerchantPhone || null;
             serverConfig.ledScrollSeconds = Math.min(300, Math.max(15, parseInt(data.ledScrollSeconds, 10) || 60));
+            serverConfig.pubBanners = Array.isArray(data.pubBanners) ? data.pubBanners : null;
             var el = document.querySelector('.payment-method.mtn-money .payment-number');
             if (el && serverConfig.mtnMerchantPhone) {
                 el.textContent = serverConfig.mtnMerchantPhone.replace(/(\d{2})(?=\d)/g, '$1 ');
             }
-            var ledEl = document.getElementById('led-text');
-            if (ledEl) {
-                ledEl.style.animation = 'led-scroll ' + serverConfig.ledScrollSeconds + 's linear infinite';
-            }
+            applyLedAnimation();
+            initPubBanner();
+            loadLedMessages();
         })
-        .catch(function () {});
+        .catch(function () {
+            loadLedMessages();
+        });
 }
 
 function initApp() {
     initTelegram();
+    applyLedAnimation();
     loadServerConfig();
-    loadLedMessages();
     updateHeaderPoints();
     updateHeaderUserInfo();
-    navigateTo('home');
+    navigateTo(getRestorableScreen());
 
     // Boutons Profil : liaison par addEventListener (obligatoire car script en fin de body, DOMContentLoaded deja passe)
     var btnSaveLink = document.getElementById('btn-save-social-link');
