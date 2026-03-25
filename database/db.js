@@ -27,7 +27,8 @@ function rowToOrder(row) {
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         validatedAt: row.validated_at ? new Date(row.validated_at).toISOString() : null,
         rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
-        rejectReason: row.reject_reason
+        rejectReason: row.reject_reason,
+        paymentMethod: row.payment_method || null
     };
 }
 
@@ -80,11 +81,18 @@ async function createOrder(order) {
     return order;
 }
 
-async function updateOrderProof(orderId, proofPath, status = 'proof_sent') {
-    await pool.execute(
-        'UPDATE orders SET proof = ?, status = ? WHERE id = ?',
-        [proofPath, status, orderId]
-    );
+async function updateOrderProof(orderId, proofPath, status = 'proof_sent', paymentMethod) {
+    if (paymentMethod != null) {
+        await pool.execute(
+            'UPDATE orders SET proof = ?, status = ?, payment_method = ? WHERE id = ?',
+            [proofPath, status, paymentMethod ? String(paymentMethod) : null, orderId]
+        );
+    } else {
+        await pool.execute(
+            'UPDATE orders SET proof = ?, status = ? WHERE id = ?',
+            [proofPath, status, orderId]
+        );
+    }
     return getOrderById(orderId);
 }
 

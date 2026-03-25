@@ -26,7 +26,8 @@ function rowToOrder(row) {
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         validatedAt: row.validated_at ? new Date(row.validated_at).toISOString() : null,
         rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
-        rejectReason: row.reject_reason
+        rejectReason: row.reject_reason,
+        paymentMethod: row.payment_method || null
     };
 }
 
@@ -94,10 +95,14 @@ async function createOrder(order) {
     return order;
 }
 
-async function updateOrderProof(orderId, proofPath, status = 'proof_sent') {
+async function updateOrderProof(orderId, proofPath, status = 'proof_sent', paymentMethod) {
+    const patch = { proof: proofPath, status };
+    if (paymentMethod != null) {
+        patch.payment_method = paymentMethod ? String(paymentMethod) : null;
+    }
     const { error } = await supabase
         .from('orders')
-        .update({ proof: proofPath, status })
+        .update(patch)
         .eq('id', orderId);
     if (error) throw error;
     return getOrderById(orderId);

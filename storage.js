@@ -53,10 +53,13 @@ const jsonStorage = {
         return order;
     },
 
-    async updateOrderProof(orderId, proofPath, status = 'proof_sent') {
+    async updateOrderProof(orderId, proofPath, status = 'proof_sent', paymentMethod) {
         if (!orders[orderId]) return null;
         orders[orderId].proof = proofPath;
         orders[orderId].status = status;
+        if (paymentMethod != null && paymentMethod !== '') {
+            orders[orderId].paymentMethod = String(paymentMethod);
+        }
         saveOrdersFile();
         return orders[orderId];
     },

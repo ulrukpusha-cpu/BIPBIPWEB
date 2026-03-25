@@ -110,6 +110,43 @@ function writeAppConfig(obj) {
     }
 }
 
+function normalizePaymentMethod(raw) {
+    const s = String(raw == null || raw === '' ? 'djamo' : raw).toLowerCase().trim();
+    const allowed = new Set(['djamo', 'usdt', 'usdc', 'ton', 'momo']);
+    return allowed.has(s) ? s : 'djamo';
+}
+
+function paymentMethodAdminLabel(method) {
+    const m = normalizePaymentMethod(method);
+    const map = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' };
+    return map[m] || m;
+}
+
+function getCryptoDepositAddress() {
+    const a = (process.env.CRYPTO_DEPOSIT_ADDRESS || '').trim();
+    if (a) return a;
+    if ((process.env.CRYPTO_USDT_ADDRESS || '').trim()) return (process.env.CRYPTO_USDT_ADDRESS || '').trim();
+    if ((process.env.CRYPTO_USDC_ADDRESS || '').trim()) return (process.env.CRYPTO_USDC_ADDRESS || '').trim();
+    return (process.env.CRYPTO_TON_ADDRESS || '').trim();
+}
+
+function publicBaseUrlFromReq(req) {
+    const env = (process.env.PUBLIC_BASE_URL || '').trim().replace(/\/$/, '');
+    if (env) return env;
+    const xfProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+    const proto = xfProto || req.protocol || 'https';
+    const host = req.get('host') || 'localhost';
+    return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+function buildProofTelegramCaption(order, paymentMethod) {
+    const mode = `\n💳 <b>Mode</b> : ${paymentMethodAdminLabel(paymentMethod)}`;
+    if (order.operator === 'ANNONCE_LED') {
+        return `📸 <b>Preuve annonce LED #${order.id}</b>\n\n💰 ${order.amountTotal} FCFA\nValider = annonce dans bandeau LED + Actualités${mode}`;
+    }
+    return `📸 <b>Preuve commande #${order.id}</b>\n\n📲 ${order.operator} - ${order.amountTotal} FCFA\n📞 ${order.phone || '—'}${mode}`;
+}
+
 // ==================== MIDDLEWARE ====================
 // CORS : comme v2 - en production, restreindre aux origines (CORS_ORIGIN) ou désactiver si non défini
 const corsOptions = NODE_ENV === 'production'
@@ -125,6 +162,18 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+app.get('/tonconnect-manifest.json', (req, res) => {
+    const base = publicBaseUrlFromReq(req);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json({
+        url: base,
+        name: (process.env.TON_CONNECT_APP_NAME || 'Bipbip Recharge CI').trim(),
+        iconUrl: (process.env.TON_CONNECT_ICON_URL || 'https://ton.org/download/ton_symbol.png').trim()
+    });
+});
+
 app.use(express.static('.', {
     etag: false,
     lastModified: false,
@@ -316,11 +365,24 @@ app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();
     const appConfig = readAppConfig();
     const banners = Array.isArray(appConfig.pubBanners) ? appConfig.pubBanners : DEFAULT_PUB_BANNERS;
+    const cryptoAddr = getCryptoDepositAddress();
+    const cryptoNetwork = (process.env.CRYPTO_DEPOSIT_NETWORK || 'TON').trim();
+    const tgUser = (process.env.TELEGRAM_BOT_USERNAME || '').trim().replace(/^@/, '');
+    const base = publicBaseUrlFromReq(req);
+    const fcfaRaw = parseFloat(String(process.env.CRYPTO_FCFA_PER_USDT || '').replace(',', '.'));
     res.json({
         mtnMerchantPhone: mtnMerchantPhone || null,
         momoEnabled: !!process.env.MTN_SUBSCRIPTION_KEY && !!process.env.MTN_API_USER,
         ledScrollSeconds: Math.min(300, Math.max(15, appConfig.ledScrollSeconds || 60)),
-        pubBanners: banners
+        pubBanners: banners,
+        djamoPayUrl: (process.env.DJAMO_PAY_URL || 'https://pay.djamo.com/pkbyg').trim(),
+        telegramWalletUrl: (process.env.TELEGRAM_WALLET_URL || 'https://t.me/wallet').trim(),
+        cryptoDepositAddress: cryptoAddr || null,
+        cryptoDepositNetwork: cryptoNetwork,
+        cryptoFcfaPerUsdt: Number.isFinite(fcfaRaw) && fcfaRaw > 0 ? fcfaRaw : null,
+        telegramBotUsername: tgUser || null,
+        twaReturnUrl: tgUser ? `https://t.me/${tgUser}` : null,
+        tonConnectManifestUrl: `${base}/tonconnect-manifest.json`
     });
 });
 
@@ -507,14 +569,13 @@ app.post('/api/orders/:id/proof', upload.single('proof'), async (req, res) => {
         }
         
         const proofPath = `/uploads/${req.file.filename}`;
-        await orderStorage.updateOrderProof(orderId, proofPath, 'proof_sent');
+        const paymentMethod = normalizePaymentMethod(req.body && req.body.paymentMethod);
+        await orderStorage.updateOrderProof(orderId, proofPath, 'proof_sent', paymentMethod);
         
         // Construire l'URL complète pour Telegram
         const proofUrl = `${req.protocol}://${req.get('host')}${proofPath}`;
         
-        const caption = order.operator === 'ANNONCE_LED'
-            ? `📸 <b>Preuve annonce LED #${orderId}</b>\n\n💰 ${order.amountTotal} FCFA\nValider = annonce dans bandeau LED + Actualités`
-            : `📸 <b>Preuve commande #${orderId}</b>\n\n📲 ${order.operator} - ${order.amountTotal} FCFA\n📞 ${order.phone}`;
+        const caption = buildProofTelegramCaption(order, paymentMethod);
         const keyboard = {
             reply_markup: {
                 inline_keyboard: [[
@@ -543,7 +604,7 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
     try {
         const orderId = req.params.id;
         const order = await orderStorage.getOrderById(orderId);
-        const { image } = req.body;
+        const { image, paymentMethod: rawPm } = req.body;
         
         if (!order) {
             return res.status(404).json({ error: 'Commande introuvable' });
@@ -561,12 +622,11 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
         fs.writeFileSync(filepath, base64Data, 'base64');
         
         const proofPath = `/uploads/${filename}`;
-        await orderStorage.updateOrderProof(orderId, proofPath, 'proof_sent');
+        const paymentMethod = normalizePaymentMethod(rawPm);
+        await orderStorage.updateOrderProof(orderId, proofPath, 'proof_sent', paymentMethod);
         
         const proofUrl = `${req.protocol}://${req.get('host')}${proofPath}`;
-        const captionB64 = order.operator === 'ANNONCE_LED'
-            ? `📸 <b>Preuve annonce LED #${orderId}</b>\n\n💰 ${order.amountTotal} FCFA\nValider = bandeau LED + Actualités`
-            : `📸 <b>Preuve commande #${orderId}</b>\n\n📲 ${order.operator} - ${order.amountTotal} FCFA\n📞 ${order.phone}`;
+        const captionB64 = buildProofTelegramCaption(order, paymentMethod);
         const keyboard2 = {
             reply_markup: {
                 inline_keyboard: [[
@@ -1497,10 +1557,10 @@ async function handleTelegramUpdate(body) {
                 if (order) {
                     const proofPath = await downloadTelegramFile(fileId);
                     if (proofPath) {
-                        await orderStorage.updateOrderProof(order.id, proofPath, 'proof_sent');
+                        await orderStorage.updateOrderProof(order.id, proofPath, 'proof_sent', 'djamo');
                         const baseUrl = (process.env.WEBHOOK_BASE_URL || process.env.BASE_URL || 'https://bipbiprecharge.ci').replace(/\/$/, '');
                         const proofUrl = baseUrl + proofPath;
-                        const caption = `📸 <b>Preuve commande #${order.id}</b>\n\n📲 ${order.operator} - ${order.amountTotal} FCFA\n📞 ${order.phone}`;
+                        const caption = buildProofTelegramCaption(order, 'djamo');
                         const keyboard3 = {
                             reply_markup: {
                                 inline_keyboard: [[

@@ -21,7 +21,21 @@ const CONFIG = {
 };
 
 // Config serveur (MoMo activé, numéro marchand, bandeau LED, bannières pub)
-let serverConfig = { momoEnabled: false, mtnMerchantPhone: null, ledScrollSeconds: 60, pubBanners: null };
+let serverConfig = {
+    momoEnabled: false,
+    mtnMerchantPhone: null,
+    ledScrollSeconds: 60,
+    pubBanners: null,
+    djamoPayUrl: null,
+    telegramWalletUrl: null,
+    cryptoDepositAddress: null,
+    cryptoDepositNetwork: null,
+    cryptoFcfaPerUsdt: null,
+    telegramBotUsername: null,
+    twaReturnUrl: null,
+    tonConnectManifestUrl: null
+};
+var __tonConnectUi = null;
 
 // En-têtes API avec initData Telegram pour validation côté serveur (sécurité comme v2)
 function getApiHeaders(extra) {
@@ -198,7 +212,7 @@ function requestPromoLikes() {
     .then(function (data) {
         if (data.success && data.order) {
             var orderAmount = data.order.amount || 150;
-            showToast('Demande créée — ' + orderAmount + ' F. Redirection vers Djamo pour payer.', 'success');
+            showToast('Demande créée — ' + orderAmount + ' F. Choisissez votre mode de paiement.', 'success');
             currentOrder = {
                 id: data.order.id,
                 operator: data.order.operator || 'PROMO_LIKES',
@@ -208,10 +222,9 @@ function requestPromoLikes() {
                 proof: null,
                 status: 'pending',
                 createdAt: data.order.createdAt,
-                paymentMethod: 'djamo'
+                paymentMethod: null
             };
-            if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
-            navigateTo('proof');
+            goToPaymentMethodScreen();
         } else {
             showToast(data.error || 'Erreur', 'error');
         }
@@ -393,7 +406,7 @@ function publierAnnonceLed() {
         textarea.value = '';
         var span = document.getElementById('annonce-char-count');
         if (span) span.textContent = '0';
-        showToast('Annonce créée — ' + prix + ' F. Redirection vers Djamo pour payer.', 'success');
+        showToast('Annonce créée — ' + prix + ' F. Choisissez votre mode de paiement.', 'success');
         fetch(API_BASE + '/api/annonces/' + encodeURIComponent(lastAnnonceId) + '/create-order', {
             method: 'POST',
             headers: getApiHeaders()
@@ -410,10 +423,9 @@ function publierAnnonceLed() {
                     proof: null,
                     status: 'pending',
                     createdAt: orderData.order.createdAt,
-                    paymentMethod: 'djamo'
+                    paymentMethod: null
                 };
-                if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
-                navigateTo('proof');
+                goToPaymentMethodScreen();
             } else {
                 showToast(orderData.error || 'Erreur création commande', 'error');
             }
@@ -966,6 +978,10 @@ function canRestoreScreen(screen) {
         phone: function () { return !!currentOrder.operator && currentOrder.amount != null; },
         confirm: function () { return !!currentOrder.operator && !!currentOrder.phone && currentOrder.amount != null; },
         'payment-method': function () { return !!currentOrder.id; },
+        'crypto-pay': function () {
+            var pm = currentOrder.paymentMethod;
+            return !!currentOrder.id && (pm === 'usdt' || pm === 'usdc' || pm === 'ton');
+        },
         momo: function () { return !!currentOrder.id; },
         proof: function () { return !!currentOrder.id; },
         success: function () { return false; }
@@ -1022,15 +1038,44 @@ function navigateTo(screen) {
         if (screen === 'payment-method' && currentOrder.id) {
             var pmEl = document.getElementById('payment-method-order-id');
             if (pmEl) pmEl.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
+            applyPaymentMethodScreenFromConfig();
+        }
+        if (screen === 'crypto-pay') {
+            var totalC = (currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0;
+            var cref = document.getElementById('crypto-pay-order-ref');
+            if (cref && currentOrder.id) cref.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber(totalC) + ' FCFA';
+            var labelMap = { usdt: 'USDT', usdc: 'USDC', ton: 'TON' };
+            var pm = currentOrder.paymentMethod || 'usdt';
+            var al = document.getElementById('crypto-pay-asset-label');
+            if (al) al.textContent = labelMap[pm] || 'Crypto';
+            var netEl = document.getElementById('crypto-pay-network');
+            if (netEl) netEl.textContent = serverConfig.cryptoDepositNetwork || '—';
+            var memo = document.getElementById('crypto-pay-memo');
+            if (memo && currentOrder.id) memo.textContent = '#' + currentOrder.id;
+            var addrEl = document.getElementById('crypto-pay-address');
+            var addr = serverConfig.cryptoDepositAddress || '';
+            if (addrEl) addrEl.textContent = addr || '—';
+            var qr = document.getElementById('crypto-pay-qr');
+            if (qr) {
+                if (addr) {
+                    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(addr);
+                    qr.classList.remove('hidden');
+                } else {
+                    qr.removeAttribute('src');
+                    qr.classList.add('hidden');
+                }
+            }
+            var est = document.getElementById('crypto-pay-estimate');
+            var rate = serverConfig.cryptoFcfaPerUsdt;
+            if (est && rate && totalC > 0) {
+                est.textContent = 'Estimation indicative : ~' + (totalC / rate).toFixed(2) + ' USDT (≈ ' + rate + ' FCFA / USDT)';
+                est.classList.remove('hidden');
+            } else if (est) est.classList.add('hidden');
         }
         if (screen === 'proof' && currentOrder.id) {
             var odEl = document.getElementById('order-id-display');
             if (odEl) odEl.textContent = 'Commande #' + currentOrder.id;
-            var hintEl = document.getElementById('proof-selected-method');
-            if (hintEl) {
-                hintEl.textContent = 'Paiement via Djamo';
-                hintEl.classList.remove('hidden');
-            }
+            syncProofScreenInstructions();
         }
         if (screen === 'admin') {
             var speedVal = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
@@ -1120,7 +1165,8 @@ function selectOperator(operator) {
         phone: null,
         proof: null,
         status: 'pending',
-        createdAt: null
+        createdAt: null,
+        paymentMethod: null
     };
     
     // Couleurs des opérateurs
@@ -1289,42 +1335,136 @@ function goToPaymentMethodScreen() {
     navigateTo('payment-method');
 }
 
-function choosePaymentMethod(method) {
-    currentOrder.paymentMethod = 'djamo';
+function applyPaymentMethodScreenFromConfig() {
+    var cryptoSec = document.getElementById('payment-crypto-block');
+    if (cryptoSec) cryptoSec.classList.toggle('hidden', !serverConfig.cryptoDepositAddress);
+    var momoBtn = document.getElementById('payment-btn-momo');
+    if (momoBtn) momoBtn.classList.toggle('hidden', !serverConfig.momoEnabled);
+    var url = serverConfig.djamoPayUrl || DJAMO_PAY_URL;
+    var link = document.getElementById('djamo-pay-link');
+    if (link) link.href = url;
+    var urlText = document.getElementById('djamo-pay-url-text');
+    if (urlText) urlText.textContent = url.replace(/^https?:\/\//, '');
+}
+
+function resetProofUploadUi() {
     var orderEl = document.getElementById('order-id-display');
-    if (orderEl) orderEl.textContent = 'Commande #' + currentOrder.id;
+    if (orderEl && currentOrder.id) orderEl.textContent = 'Commande #' + currentOrder.id;
     var uploadEl = document.getElementById('upload-area');
     var previewEl = document.getElementById('preview-container');
     var btnEl = document.getElementById('btn-send-proof');
     if (uploadEl) uploadEl.style.display = 'block';
     if (previewEl) previewEl.style.display = 'none';
-    if (btnEl) btnEl.disabled = true;
-    var hintEl = document.getElementById('proof-selected-method');
-    if (hintEl) {
-        hintEl.textContent = 'Paiement via Djamo';
-        hintEl.classList.remove('hidden');
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '📤 Envoyer la preuve';
     }
-    if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
+    removePreview();
+}
+
+function syncProofScreenInstructions() {
+    var hint = document.getElementById('proof-selected-method');
+    var body = document.getElementById('proof-instructions-body');
+    var pm = currentOrder.paymentMethod || 'djamo';
+    var labels = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' };
+    if (hint) {
+        hint.textContent = 'Mode : ' + (labels[pm] || pm);
+        hint.classList.remove('hidden');
+    }
+    if (!body) return;
+    var payUrl = serverConfig.djamoPayUrl || DJAMO_PAY_URL;
+    if (pm === 'djamo') {
+        body.innerHTML = '<p>Nom affiché : <strong class="text-white">BIPBIP RECHARGE PRO</strong></p>' +
+            '<p>Payez via Djamo puis envoyez une capture d’écran ci-dessous.</p>' +
+            '<a href="' + escapeHtml(payUrl) + '" target="_blank" rel="noopener" class="inline-block mt-2 text-emerald-400 font-mono text-sm break-all underline">' + escapeHtml(payUrl) + '</a>';
+    } else if (pm === 'momo') {
+        body.innerHTML = '<p>Demande MoMo ou preuve manuelle : joignez une capture ci-dessous pour validation par l’admin.</p>';
+    } else if (pm === 'usdt' || pm === 'usdc' || pm === 'ton') {
+        var addr = serverConfig.cryptoDepositAddress || '';
+        body.innerHTML = '<p>Réseau indiqué : <strong class="text-white">' + escapeHtml(serverConfig.cryptoDepositNetwork || '—') + '</strong></p>' +
+            (addr ? '<p class="font-mono text-xs text-emerald-400 break-all mt-2">' + escapeHtml(addr) + '</p>' : '<p class="text-amber-400 text-xs">Adresse non configurée côté serveur.</p>') +
+            '<p class="text-xs text-slate-500 mt-2">Référence commande : <strong class="text-white">#' + escapeHtml(currentOrder.id || '') + '</strong></p>';
+    } else {
+        body.innerHTML = '<p class="text-slate-500 text-xs">Sélectionnez un mode de paiement à l’étape précédente.</p>';
+    }
+}
+
+function chooseDjamoPayment() {
+    currentOrder.paymentMethod = 'djamo';
+    var url = serverConfig.djamoPayUrl || DJAMO_PAY_URL;
+    if (typeof window !== 'undefined' && window.open) window.open(url, '_blank');
     showToast('Ouvrez Djamo pour payer, puis envoyez la preuve.', 'info');
+    resetProofUploadUi();
     navigateTo('proof');
 }
 
 function djamoPaid() {
-    currentOrder.paymentMethod = 'djamo';
-    if (typeof window !== 'undefined' && window.open) window.open(DJAMO_PAY_URL, '_blank');
-    var orderEl = document.getElementById('order-id-display');
-    if (orderEl) orderEl.textContent = 'Commande #' + currentOrder.id;
-    var uploadEl = document.getElementById('upload-area');
-    var previewEl = document.getElementById('preview-container');
-    var btnEl = document.getElementById('btn-send-proof');
-    if (uploadEl) uploadEl.style.display = 'block';
-    if (previewEl) previewEl.style.display = 'none';
-    if (btnEl) btnEl.disabled = true;
-    showToast('Envoyez la preuve de votre paiement Djamo', 'info');
+    chooseDjamoPayment();
+}
+
+function startMomoFromPaymentScreen() {
+    if (!serverConfig.momoEnabled) {
+        showToast('Paiement MoMo indisponible', 'error');
+        return;
+    }
+    if (!currentOrder.id) {
+        showToast('Commande introuvable', 'error');
+        return;
+    }
+    currentOrder.paymentMethod = 'momo';
+    requestMomoPayment(currentOrder.id);
+}
+
+function goToCryptoPayment(asset) {
+    if (!serverConfig.cryptoDepositAddress) {
+        showToast('Paiement crypto non configuré', 'error');
+        return;
+    }
+    currentOrder.paymentMethod = asset === 'usdc' ? 'usdc' : asset === 'ton' ? 'ton' : 'usdt';
+    navigateTo('crypto-pay');
+}
+
+function continueCryptoToProof() {
+    resetProofUploadUi();
     navigateTo('proof');
 }
 
+function openTelegramWalletLinkFallback() {
+    var u = serverConfig.telegramWalletUrl || 'https://t.me/wallet';
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(u);
+    else if (tg && tg.openLink) tg.openLink(u);
+    else if (typeof window !== 'undefined' && window.open) window.open(u, '_blank');
+}
+
+function openTelegramWalletPay() {
+    var manifest = serverConfig.tonConnectManifestUrl;
+    if (!manifest) {
+        showToast('Manifest TON Connect indisponible (PUBLIC_BASE_URL / domaine)', 'error');
+        openTelegramWalletLinkFallback();
+        return;
+    }
+    var TC = (window.TON_CONNECT_UI && window.TON_CONNECT_UI.TonConnectUI) || window.TonConnectUI;
+    if (!TC) {
+        showToast('Chargement wallet : ouverture du lien Telegram', 'info');
+        openTelegramWalletLinkFallback();
+        return;
+    }
+    try {
+        if (!__tonConnectUi) {
+            __tonConnectUi = new TC({ manifestUrl: manifest });
+        }
+        if (tg && tg.initData && serverConfig.twaReturnUrl) {
+            __tonConnectUi.uiOptions = { twaReturnUrl: serverConfig.twaReturnUrl };
+        }
+        __tonConnectUi.openModal();
+    } catch (e) {
+        console.warn('[TON Connect]', e);
+        openTelegramWalletLinkFallback();
+    }
+}
+
 function requestMomoPayment(orderId) {
+    currentOrder.paymentMethod = 'momo';
     const telegramChatId = tg?.initDataUnsafe?.user?.id?.toString() || null;
     return fetch(API_BASE + '/api/momo/request-to-pay', {
         method: 'POST',
@@ -1538,7 +1678,10 @@ function sendProof() {
         return fetch(proofUrl, {
             method: 'POST',
             headers: getApiHeaders(),
-            body: JSON.stringify({ image: imageData })
+            body: JSON.stringify({
+                image: imageData,
+                paymentMethod: currentOrder.paymentMethod || 'djamo'
+            })
         });
     })
     .then(res => {
@@ -1742,7 +1885,9 @@ function renderAdminOrders(filter = 'pending') {
             '<p><strong>' + (CONFIG.OPERATORS[order.operator] ? CONFIG.OPERATORS[order.operator].icon : '📱') + ' Opérateur:</strong> ' + (order.operator || '') + '</p>' +
             '<p><strong>💰 Montant:</strong> ' + formatNumber(order.amountTotal) + ' FCFA</p>' +
             '<p><strong>📞 Numéro:</strong> +225 ' + (order.phone || '') + '</p>' +
-            '<p><strong>📅 Date:</strong> ' + formatDate(order.createdAt) + '</p></div>' +
+            '<p><strong>📅 Date:</strong> ' + formatDate(order.createdAt) + '</p>' +
+            (order.paymentMethod ? '<p><strong>💳 Mode paiement:</strong> ' + escapeHtml(({ djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' }[order.paymentMethod] || order.paymentMethod)) + '</p>' : '') +
+            '</div>' +
             proofHtml + actionsHtml + '</div>';
     }).join('');
 }
@@ -2017,10 +2162,22 @@ function loadServerConfig() {
             serverConfig.mtnMerchantPhone = data.mtnMerchantPhone || null;
             serverConfig.ledScrollSeconds = Math.min(300, Math.max(15, parseInt(data.ledScrollSeconds, 10) || 60));
             serverConfig.pubBanners = Array.isArray(data.pubBanners) ? data.pubBanners : null;
+            serverConfig.djamoPayUrl = data.djamoPayUrl || null;
+            serverConfig.telegramWalletUrl = data.telegramWalletUrl || null;
+            serverConfig.cryptoDepositAddress = data.cryptoDepositAddress || null;
+            serverConfig.cryptoDepositNetwork = data.cryptoDepositNetwork || null;
+            serverConfig.cryptoFcfaPerUsdt = data.cryptoFcfaPerUsdt != null ? Number(data.cryptoFcfaPerUsdt) : null;
+            serverConfig.telegramBotUsername = data.telegramBotUsername || null;
+            serverConfig.twaReturnUrl = data.twaReturnUrl || null;
+            serverConfig.tonConnectManifestUrl = data.tonConnectManifestUrl || null;
+            if (serverConfig.djamoPayUrl) {
+                DJAMO_PAY_URL = serverConfig.djamoPayUrl;
+            }
             var el = document.querySelector('.payment-method.mtn-money .payment-number');
             if (el && serverConfig.mtnMerchantPhone) {
                 el.textContent = serverConfig.mtnMerchantPhone.replace(/(\d{2})(?=\d)/g, '$1 ');
             }
+            applyPaymentMethodScreenFromConfig();
             applyLedAnimation();
             initPubBanner();
             loadLedMessages();
