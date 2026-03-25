@@ -4,3 +4,4 @@ uploads/
 data/
 *.log
 .DS_Store
+.claude/
