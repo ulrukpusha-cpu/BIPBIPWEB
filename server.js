@@ -360,6 +360,63 @@ async function downloadTelegramFile(fileId) {
 
 // ==================== API ROUTES ====================
 
+/** Float depuis l’env (virgule → point), avec minimum — aligné logique StickerStreet / cours TON */
+function envFloatTon(key, defaultVal, minVal) {
+    try {
+        const raw = process.env[key];
+        if (raw == null || String(raw).trim() === '') return Number(defaultVal);
+        let s = String(raw).trim();
+        if (s.includes('=')) s = s.split('=').pop().trim();
+        s = s.replace(',', '.');
+        const v = parseFloat(s);
+        if (!Number.isFinite(v) || v < minVal) return Number(defaultVal);
+        return v;
+    } catch (_) {
+        return Number(defaultVal);
+    }
+}
+
+const BIPBIP_XOF_PER_USD = envFloatTon('XOF_PER_USD', '600', 1);
+const BIPBIP_TON_FALLBACK_USD = envFloatTon('TON_FALLBACK_USD', '7', 0.01);
+
+async function fetchTonUsdFromCoingecko() {
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ton&vs_currencies=usd', { signal: controller.signal });
+        clearTimeout(t);
+        if (!resp.ok) return 0;
+        const data = await resp.json();
+        const u = data && data.ton && data.ton.usd;
+        const v = parseFloat(u);
+        return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+/** Cours TON + montant TON pour un total XOF (Mini App, même principe que StickerStreet) */
+app.get('/api/rates/ton', async (req, res) => {
+    const totalXof = parseFloat(String(req.query.total_xof || '').replace(',', '.')) || 0;
+    if (totalXof <= 0) {
+        return res.status(400).json({ error: 'total_xof requis' });
+    }
+    let tonUsd = await fetchTonUsdFromCoingecko();
+    if (tonUsd <= 0) tonUsd = BIPBIP_TON_FALLBACK_USD;
+    if (BIPBIP_XOF_PER_USD <= 0 || tonUsd <= 0) {
+        return res.status(503).json({ error: 'Taux indisponible', ton_usd: 0, amount_ton: 0 });
+    }
+    const amountUsd = totalXof / BIPBIP_XOF_PER_USD;
+    const amountTon = amountUsd / tonUsd;
+    return res.json({
+        ton_usd: Math.round(tonUsd * 10000) / 10000,
+        xof_per_usd: BIPBIP_XOF_PER_USD,
+        amount_ton: Math.round(amountTon * 1e6) / 1e6,
+        amount_usd: Math.round(amountUsd * 100) / 100
+    });
+});
+
 // Config publique (MoMo, vitesse bandeau LED, bannières pub)
 app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();

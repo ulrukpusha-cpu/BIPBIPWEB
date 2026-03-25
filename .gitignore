@@ -1,4 +1,7 @@
 node_modules/
+tmp/
+.env.bak*
+*.backup.*
 .env
 uploads/
 data/

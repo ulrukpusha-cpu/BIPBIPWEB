@@ -47,9 +47,54 @@
         /* Durée d'animation appliquée par app.js (réglage admin), pas de 60s figé ici */
         .led-text { display: inline-block; padding-left: 100%; }
         @keyframes led-scroll { to { transform: translate3d(-100%, 0, 0); } }
+        /* Écran PC : accès réservé mobile / tablette */
+        #bipbip-desktop-gate {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 50000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 2rem 1.25rem 2.5rem;
+            overflow-y: auto;
+            background: #0f172a;
+            text-align: center;
+        }
+        #bipbip-desktop-gate.bipbip-gate-visible { display: flex; }
     </style>
 </head>
 <body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200 text-slate-300" style="background-color: #0f172a;">
+
+    <!-- PC / grand écran : QR Telegram + lien site (app réservée mobile & tablette) -->
+    <div id="bipbip-desktop-gate" class="text-slate-300" role="dialog" aria-labelledby="bipbip-gate-title" aria-modal="true">
+        <img src="assets/logo%202.PNG" alt="" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" />
+        <h1 id="bipbip-gate-title" class="text-xl font-bold text-white mb-2 max-w-md mx-auto">Bipbip Recharge CI</h1>
+        <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">Cette application est utilisable sur <strong class="text-slate-300">smartphone</strong> et <strong class="text-slate-300">tablette</strong> (navigateur ou Telegram). Sur ordinateur, scannez un QR avec votre téléphone ou passez votre navigateur en <strong class="text-slate-300">mode mobile</strong>.</p>
+        <div class="flex flex-col sm:flex-row gap-8 items-center justify-center w-full max-w-2xl mx-auto mb-8">
+            <div class="flex flex-col items-center">
+                <p class="text-xs font-semibold text-sky-300 uppercase tracking-wide mb-2">Ouvrir dans Telegram</p>
+                <img id="bipbip-gate-qr-telegram" src="" alt="QR code Telegram" width="200" height="200" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <p id="bipbip-gate-qr-telegram-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
+                <a id="bipbip-gate-tg-link" href="https://telegram.org" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-sky-500 text-white hover:bg-sky-400 transition-colors text-sm">Ouvrir le bot Telegram</a>
+            </div>
+            <div class="flex flex-col items-center">
+                <p class="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-2">Ce site sur mobile</p>
+                <img id="bipbip-gate-qr-site" src="" alt="QR code du site" width="200" height="200" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <p id="bipbip-gate-qr-site-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
+                <button type="button" id="bipbip-gate-copy-url" class="mt-3 px-4 py-2 rounded-xl text-sm font-medium border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">Copier le lien du site</button>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-4 max-w-lg mx-auto border border-white/15 text-left text-xs text-slate-400 leading-relaxed">
+            <p class="font-semibold text-slate-300 mb-2">Mode mobile dans le navigateur (PC)</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong class="text-slate-400">Chrome / Edge</strong> : <kbd class="px-1 py-0.5 rounded bg-white/10">F12</kbd> puis <kbd class="px-1 py-0.5 rounded bg-white/10">Ctrl</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">Shift</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">M</kbd>, choisir un appareil, puis actualiser la page.</li>
+                <li><strong class="text-slate-400">Firefox</strong> : <kbd class="px-1 py-0.5 rounded bg-white/10">Ctrl</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">Shift</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">M</kbd> (mode responsive).</li>
+                <li><strong class="text-slate-400">Safari (Mac)</strong> : menu Développement → « Entrer dans le mode Responsive Design » (activer le menu Développement dans les réglages avancés).</li>
+            </ul>
+            <p class="mt-3 text-slate-500">Astuce développeur : ajoutez <code class="text-sky-400/90 bg-white/5 px-1 rounded">?force_mobile=1</code> à l’URL une fois pour débloquer cette session sur PC (tests uniquement).</p>
+        </div>
+    </div>
 
     <!-- Background Decoration (désactivé en mode bas de gamme : gros flous GPU) -->
     <div id="page-ambient-blur" class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0" aria-hidden="true">
@@ -349,45 +394,75 @@
                 <h2 class="text-xl font-semibold text-white">Mode de paiement</h2>
             </div>
             <div class="order-id-display glass-panel rounded-xl py-4 text-center font-bold text-lg text-white mb-4 border border-amber-500/30 bg-amber-500/10" id="payment-method-order-id"></div>
-            <p class="text-slate-400 text-sm text-center mb-4">Choisissez comment payer, puis envoyez une capture d’écran à l’étape suivante.</p>
-            <div class="space-y-3 mb-4">
+            <p id="payment-method-hint" class="text-slate-400 text-sm text-center mb-4">Choisissez comment payer, puis envoyez une capture à l’étape suivante.</p>
+
+            <div class="flex rounded-2xl p-1 gap-1 mb-4 bg-slate-800/80 border border-white/10" role="tablist">
+                <button type="button" id="pay-tab-djamo" onclick="setPaymentMethodTab('djamo')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors bg-white/15 text-white">Djamo</button>
+                <button type="button" id="pay-tab-momo" onclick="setPaymentMethodTab('momo')" class="hidden flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors text-slate-400">MoMo</button>
+                <button type="button" id="pay-tab-ton" onclick="setPaymentMethodTab('ton')" class="hidden flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors text-slate-400">TON</button>
+            </div>
+
+            <div id="pay-panel-djamo" class="space-y-3 mb-4">
                 <div class="glass-panel rounded-xl p-5 border border-emerald-500/30 bg-emerald-500/10">
                     <div class="flex items-center gap-3 mb-3">
                         <span class="text-3xl">💳</span>
                         <div>
                             <h3 class="font-bold text-white">Djamo</h3>
-                            <p class="text-xs text-slate-400">Paiement FCFA classique</p>
+                            <p class="text-xs text-slate-400">Paiement FCFA — capture d’écran à l’étape suivante</p>
                         </div>
                     </div>
                     <a href="https://pay.djamo.com/pkbyg" target="_blank" rel="noopener" id="djamo-pay-link" class="inline-block w-full text-center px-4 py-3 rounded-xl font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-colors mb-2">Ouvrir Djamo Pay</a>
                     <p class="text-[11px] text-slate-500 text-center break-all" id="djamo-pay-url-text">pay.djamo.com/pkbyg</p>
                     <button type="button" onclick="chooseDjamoPayment()" class="btn-primary w-full py-3 mt-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors">
                         <iconify-icon icon="solar:check-circle-linear" width="18"></iconify-icon>
-                        <span>Continuer vers la preuve (Djamo)</span>
+                        <span>Continuer vers la preuve</span>
                     </button>
                 </div>
-                <button type="button" id="payment-btn-momo" onclick="startMomoFromPaymentScreen()" class="hidden w-full glass-panel rounded-xl p-4 border border-amber-500/40 bg-amber-500/10 text-left flex items-center gap-3 hover:bg-amber-500/15 transition-colors">
-                    <span class="text-2xl">📲</span>
-                    <div>
-                        <span class="font-bold text-white block">MTN MoMo</span>
-                        <span class="text-xs text-slate-400">Demande de paiement sur votre numéro</span>
+            </div>
+
+            <div id="pay-panel-momo" class="hidden mb-4">
+                <div class="glass-panel rounded-xl p-5 border border-amber-500/40 bg-amber-500/10">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">📲</span>
+                        <div>
+                            <h3 class="font-bold text-white">MTN MoMo</h3>
+                            <p class="text-xs text-slate-400">Demande de paiement sur le numéro de la commande</p>
+                        </div>
                     </div>
-                </button>
-                <div id="payment-crypto-block" class="hidden glass-panel rounded-xl p-5 border border-sky-500/30 bg-sky-500/5">
-                    <p class="text-sm font-semibold text-white mb-3">Crypto (même adresse)</p>
-                    <p class="text-xs text-slate-500 mb-3">Indiquez ce que vous envoyez (USDT, USDC ou TON) pour l’admin.</p>
-                    <div class="grid grid-cols-3 gap-2">
-                        <button type="button" onclick="goToCryptoPayment('usdt')" class="py-2.5 rounded-xl text-sm font-bold bg-white/10 text-sky-300 border border-sky-500/30 hover:bg-white/15">USDT</button>
-                        <button type="button" onclick="goToCryptoPayment('usdc')" class="py-2.5 rounded-xl text-sm font-bold bg-white/10 text-sky-300 border border-sky-500/30 hover:bg-white/15">USDC</button>
-                        <button type="button" onclick="goToCryptoPayment('ton')" class="py-2.5 rounded-xl text-sm font-bold bg-white/10 text-sky-300 border border-sky-500/30 hover:bg-white/15">TON</button>
-                    </div>
-                </div>
-                <div class="glass-panel rounded-xl p-5 border border-cyan-500/25 bg-cyan-500/5">
-                    <p class="text-sm font-semibold text-white mb-1">Telegram / TON Connect</p>
-                    <p class="text-xs text-slate-500 mb-3">Ouvre le wallet (Tonkeeper, Wallet dans Telegram, etc.) pour payer ou connecter.</p>
-                    <button type="button" onclick="openTelegramWalletPay()" class="w-full py-3 rounded-xl font-semibold border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 transition-colors">Connecter un wallet TON</button>
+                    <button type="button" onclick="startMomoFromPaymentScreen()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-amber-500 text-black hover:bg-amber-400 transition-colors">
+                        <iconify-icon icon="solar:smartphone-linear" width="20"></iconify-icon>
+                        <span>Lancer le paiement MoMo</span>
+                    </button>
                 </div>
             </div>
+
+            <div id="pay-panel-ton" class="hidden mb-4">
+                <div class="glass-panel rounded-xl p-5 border-2 border-sky-500/35 bg-sky-500/5">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-11 h-11 rounded-xl bg-sky-500/20 flex items-center justify-center text-xl" aria-hidden="true">◆</div>
+                        <div>
+                            <h3 class="font-bold text-white">Paiement en TON</h3>
+                            <p class="text-xs text-slate-400">Cours en temps réel — connexion wallet et envoi du montant en une étape</p>
+                        </div>
+                    </div>
+                    <p id="ton-rate-loading" class="text-sm text-slate-400 mb-3 hidden">Chargement du cours TON…</p>
+                    <p id="ton-rate-error" class="text-sm text-amber-400 mb-3 hidden"></p>
+                    <div id="ton-rate-box" class="hidden mb-4 p-3 rounded-xl bg-slate-900/60 border border-white/10">
+                        <p class="text-sm text-slate-300">Montant à envoyer</p>
+                        <p id="ton-rate-amount" class="text-lg font-bold text-sky-300 mt-1">—</p>
+                        <p id="ton-rate-usd" class="text-[11px] text-slate-500 mt-1">—</p>
+                    </div>
+                    <button type="button" id="btn-ton-connect-wallet" onclick="openTelegramWalletPay()" class="w-full py-3 rounded-xl font-semibold border border-sky-500/50 text-sky-300 hover:bg-sky-500/10 transition-colors mb-2">Connecter le wallet</button>
+                    <p id="ton-wallet-connected-line" class="text-sm text-emerald-400 mb-3 hidden text-center"></p>
+                    <button type="button" id="btn-bipbip-ton-pay" onclick="bipbipTonWalletPay()" disabled class="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-95 transition-opacity disabled:opacity-45 disabled:cursor-not-allowed shadow-lg shadow-sky-500/20">
+                        Connecte ton wallet pour payer
+                    </button>
+                </div>
+            </div>
+
+            <p id="payment-manual-crypto-wrap" class="text-center text-xs text-slate-500 mb-2 hidden">
+                <button type="button" onclick="goToCryptoPayment('usdt')" class="text-sky-400 hover:underline font-medium">USDT / USDC — envoi manuel vers l’adresse</button>
+            </p>
         </div>
 
         <!-- Détail paiement crypto (adresse + QR + TON Connect) -->
@@ -404,7 +479,7 @@
                 <p id="crypto-pay-asset-label" class="text-lg font-bold text-white">USDT</p>
                 <p class="text-xs text-slate-500 mt-2">Réseau (config serveur)</p>
                 <p id="crypto-pay-network" class="text-sm text-slate-300">TON</p>
-                <p class="text-xs text-amber-400/90 mt-4">Référence / mémo : utilisez le n° de commande dans la transaction si le wallet le permet.</p>
+                <p class="text-xs text-amber-400/90 mt-4">Référence / mémo : indiquez le n° de commande si le wallet le permet.</p>
                 <p id="crypto-pay-memo" class="font-mono text-sm text-white mt-1">#</p>
                 <p class="text-xs text-slate-500 mt-4">Adresse de dépôt</p>
                 <p id="crypto-pay-address" class="font-mono text-xs text-emerald-400 break-all mt-1"></p>
@@ -413,7 +488,7 @@
                 </div>
                 <p id="crypto-pay-estimate" class="text-sm text-slate-400 text-center hidden"></p>
             </div>
-            <button type="button" onclick="openTelegramWalletPay()" class="w-full py-3 rounded-xl font-semibold border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 transition-colors mb-3">Connecter un wallet TON (modal)</button>
+            <p class="text-xs text-slate-500 mb-3 text-center">Pour payer en TON en un clic, utilise l’onglet <strong class="text-sky-300">TON</strong> à l’étape précédente.</p>
             <button type="button" onclick="continueCryptoToProof()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors">
                 <span>Continuer vers la preuve</span>
                 <iconify-icon icon="solar:arrow-right-linear" width="18"></iconify-icon>
@@ -685,7 +760,19 @@
             <div class="help-content space-y-4">
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Comment acheter du crédit ?</h3>
-                    <p class="text-sm text-slate-400 leading-relaxed">1. Cliquez sur "Acheter"<br>2. Choisissez votre opérateur<br>3. Sélectionnez le montant<br>4. Entrez le numéro à recharger<br>5. Confirmez et envoyez la preuve de paiement</p>
+                    <p class="text-sm text-slate-400 leading-relaxed">1. Cliquez sur « Acheter »<br>2. Choisissez votre opérateur (MTN, Orange, Moov)<br>3. Sélectionnez le montant<br>4. Entrez le numéro à recharger<br>5. Confirmez la commande<br>6. Choisissez un mode de paiement (Djamo, MoMo si activé, ou TON)<br>7. Pour Djamo / MoMo / envoi crypto manuel : envoyez une capture d’écran à l’étape « Preuve ». Pour le TON via wallet, la preuve est générée automatiquement après l’envoi.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-sky-500/25 bg-sky-500/5">
+                    <h3 class="font-semibold text-white mb-2 flex items-center gap-2"><span class="text-sky-300" aria-hidden="true">◆</span> Paiement en TON (wallet)</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed mb-3">Disponible sur l’écran <strong class="text-slate-300">Mode de paiement</strong> : onglet <strong class="text-sky-300">TON</strong> (affiché lorsque le service est configuré).</p>
+                    <ol class="text-sm text-slate-400 leading-relaxed list-decimal list-inside space-y-2">
+                        <li>Ouvre l’onglet <strong class="text-slate-300">TON</strong> : le montant en TON est calculé à partir du cours du moment (conversion depuis ton total en FCFA).</li>
+                        <li>Appuie sur <strong class="text-slate-300">Connecter le wallet</strong> et choisis Tonkeeper, Wallet Telegram, etc. (TON Connect).</li>
+                        <li>Une fois connecté, appuie sur <strong class="text-slate-300">Payer ≈ … TON</strong> : une transaction envoie le montant vers l’adresse du marchand.</li>
+                        <li>Après validation dans ton wallet, une <strong class="text-slate-300">preuve automatique</strong> est envoyée aux équipes ; tu arrives sur l’écran de confirmation. La recharge est traitée après validation par l’admin, comme pour les autres modes.</li>
+                    </ol>
+                    <p class="text-sm text-slate-500 leading-relaxed mt-3"><strong class="text-slate-400">USDT / USDC</strong> : envoi manuel vers la même adresse affichée — utilise le lien « USDT / USDC — envoi manuel » sous les onglets, puis envoie une capture à l’étape Preuve.</p>
+                    <p class="text-xs text-slate-500 mt-3">Astuce : ouvre l’app depuis le <strong class="text-slate-400">bot Telegram</strong> pour un retour fluide après connexion au wallet. Le paiement TON nécessite une connexion internet stable et un site accessible en HTTPS.</p>
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Quels sont les frais ?</h3>
@@ -693,7 +780,11 @@
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Délai de traitement ?</h3>
-                    <p class="text-sm text-slate-400 leading-relaxed">Votre recharge est effectuée automatiquement après confirmation de votre paiement Djamo.</p>
+                    <p class="text-sm text-slate-400 leading-relaxed">Après réception de la preuve de paiement (capture ou TON wallet), l’équipe valide la commande puis la recharge est effectuée. Le délai dépend du moment où la preuve est reçue et validée.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Pourquoi ça ne s’ouvre pas sur mon ordinateur ?</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">L’app est pensée pour <strong class="text-slate-300">téléphone et tablette</strong> (navigateur ou Telegram). Sur PC, la page affiche des <strong class="text-slate-300">QR codes</strong> (bot Telegram + lien du site) : scanne-les avec ton mobile. Tu peux aussi activer le <strong class="text-slate-300">mode responsive</strong> du navigateur (voir les raccourcis sur l’écran d’accueil bloqué).</p>
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Contact support</h3>
@@ -760,13 +851,103 @@
     <!-- Toast : notification discrète (courte, style sobre) -->
     <div id="toast" class="toast fixed bottom-24 left-1/2 -translate-x-1/2 translate-y-8 px-4 py-2 rounded-lg font-medium text-xs shadow-xl opacity-0 transition-all duration-300 z-[1000] bg-slate-800/95 text-slate-300 border border-white/10"></div>
 
-    <script src="app.js"></script>
-    <script src="bipbip-dynamic-scene.js"></script>
     <script>
-        // Init dynamic scene on home
-        if (document.getElementById('bipbip-scene')) {
-            new BipbipDynamicScene('#bipbip-scene');
+    (function () {
+        function bipbipAllowMobileOrTablet() {
+            try {
+                if (window.sessionStorage.getItem('bipbip_force_mobile') === '1') return true;
+                var q = new URLSearchParams(window.location.search || '');
+                if (q.get('force_mobile') === '1') {
+                    window.sessionStorage.setItem('bipbip_force_mobile', '1');
+                    return true;
+                }
+            } catch (e) {}
+            try {
+                var tw = window.Telegram && window.Telegram.WebApp;
+                if (tw && (String(tw.initData || '').trim() || (tw.initDataUnsafe && tw.initDataUnsafe.user))) {
+                    return true;
+                }
+            } catch (e2) {}
+            var ua = navigator.userAgent || '';
+            if (/webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+            if (/iPad|Tablet|Kindle|Silk|PlayBook/i.test(ua)) return true;
+            if (/Android/i.test(ua)) return true;
+            try {
+                if (navigator.maxTouchPoints > 1 && /MacIntel|Macintosh/i.test(navigator.platform || '')) return true;
+            } catch (e3) {}
+            var iw = window.innerWidth || 0;
+            var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
+            var w = Math.min(iw, sw);
+            if (w > 0 && w <= 900) return true;
+            return false;
         }
+
+        function bipbipShowDesktopGate() {
+            var gate = document.getElementById('bipbip-desktop-gate');
+            if (gate) gate.classList.add('bipbip-gate-visible');
+            var base = window.location.origin || '';
+            var siteUrl = (window.location.href || '').split('#')[0];
+            function setQr(imgId, loadingId, data) {
+                var img = document.getElementById(imgId);
+                var ld = document.getElementById(loadingId);
+                if (!img || !data) return;
+                img.onload = function () {
+                    img.classList.remove('hidden');
+                    if (ld) ld.classList.add('hidden');
+                };
+                img.onerror = function () {
+                    if (ld) { ld.textContent = 'QR indisponible'; ld.classList.remove('hidden'); }
+                };
+                img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=' + encodeURIComponent(data);
+            }
+            fetch(base + '/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
+                var bot = (cfg.telegramBotUsername || '').replace(/^@/, '').trim();
+                var tgUrl = bot ? ('https://t.me/' + bot) : 'https://telegram.org';
+                var a = document.getElementById('bipbip-gate-tg-link');
+                if (a) { a.href = tgUrl; }
+                setQr('bipbip-gate-qr-telegram', 'bipbip-gate-qr-telegram-loading', tgUrl);
+            }).catch(function () {
+                setQr('bipbip-gate-qr-telegram', 'bipbip-gate-qr-telegram-loading', 'https://telegram.org');
+            });
+            setQr('bipbip-gate-qr-site', 'bipbip-gate-qr-site-loading', siteUrl);
+            var copyBtn = document.getElementById('bipbip-gate-copy-url');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function () {
+                    var url = siteUrl;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(function () {
+                            copyBtn.textContent = 'Lien copié !';
+                            setTimeout(function () { copyBtn.textContent = 'Copier le lien du site'; }, 2500);
+                        }).catch(function () { window.prompt('Copiez ce lien :', url); });
+                    } else {
+                        window.prompt('Copiez ce lien :', url);
+                    }
+                });
+            }
+        }
+
+        function bipbipLoadAppScripts() {
+            var app = document.createElement('script');
+            app.src = 'app.js';
+            app.onload = function () {
+                var sc = document.createElement('script');
+                sc.src = 'bipbip-dynamic-scene.js';
+                sc.onload = function () {
+                    if (document.getElementById('bipbip-scene') && typeof BipbipDynamicScene !== 'undefined') {
+                        try { new BipbipDynamicScene('#bipbip-scene'); } catch (err) {}
+                    }
+                };
+                document.body.appendChild(sc);
+            };
+            document.body.appendChild(app);
+        }
+
+        if (bipbipAllowMobileOrTablet()) {
+            bipbipLoadAppScripts();
+        } else {
+            bipbipShowDesktopGate();
+        }
+    })();
     </script>
 </body>
 </html>

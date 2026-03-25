@@ -36,6 +36,8 @@ let serverConfig = {
     tonConnectManifestUrl: null
 };
 var __tonConnectUi = null;
+/** Onglet paiement actif : djamo | momo | ton (UX type StickerStreet) */
+var bipbipPayTab = 'djamo';
 
 // En-têtes API avec initData Telegram pour validation côté serveur (sécurité comme v2)
 function getApiHeaders(extra) {
@@ -1332,19 +1334,275 @@ function goToPaymentMethodScreen() {
         el.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber(amount) + ' FCFA';
     }
     currentOrder.paymentMethod = null;
+    bipbipPayTab = 'djamo';
     navigateTo('payment-method');
 }
 
+function setPaymentMethodTab(tab) {
+    if (tab !== 'djamo' && tab !== 'momo' && tab !== 'ton') tab = 'djamo';
+    bipbipPayTab = tab;
+    ['djamo', 'momo', 'ton'].forEach(function (t) {
+        var btn = document.getElementById('pay-tab-' + t);
+        var panel = document.getElementById('pay-panel-' + t);
+        if (btn && !btn.classList.contains('hidden')) {
+            var on = (t === tab);
+            btn.classList.toggle('bg-white/15', on);
+            btn.classList.toggle('text-white', on);
+            btn.classList.toggle('text-slate-400', !on);
+        }
+        if (panel) panel.classList.toggle('hidden', t !== tab);
+    });
+    var hint = document.getElementById('payment-method-hint');
+    if (hint) {
+        hint.textContent = tab === 'ton'
+            ? 'Cours en direct : envoi du montant exact en TON depuis ton wallet. Une preuve est générée et envoyée aux admins.'
+            : 'Choisissez comment payer, puis envoyez une capture à l’étape suivante.';
+    }
+    if (tab === 'ton') refreshBipbipTonRate();
+    else updateBipbipTonPayButton();
+}
+
 function applyPaymentMethodScreenFromConfig() {
-    var cryptoSec = document.getElementById('payment-crypto-block');
-    if (cryptoSec) cryptoSec.classList.toggle('hidden', !serverConfig.cryptoDepositAddress);
-    var momoBtn = document.getElementById('payment-btn-momo');
-    if (momoBtn) momoBtn.classList.toggle('hidden', !serverConfig.momoEnabled);
+    var manualWrap = document.getElementById('payment-manual-crypto-wrap');
+    if (manualWrap) manualWrap.classList.toggle('hidden', !serverConfig.cryptoDepositAddress);
+    var tabMomo = document.getElementById('pay-tab-momo');
+    if (tabMomo) tabMomo.classList.toggle('hidden', !serverConfig.momoEnabled);
+    var tabTon = document.getElementById('pay-tab-ton');
+    if (tabTon) tabTon.classList.toggle('hidden', !serverConfig.cryptoDepositAddress);
     var url = serverConfig.djamoPayUrl || DJAMO_PAY_URL;
     var link = document.getElementById('djamo-pay-link');
     if (link) link.href = url;
     var urlText = document.getElementById('djamo-pay-url-text');
     if (urlText) urlText.textContent = url.replace(/^https?:\/\//, '');
+    if (bipbipPayTab === 'momo' && !serverConfig.momoEnabled) bipbipPayTab = 'djamo';
+    if (bipbipPayTab === 'ton' && !serverConfig.cryptoDepositAddress) bipbipPayTab = 'djamo';
+    setPaymentMethodTab(bipbipPayTab);
+}
+
+function refreshBipbipTonRate() {
+    var loadEl = document.getElementById('ton-rate-loading');
+    var errEl = document.getElementById('ton-rate-error');
+    var boxEl = document.getElementById('ton-rate-box');
+    var amount = (currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0;
+    if (loadEl) loadEl.classList.remove('hidden');
+    if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
+    if (boxEl) boxEl.classList.add('hidden');
+    window.__bipbipTonRate = null;
+    fetch(API_BASE + '/api/rates/ton?total_xof=' + encodeURIComponent(amount))
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (_ref) {
+            var ok = _ref.ok, j = _ref.j;
+            if (loadEl) loadEl.classList.add('hidden');
+            if (!ok || j.error) {
+                if (errEl) {
+                    errEl.textContent = (j && j.error) ? j.error : 'Taux indisponible';
+                    errEl.classList.remove('hidden');
+                }
+            } else {
+                window.__bipbipTonRate = j;
+                var tonAmt = document.getElementById('ton-rate-amount');
+                var tonUsd = document.getElementById('ton-rate-usd');
+                if (tonAmt) tonAmt.textContent = (j.amount_ton != null ? Number(j.amount_ton).toFixed(4) : '—') + ' TON';
+                if (tonUsd) tonUsd.textContent = 'Cours actuel : 1 TON ≈ ' + (j.ton_usd != null ? j.ton_usd : '—') + ' $';
+                if (boxEl) boxEl.classList.remove('hidden');
+            }
+            var u = getBipbipTonConnectUi();
+            if (u) bipbipOnTonWalletUi(u.wallet);
+            else updateBipbipTonPayButton();
+        })
+        .catch(function () {
+            if (loadEl) loadEl.classList.add('hidden');
+            if (errEl) {
+                errEl.textContent = 'Réseau indisponible';
+                errEl.classList.remove('hidden');
+            }
+            window.__bipbipTonRate = null;
+            var u2 = getBipbipTonConnectUi();
+            if (u2) bipbipOnTonWalletUi(u2.wallet);
+            else updateBipbipTonPayButton();
+        });
+}
+
+function getBipbipTonConnectUi() {
+    var manifest = serverConfig.tonConnectManifestUrl;
+    if (!manifest) return null;
+    var TC = (window.TON_CONNECT_UI && window.TON_CONNECT_UI.TonConnectUI) || window.TonConnectUI;
+    if (!TC) return null;
+    if (!__tonConnectUi) {
+        __tonConnectUi = new TC({ manifestUrl: manifest });
+        if (tg && tg.initData && serverConfig.twaReturnUrl) {
+            __tonConnectUi.uiOptions = { twaReturnUrl: serverConfig.twaReturnUrl };
+        }
+        __tonConnectUi.onStatusChange(function (wallet) {
+            bipbipOnTonWalletUi(wallet);
+        });
+    }
+    return __tonConnectUi;
+}
+
+function bipbipOnTonWalletUi(wallet) {
+    var line = document.getElementById('ton-wallet-connected-line');
+    var connectBtn = document.getElementById('btn-ton-connect-wallet');
+    var acc = wallet && wallet.account;
+    var addr = acc && acc.address;
+    if (addr) {
+        if (line) {
+            line.textContent = '✓ Wallet · ' + addr.slice(0, 6) + '…' + addr.slice(-4);
+            line.classList.remove('hidden');
+        }
+        if (connectBtn) connectBtn.textContent = 'Wallet connecté';
+    } else {
+        if (line) { line.classList.add('hidden'); line.textContent = ''; }
+        if (connectBtn) connectBtn.textContent = 'Connecter le wallet';
+    }
+    updateBipbipTonPayButton();
+}
+
+function updateBipbipTonPayButton() {
+    var btn = document.getElementById('btn-bipbip-ton-pay');
+    if (!btn) return;
+    var rate = window.__bipbipTonRate;
+    var ui = getBipbipTonConnectUi();
+    var connected = ui && ui.wallet && ui.wallet.account && ui.wallet.account.address;
+    var merchant = serverConfig.cryptoDepositAddress;
+    var totalFcfa = formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0);
+    if (!merchant) {
+        btn.disabled = true;
+        btn.textContent = 'Paiement TON indisponible';
+        return;
+    }
+    if (!rate || rate.amount_ton == null) {
+        btn.disabled = true;
+        btn.textContent = 'Chargement du cours…';
+        return;
+    }
+    if (!connected) {
+        btn.disabled = true;
+        btn.textContent = 'Connecte ton wallet pour payer';
+        return;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Payer ≈ ' + Number(rate.amount_ton).toFixed(4) + ' TON (' + totalFcfa + ' FCFA)';
+}
+
+function buildBipbipTonReceiptDataUrl(amountTon, tonUsd) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 260;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, 480, 260);
+    ctx.strokeStyle = '#0ea5e9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(8, 8, 464, 244);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '600 18px Inter, system-ui, sans-serif';
+    ctx.fillText('Bipbip Recharge CI — TON Connect', 24, 42);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px Inter, system-ui, sans-serif';
+    var idLine = 'Commande #' + (currentOrder.id || '') + ' · ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
+    ctx.fillText(idLine.slice(0, 52), 24, 68);
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 21px Inter, system-ui, sans-serif';
+    ctx.fillText('≈ ' + (amountTon != null ? Number(amountTon).toFixed(4) : '') + ' TON envoyés', 24, 108);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px Inter, system-ui, sans-serif';
+    ctx.fillText('Cours indicatif : 1 TON ≈ ' + (tonUsd != null ? tonUsd : '—') + ' USD', 24, 134);
+    ctx.fillText(new Date().toLocaleString('fr-FR'), 24, 198);
+    return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+function sendProofFromDataUrlCompressed(dataUrl, paymentMethod) {
+    var pm = paymentMethod || 'djamo';
+    currentOrder.paymentMethod = pm;
+    compressProofImage(dataUrl).then(function (imageData) {
+        return fetch(API_BASE + '/api/orders/' + encodeURIComponent(currentOrder.id) + '/proof-base64', {
+            method: 'POST',
+            headers: getApiHeaders(),
+            body: JSON.stringify({ image: imageData, paymentMethod: pm })
+        });
+    })
+        .then(function (res) {
+            return res.text().then(function (text) {
+                try {
+                    var data = JSON.parse(text);
+                    return { ok: res.ok, status: res.status, data: data };
+                } catch (_) {
+                    return { ok: false, status: res.status, data: { error: res.status === 413 ? 'Image trop volumineuse' : 'Erreur serveur' } };
+                }
+            });
+        })
+        .then(function (_ref2) {
+            var ok = _ref2.ok, status = _ref2.status, data = _ref2.data;
+            var tonBtn = document.getElementById('btn-bipbip-ton-pay');
+            if (tonBtn) { tonBtn.disabled = false; updateBipbipTonPayButton(); }
+            if (ok && data.success) {
+                var orderIndex = orders.findIndex(function (o) { return o.id === currentOrder.id; });
+                if (orderIndex !== -1) {
+                    orders[orderIndex].proof = true;
+                    orders[orderIndex].status = 'proof_sent';
+                } else {
+                    orders.push({
+                        id: currentOrder.id,
+                        operator: currentOrder.operator,
+                        amount: currentOrder.amount,
+                        amountTotal: currentOrder.amountTotal,
+                        phone: currentOrder.phone,
+                        proof: true,
+                        status: 'proof_sent',
+                        createdAt: currentOrder.createdAt
+                    });
+                }
+                saveOrders();
+                var successInfo = document.getElementById('success-order-info');
+                if (successInfo) {
+                    successInfo.innerHTML = '\n                    <p><strong>Commande:</strong> #' + currentOrder.id + '</p>\n                    <p><strong>Montant:</strong> ' + formatNumber(currentOrder.amountTotal) + ' FCFA</p>\n                    <p><strong>Numéro:</strong> +225 ' + currentOrder.phone + '</p>\n                    <p><strong>Statut:</strong> ⏳ En attente de validation</p>\n                ';
+                }
+                showToast('Paiement TON enregistré !', 'success');
+                navigateTo('success');
+            } else {
+                var msg = (data && data.error) ? data.error : ('Erreur serveur (' + status + ')');
+                showToast(msg, 'error');
+            }
+        })
+        .catch(function (err) {
+            console.error('Erreur preuve TON:', err);
+            var tonBtn2 = document.getElementById('btn-bipbip-ton-pay');
+            if (tonBtn2) { tonBtn2.disabled = false; updateBipbipTonPayButton(); }
+            showToast('Erreur réseau. Réessaie.', 'error');
+        });
+}
+
+function bipbipTonWalletPay() {
+    var ui = getBipbipTonConnectUi();
+    var merchant = serverConfig.cryptoDepositAddress;
+    var rate = window.__bipbipTonRate;
+    if (!ui || !merchant || !rate || rate.amount_ton == null) {
+        showToast('Vérifie le cours TON et l’adresse marchand', 'error');
+        return;
+    }
+    if (!ui.wallet || !ui.wallet.account || !ui.wallet.account.address) {
+        showToast('Connecte d’abord ton wallet', 'info');
+        ui.openModal();
+        return;
+    }
+    var amountTon = Number(rate.amount_ton);
+    var amountNano = BigInt(Math.round(amountTon * 1e9));
+    var btn = document.getElementById('btn-bipbip-ton-pay');
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi en cours…'; }
+    ui.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 300,
+        messages: [{ address: merchant, amount: amountNano.toString() }]
+    }).then(function () {
+        currentOrder.paymentMethod = 'ton';
+        var receipt = buildBipbipTonReceiptDataUrl(amountTon, rate.ton_usd);
+        sendProofFromDataUrlCompressed(receipt, 'ton');
+    }).catch(function (err) {
+        if (btn) { btn.disabled = false; updateBipbipTonPayButton(); }
+        var s = String(err && err.message ? err.message : err);
+        if (!/declin|reject|cancel|annul/i.test(s)) console.warn('[TON]', err);
+        showToast('Paiement annulé ou échoué', 'info');
+    });
 }
 
 function resetProofUploadUi() {
@@ -1420,7 +1678,12 @@ function goToCryptoPayment(asset) {
         showToast('Paiement crypto non configuré', 'error');
         return;
     }
-    currentOrder.paymentMethod = asset === 'usdc' ? 'usdc' : asset === 'ton' ? 'ton' : 'usdt';
+    if (asset === 'ton') {
+        bipbipPayTab = 'ton';
+        navigateTo('payment-method');
+        return;
+    }
+    currentOrder.paymentMethod = asset === 'usdc' ? 'usdc' : 'usdt';
     navigateTo('crypto-pay');
 }
 
@@ -1437,26 +1700,18 @@ function openTelegramWalletLinkFallback() {
 }
 
 function openTelegramWalletPay() {
-    var manifest = serverConfig.tonConnectManifestUrl;
-    if (!manifest) {
-        showToast('Manifest TON Connect indisponible (PUBLIC_BASE_URL / domaine)', 'error');
-        openTelegramWalletLinkFallback();
-        return;
-    }
-    var TC = (window.TON_CONNECT_UI && window.TON_CONNECT_UI.TonConnectUI) || window.TonConnectUI;
-    if (!TC) {
-        showToast('Chargement wallet : ouverture du lien Telegram', 'info');
+    var ui = getBipbipTonConnectUi();
+    if (!ui) {
+        if (!serverConfig.tonConnectManifestUrl) {
+            showToast('Manifest TON Connect indisponible (PUBLIC_BASE_URL)', 'error');
+        } else {
+            showToast('SDK wallet indisponible', 'info');
+        }
         openTelegramWalletLinkFallback();
         return;
     }
     try {
-        if (!__tonConnectUi) {
-            __tonConnectUi = new TC({ manifestUrl: manifest });
-        }
-        if (tg && tg.initData && serverConfig.twaReturnUrl) {
-            __tonConnectUi.uiOptions = { twaReturnUrl: serverConfig.twaReturnUrl };
-        }
-        __tonConnectUi.openModal();
+        ui.openModal();
     } catch (e) {
         console.warn('[TON Connect]', e);
         openTelegramWalletLinkFallback();
