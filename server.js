@@ -54,7 +54,7 @@ function getAdminChatIds() {
 const ADMIN_CHAT_ID = getAdminChatIds()[0] || ''; // pour compatibilité
 
 // Achats directs dans le bot (sans webapp)
-const BOT_FRAIS_PERCENT = 5;
+const BOT_FRAIS_PERCENT = 10;
 const BOT_OPERATORS = {
     MTN: { prefix: '05' },
     Orange: { prefix: '07' },
@@ -186,6 +186,25 @@ app.get('/tonconnect-manifest.json', (req, res) => {
         name: (process.env.TON_CONNECT_APP_NAME || 'Bipbip Recharge CI').trim(),
         iconUrl: (process.env.TON_CONNECT_ICON_URL || 'https://ton.org/download/ton_symbol.png').trim()
     });
+});
+
+// ==================== SEO PAGES ====================
+app.get('/recharge-mtn-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'recharge-mtn-ci.html'));
+});
+app.get('/recharge-orange-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'recharge-orange-ci.html'));
+});
+app.get('/recharge-moov-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'recharge-moov-ci.html'));
+});
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain');
+    res.sendFile(path.join(__dirname, 'robots.txt'));
+});
+app.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml');
+    res.sendFile(path.join(__dirname, 'sitemap.xml'));
 });
 
 app.use(express.static('.', {

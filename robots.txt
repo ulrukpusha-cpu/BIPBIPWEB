@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /recharge-mtn-ci
+Allow: /recharge-orange-ci
+Allow: /recharge-moov-ci
+
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /data/
+Disallow: /database/
+Disallow: /middleware/
+Disallow: /routes/
+Disallow: /services/
+Disallow: /scripts/
+Disallow: /node_modules/
+
+Sitemap: https://bipbiprecharge.ci/sitemap.xml

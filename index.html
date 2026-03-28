@@ -60,19 +60,57 @@
 
     <!-- ═══ Structured Data (JSON-LD) ═══ -->
     <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "MobileApplication",
-        "name": "Bipbip Recharge CI",
-        "operatingSystem": "Android, iOS",
-        "applicationCategory": "FinanceApplication",
-        "description": "Rechargez votre crédit mobile MTN, Orange et Moov. Paiement sécurisé via Djamo, MTN MoMo ou crypto.",
-        "url": "https://bipbiprecharge.ci/",
-        "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "XOF" },
-        "provider": { "@type": "Organization", "name": "Bipbip Recharge CI", "url": "https://bipbiprecharge.ci/" },
-        "areaServed": { "@type": "Country", "name": "CI" }
-    }
+    [
+        {
+            "@context": "https://schema.org",
+            "@type": "MobileApplication",
+            "name": "Bipbip Recharge CI",
+            "operatingSystem": "Android, iOS",
+            "applicationCategory": "FinanceApplication",
+            "description": "Rechargez votre crédit mobile MTN, Orange et Moov. Paiement sécurisé via Djamo, MTN MoMo ou crypto.",
+            "url": "https://bipbiprecharge.ci/",
+            "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "XOF" },
+            "provider": { "@type": "Organization", "name": "Bipbip Recharge CI", "url": "https://bipbiprecharge.ci/" },
+            "areaServed": { "@type": "Country", "name": "CI" }
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            "name": "Bipbip Recharge CI",
+            "description": "Service de recharge de crédit mobile en ligne en Côte d'Ivoire. MTN, Orange et Moov. Paiement via Djamo, MTN MoMo ou crypto TON.",
+            "url": "https://bipbiprecharge.ci/",
+            "logo": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+            "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+            "address": {
+                "@type": "PostalAddress",
+                "addressCountry": "CI",
+                "addressLocality": "Abidjan"
+            },
+            "geo": {
+                "@type": "GeoCoordinates",
+                "latitude": "5.3600",
+                "longitude": "-4.0083"
+            },
+            "openingHours": "Mo-Su 00:00-23:59",
+            "priceRange": "500 - 25000 FCFA",
+            "paymentAccepted": "Djamo, MTN MoMo, Crypto TON",
+            "currenciesAccepted": "XOF",
+            "areaServed": { "@type": "Country", "name": "CI" },
+            "sameAs": []
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Bipbip Recharge CI",
+            "url": "https://bipbiprecharge.ci/",
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://bipbiprecharge.ci/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+            }
+        }
+    ]
     </script>
 
     <!-- ═══ Preconnect (réduit latence DNS+TLS sur 3G) ═══ -->
@@ -160,9 +198,9 @@
     <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
     <!-- ═══ CSS non-critique (async via media trick) ═══ -->
-    <link rel="stylesheet" href="styles.css?v=20260327d" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260327d" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="styles.css?v=20260327d"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260327d"></noscript>
+    <link rel="stylesheet" href="styles.css?v=20260328b" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260328b" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="styles.css?v=20260328b"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260328b"></noscript>
 
     <!-- TON Connect : lazy-load (chargé par app.js uniquement quand le panel paiement s'ouvre) -->
 </head>
@@ -371,48 +409,48 @@
             <div class="space-y-3 mb-4">
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">500 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 25 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 525 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 50 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 550 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">1 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 50 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 1 050 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 100 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 1 100 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">2 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 100 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 2 100 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 200 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 2 200 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">5 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 250 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 5 250 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 5 500 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">10 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 500 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 10 500 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 1 000 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 11 000 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">15 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 750 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 15 750 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 1 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 16 500 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">20 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 1 000 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 21 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 2 000 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 22 000 FCFA</span>
                 </div>
                 <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
                     <span class="font-semibold text-white">25 000 FCFA</span>
-                    <span class="text-slate-400 text-sm">+ 1 250 FCFA frais</span>
-                    <span class="font-semibold text-emerald-400">= 26 250 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 2 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 27 500 FCFA</span>
                 </div>
             </div>
             <div class="glass-panel rounded-xl p-4 flex items-center gap-3 text-amber-400/90">
                 <iconify-icon icon="solar:wallet-money-linear" width="24"></iconify-icon>
-                <span class="text-sm font-medium">Frais de service : 5%</span>
+                <span class="text-sm font-medium">Frais de service : 10%</span>
             </div>
         </div>
 
@@ -425,29 +463,29 @@
                 <h2 class="text-xl font-semibold text-white">Choisir l'opérateur</h2>
             </div>
             <div class="space-y-3">
-                <button type="button" onclick="selectOperator('MTN')" class="operator-btn mtn w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left">
+                <button type="button" data-operator="MTN" onclick="selectOperator('MTN')" class="operator-btn mtn w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge mtn-badge px-4 py-2 rounded-lg font-bold text-sm bg-amber-400/20 text-amber-400 border border-amber-400/30">MTN</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">MTN Mobile Money</span>
                         <span class="operator-prefix text-xs text-slate-400">Préfixe: 05XX XXX XXX</span>
                     </div>
-                    <iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
-                <button type="button" onclick="selectOperator('Orange')" class="operator-btn orange w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left">
+                <button type="button" data-operator="Orange" onclick="selectOperator('Orange')" class="operator-btn orange w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge orange-badge px-4 py-2 rounded-lg font-bold text-sm bg-orange-500/20 text-orange-400 border border-orange-500/30">Orange</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">Orange Money</span>
                         <span class="operator-prefix text-xs text-slate-400">Préfixe: 07XX XXX XXX</span>
                     </div>
-                    <iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
-                <button type="button" onclick="selectOperator('Moov')" class="operator-btn moov w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left">
+                <button type="button" data-operator="Moov" onclick="selectOperator('Moov')" class="operator-btn moov w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge moov-badge px-4 py-2 rounded-lg font-bold text-sm bg-blue-500/20 text-blue-400 border border-blue-500/30">Moov</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">Moov Africa</span>
                         <span class="operator-prefix text-xs text-slate-400">Préfixe: 01XX XXX XXX</span>
                     </div>
-                    <iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400"></iconify-icon>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
             </div>
         </div>
@@ -462,35 +500,35 @@
             </div>
             <div class="selected-operator glass-panel rounded-xl p-4 mb-6 flex items-center gap-3 border border-white/15" id="selected-operator-display"></div>
             <div class="grid grid-cols-2 gap-3">
-                <button type="button" onclick="selectAmount(500)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="500" onclick="selectAmount(500)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">500</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(1000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="1000" onclick="selectAmount(1000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">1 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(2000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="2000" onclick="selectAmount(2000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">2 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(5000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="5000" onclick="selectAmount(5000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">5 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(10000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="10000" onclick="selectAmount(10000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">10 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(15000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="15000" onclick="selectAmount(15000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">15 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(20000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="20000" onclick="selectAmount(20000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">20 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" onclick="selectAmount(25000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15">
+                <button type="button" data-amount="25000" onclick="selectAmount(25000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">25 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
@@ -961,7 +999,7 @@
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Quels sont les frais ?</h3>
-                    <p class="text-sm text-slate-400 leading-relaxed">Les frais de service sont de 5% du montant de la recharge.</p>
+                    <p class="text-sm text-slate-400 leading-relaxed">Les frais de service sont de 10% du montant de la recharge.</p>
                 </div>
                 <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
                     <h3 class="font-semibold text-white mb-2">Délai de traitement ?</h3>
@@ -1038,7 +1076,14 @@
 
     <script>
     (function () {
+        function bipbipIsBot() {
+            try {
+                var ua = navigator.userAgent || '';
+                return /Googlebot|bingbot|Baiduspider|yandex|DuckDuckBot|Slurp|facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Applebot|Pinterestbot|crawl|spider|bot/i.test(ua);
+            } catch (e) { return false; }
+        }
         function bipbipAllowMobileOrTablet() {
+            if (bipbipIsBot()) return true;
             try {
                 if (window.sessionStorage.getItem('bipbip_force_mobile') === '1') return true;
                 var q = new URLSearchParams(window.location.search || '');
@@ -1112,7 +1157,7 @@
         }
 
         function bipbipLoadAppScripts() {
-            var _v = '?v=20260327d';
+            var _v = '?v=20260328b';
             var tgInt = document.createElement('script');
             tgInt.src = 'bipbip-telegram.js' + _v;
             document.body.appendChild(tgInt);
