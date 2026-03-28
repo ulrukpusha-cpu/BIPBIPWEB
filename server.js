@@ -3,6 +3,7 @@ const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
@@ -24,9 +25,22 @@ const ledService = require('./services/ledService');
 
 // ==================== CONFIG ====================
 const app = express();
+
+app.use(compression({ level: 6, threshold: 512 }));
+
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
 const PORT = process.env.PORT || 3000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const TELEGRAM_BOT_TOKEN_ADMIN = (process.env.TELEGRAM_BOT_TOKEN_ADMIN || '').trim();
+/** Si true : Telegram n’appelle plus handleTelegramUpdate (bot chat géré par bot.py en polling). La webapp /api/telegram/* reste active. */
+const TELEGRAM_WEBHOOK_DISABLED = ['1', 'true', 'yes'].includes(
+    String(process.env.TELEGRAM_WEBHOOK_DISABLED || '').trim().toLowerCase()
+);
 
 // Plusieurs admins : ADMIN_CHAT_IDS=id1,id2,id3  ou un seul : ADMIN_CHAT_ID=id
 function getAdminChatIds() {
@@ -175,14 +189,20 @@ app.get('/tonconnect-manifest.json', (req, res) => {
 });
 
 app.use(express.static('.', {
-    etag: false,
-    lastModified: false,
+    etag: true,
+    lastModified: true,
     maxAge: 0,
     setHeaders: (res, filePath) => {
-        if (/\.(html|css|js)$/.test(filePath)) {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
+        if (/\.(webp|png|jpe?g|gif|svg|ico)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        } else if (/\.(woff2?|ttf|eot)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+        } else if (/\.(css|js)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+        } else if (/\.html$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'no-cache');
+        } else if (/\.(json)$/i.test(filePath)) {
+            res.setHeader('Cache-Control', 'public, max-age=600');
         }
     }
 }));
@@ -1115,6 +1135,9 @@ app.get('/api/telegram/webhook-info', async (req, res) => {
 // Webhook Telegram : repondre 200 tout de suite puis traiter (evite timeout)
 app.post('/api/telegram/webhook', (req, res) => {
     res.json({ ok: true });
+    if (TELEGRAM_WEBHOOK_DISABLED) {
+        return;
+    }
     setImmediate(() => handleTelegramUpdate(req.body).catch(err => console.error('[Webhook]', err)));
 });
 

@@ -86,23 +86,9 @@ let tg = window.Telegram?.WebApp;
 
 function initTelegram() {
     if (tg) {
-        tg.ready();
-        tg.expand();
-        
-        // Appliquer le thème Telegram
-        if (tg.colorScheme === 'light') {
-            document.body.classList.add('light-theme');
-        }
-        
-        // Configurer le bouton principal
-        tg.MainButton.setParams({
-            text: 'Fermer',
-            color: '#e94560'
-        });
-        
+        // bipbip-telegram.js gère ready(), expand(), couleurs, safe areas, back button, haptic, thème
         console.log('Telegram WebApp initialisé', tg.initDataUnsafe);
         
-        // Inscription automatique (photo + nom). fetchTelegramMe uniquement à l'ouverture du Profil pour ne pas écraser la photo.
         if (tg.initData) {
             registerTelegramUser();
         } else {
@@ -358,17 +344,19 @@ function updateHeaderUserInfo() {
     }
 }
 
-function convertPointsToBip() {
-    if (userPoints < 100) {
-        showToast('Minimum 100 points pour convertir en BIP', 'error');
-        return;
+function showConvertBbrWipBlock() {
+    var block = document.getElementById('convert-bbr-wip-block');
+    if (block) {
+        block.classList.remove('hidden');
+        try {
+            block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (e) {}
     }
-    var bip = Math.floor(userPoints / 100);
-    userPoints -= bip * 100;
-    localStorage.setItem('bipbip_points', String(userPoints));
-    updateHeaderPoints();
-    updateProfilPoints();
-    showToast('Conversion effectuée : ' + bip + ' BIP', 'success');
+}
+
+function hideConvertBbrWipBlock() {
+    var block = document.getElementById('convert-bbr-wip-block');
+    if (block) block.classList.add('hidden');
 }
 
 var actualitesSort = 'all';
@@ -1014,6 +1002,9 @@ function navigateTo(screen) {
     if (targetScreen) {
         targetScreen.classList.add('active');
         currentScreen = screen;
+        if (typeof window.__bipbipTgUpdateBackButton === 'function') window.__bipbipTgUpdateBackButton(screen);
+        if (typeof window.__bipbipTgClosingGuard === 'function') window.__bipbipTgClosingGuard(screen);
+        if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
         if (screen === 'status') renderOrdersList();
         if (screen === 'home') {
             updateHeaderUserInfo();
@@ -1125,6 +1116,10 @@ function showToast(message, type = 'info') {
     if (!toast) return;
     toast.textContent = message;
     toast.className = `toast show ${type}`;
+    if (typeof window.__bipbipHaptic === 'function') {
+        if (type === 'success') window.__bipbipHaptic('notification', 'success');
+        else if (type === 'error') window.__bipbipHaptic('notification', 'error');
+    }
     var duration = type === 'success' ? 1500 : 3000;
     setTimeout(function () {
         toast.classList.remove('show');
@@ -1159,6 +1154,8 @@ function clearLocalOrders() {
 
 // ==================== BUY FLOW ====================
 function selectOperator(operator) {
+    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('selection');
+    if (typeof window.__bipbipDeviceStorage === 'object') window.__bipbipDeviceStorage.set('last_operator', operator);
     currentOrder = {
         id: null,
         operator: operator,
@@ -1191,6 +1188,7 @@ function selectOperator(operator) {
 }
 
 function selectAmount(amount) {
+    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
     const frais = Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
     const total = amount + frais;
     
@@ -1206,9 +1204,10 @@ function selectAmount(amount) {
         <p><span>Total à payer</span><span>${formatNumber(total)} FCFA</span></p>
     `;
     
-    // Reset phone input
-    document.getElementById('phone-input').value = '';
-    document.getElementById('btn-continue-phone').disabled = true;
+    var phoneInput = document.getElementById('phone-input');
+    var lastPhone = window.__bipbipLastPhone || '';
+    phoneInput.value = lastPhone;
+    document.getElementById('btn-continue-phone').disabled = !lastPhone || lastPhone.length < 10;
     document.getElementById('phone-hint').textContent = 'Entrez un numéro valide';
     document.getElementById('phone-hint').className = 'input-hint';
     
@@ -1254,6 +1253,7 @@ function validatePhone() {
     }
     
     currentOrder.phone = phone;
+    if (typeof window.__bipbipDeviceStorage === 'object') window.__bipbipDeviceStorage.set('last_phone', phone);
     
     // Afficher les détails de confirmation
     const details = document.getElementById('confirmation-details');
@@ -1427,7 +1427,16 @@ function getBipbipTonConnectUi() {
     var manifest = serverConfig.tonConnectManifestUrl;
     if (!manifest) return null;
     var TC = (window.TON_CONNECT_UI && window.TON_CONNECT_UI.TonConnectUI) || window.TonConnectUI;
-    if (!TC) return null;
+    if (!TC) {
+        if (typeof window.__loadTonConnect === 'function' && !window.__isTonConnectLoaded()) {
+            window.__loadTonConnect(function () {
+                var u = getBipbipTonConnectUi();
+                if (u) bipbipOnTonWalletUi(u.wallet);
+                else updateBipbipTonPayButton();
+            });
+        }
+        return null;
+    }
     if (!__tonConnectUi) {
         __tonConnectUi = new TC({ manifestUrl: manifest });
         if (tg && tg.initData && serverConfig.twaReturnUrl) {
@@ -1979,6 +1988,8 @@ function sendProof() {
                 `;
             }
             showToast('Preuve envoyée avec succès !', 'success');
+            if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('notification', 'success');
+            if (typeof window.__bipbipTgPromptHomeScreen === 'function') window.__bipbipTgPromptHomeScreen();
             navigateTo('success');
         } else {
             const msg = (data && data.error) ? data.error : ('Erreur serveur (' + status + ')');
@@ -2462,7 +2473,7 @@ function initApp() {
     var btnAnnonceMomoCheck = document.getElementById('btn-annonce-momo-check');
     if (btnAnnonceMomoCheck) btnAnnonceMomoCheck.addEventListener('click', function (e) { e.preventDefault(); checkAnnonceMomoStatus(); });
     var btnConvertPoints = document.getElementById('btn-convert-points');
-    if (btnConvertPoints) btnConvertPoints.addEventListener('click', function (e) { e.preventDefault(); convertPointsToBip(); });
+    if (btnConvertPoints) btnConvertPoints.addEventListener('click', function (e) { e.preventDefault(); showConvertBbrWipBlock(); });
 
     var btnDailyClaim = document.getElementById('btn-daily-claim');
     if (btnDailyClaim) btnDailyClaim.addEventListener('click', function (e) { e.preventDefault(); claimDailyCheckin(); });

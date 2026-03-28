@@ -2,7 +2,11 @@
 <html lang="fr" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
-    <script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <!-- Lite mode detection (synchrone : doit tourner avant le premier paint) -->
+<script>
     (function () {
         try {
             var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -17,70 +21,230 @@
         } catch (e) {}
     })();
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bipbip Recharge CI - Recharge Rapide</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tonconnect/ui@2.4.2/dist/tonconnect-ui.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=20260323a">
-    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260323a">
+
+    <!-- ═══ SEO ═══ -->
+    <title>Bipbip Recharge CI — Recharge mobile rapide en Côte d'Ivoire</title>
+    <meta name="description" content="Rechargez votre crédit mobile MTN, Orange et Moov en quelques clics. Paiement sécurisé via Djamo, MTN MoMo ou crypto (TON). Service disponible 24/7 en Côte d'Ivoire.">
+    <meta name="keywords" content="recharge mobile, Côte d'Ivoire, MTN, Orange, Moov, crédit téléphone, Bipbip, Djamo, MoMo, TON, crypto">
+    <meta name="author" content="Bipbip Recharge CI">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://bipbiprecharge.ci/">
+
+    <!-- ═══ Open Graph ═══ -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Bipbip Recharge CI">
+    <meta property="og:title" content="Bipbip Recharge CI — Recharge mobile rapide">
+    <meta property="og:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
+    <meta property="og:url" content="https://bipbiprecharge.ci/">
+    <meta property="og:image" content="https://bipbiprecharge.ci/assets/logo-bip-512.webp">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:locale" content="fr_CI">
+
+    <!-- ═══ Twitter Card ═══ -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Bipbip Recharge CI — Recharge mobile rapide">
+    <meta name="twitter:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
+    <meta name="twitter:image" content="https://bipbiprecharge.ci/assets/logo-bip-512.webp">
+
+    <!-- ═══ PWA & Icônes ═══ -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bipbip">
+    <meta name="application-name" content="Bipbip Recharge">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/webp" sizes="192x192" href="/assets/logo-bip-192.webp">
+    <link rel="icon" type="image/png" sizes="269x279" href="/assets/logo-bip.png">
+    <link rel="apple-touch-icon" href="/assets/logo-bip.png">
+
+    <!-- ═══ Structured Data (JSON-LD) ═══ -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "MobileApplication",
+        "name": "Bipbip Recharge CI",
+        "operatingSystem": "Android, iOS",
+        "applicationCategory": "FinanceApplication",
+        "description": "Rechargez votre crédit mobile MTN, Orange et Moov. Paiement sécurisé via Djamo, MTN MoMo ou crypto.",
+        "url": "https://bipbiprecharge.ci/",
+        "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "XOF" },
+        "provider": { "@type": "Organization", "name": "Bipbip Recharge CI", "url": "https://bipbiprecharge.ci/" },
+        "areaServed": { "@type": "Country", "name": "CI" }
+    }
+    </script>
+
+    <!-- ═══ Preconnect (réduit latence DNS+TLS sur 3G) ═══ -->
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="dns-prefetch" href="https://code.iconify.design">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    <link rel="dns-prefetch" href="https://telegram.org">
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+
+    <!-- ═══ CSS : Google Fonts (swap) ═══ -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- ═══ CSS critique (inline — above the fold) ═══ -->
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        .gradient-text {
-            background: linear-gradient(to right, #fff, #cbd5e1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        body { background-color: #0f172a; }
-        .led-wrap { overflow: hidden; white-space: nowrap; }
-        /* Durée d'animation appliquée par app.js (réglage admin), pas de 60s figé ici */
-        .led-text { display: inline-block; padding-left: 100%; }
-        @keyframes led-scroll { to { transform: translate3d(-100%, 0, 0); } }
-        /* Écran PC : accès réservé mobile / tablette */
-        #bipbip-desktop-gate {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 50000;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 2rem 1.25rem 2.5rem;
-            overflow-y: auto;
-            background: #0f172a;
-            text-align: center;
-        }
-        #bipbip-desktop-gate.bipbip-gate-visible { display: flex; }
+        body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0f172a;margin:0;color:#e2e8f0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+        h1,h2,h3,h4,.font-semibold,.font-bold{color:#f1f5f9}
+        p,span,a,button,label,li{color:inherit}
+        .text-white{color:#fff !important}
+        .text-slate-300{color:#cbd5e1 !important}
+        .text-slate-400{color:#94a3b8 !important}
+        .text-slate-500{color:#64748b !important}
+        .text-amber-400{color:#fbbf24 !important}
+        .text-emerald-400{color:#34d399 !important}
+        .text-rose-400{color:#fb7185 !important}
+        .text-indigo-400{color:#818cf8 !important}
+        .text-sky-300{color:#7dd3fc !important}
+        .text-purple-400{color:#c084fc !important}
+        .text-blue-200{color:#bfdbfe !important}
+        .glass-panel{background:rgba(30,41,59,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);color:#e2e8f0}
+        @supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){.glass-panel{background:rgba(255,255,255,.08)}}
+        .glass-panel h4,.glass-panel .font-semibold{color:#f1f5f9}
+        .glass-panel p{color:#cbd5e1}
+        nav.fixed{background:rgba(15,23,42,.95) !important;color:#f1f5f9}
+        @supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){nav.fixed{background:rgba(15,23,42,.8) !important}}
+        .scene-hero-title{color:#fff !important;text-shadow:0 3px 20px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.6) !important;font-weight:700}
+        .scene-hero-subtitle{color:rgba(255,255,255,.92) !important;text-shadow:0 2px 12px rgba(0,0,0,.85) !important}
+        .scene-status-pill{background:rgba(15,23,42,.8) !important;border-color:rgba(255,255,255,.3) !important;color:#bfdbfe}
+        #service-status-text{color:#bfdbfe !important}
+        #bipbip-topbar{background:#1a2536 !important;color:#94a3b8}
+        .sort-btn{color:#94a3b8 !important;background:rgba(30,41,59,.7) !important;border-color:rgba(255,255,255,.18) !important}
+        .sort-btn.active{color:#fff !important;background:rgba(255,255,255,.14) !important}
+        #article-overlay{background:rgba(15,23,42,.98) !important}
+        main{color:#e2e8f0}
+        main h1,main h2,main h3,main h4{color:#f1f5f9 !important}
+        main p{color:#cbd5e1}
+        main a{color:#e2e8f0}
+        main button{color:#e2e8f0}
+        main .text-sm{color:#cbd5e1}
+        main .text-xs{color:#94a3b8}
+        nav.fixed span,nav.fixed a,nav.fixed button{color:inherit}
+        .nav-bottom-btn{color:#94a3b8}
+        .nav-bottom-btn.text-amber-400{color:#fbbf24 !important}
+        .gradient-text{background:linear-gradient(to right,#fff,#cbd5e1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1e293b}::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#64748b}
+        .led-wrap{overflow:hidden;white-space:nowrap}.led-text{display:inline-block;padding-left:100%;will-change:transform}
+        @keyframes led-scroll{to{transform:translate3d(-100%,0,0)}}
+        #bipbip-desktop-gate{display:none;position:fixed;inset:0;z-index:50000;flex-direction:column;align-items:center;justify-content:flex-start;padding:2rem 1.25rem 2.5rem;overflow-y:auto;background:#0f172a;text-align:center}
+        #bipbip-desktop-gate.bipbip-gate-visible{display:flex}
+        #bipbip-splash{position:fixed;inset:0;z-index:60000;display:flex;align-items:center;justify-content:center;background:#08080D;transition:opacity .45s ease,visibility .45s ease}
+        #bipbip-splash.bipbip-splash-hidden{opacity:0;visibility:hidden;pointer-events:none}
+        #bipbip-splash video{width:100%;height:100%;object-fit:contain;background:#08080D}
+        #bipbip-splash-fallback{display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;text-align:center}
+        #bipbip-splash.bipbip-splash-fallback-only video{display:none}
+        #bipbip-splash.bipbip-splash-fallback-only #bipbip-splash-fallback{display:flex}
+        #bipbip-splash-fallback img{width:min(200px,50vw);height:auto;object-fit:contain;border-radius:1rem}
+        #bipbip-splash-skip{position:absolute;bottom:max(1.25rem,env(safe-area-inset-bottom));right:max(1rem,env(safe-area-inset-right));z-index:2;padding:.5rem .85rem;font-size:.75rem;font-weight:600;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:.75rem;cursor:pointer}
+        #bipbip-splash-skip:hover{color:#fff;background:rgba(255,255,255,.12)}
+        html.bipbip-splash-pending body>*:not(#bipbip-splash){visibility:hidden}
+        html.bipbip-splash-pending{background:#08080D}
+        @media(prefers-reduced-motion:reduce){#bipbip-splash{transition:none}}
+        .screen:not(.active){content-visibility:auto;contain-intrinsic-size:0 500px}
+        #bipbip-topbar{will-change:auto;-webkit-font-smoothing:antialiased;box-sizing:border-box}
     </style>
+
+    <!-- ═══ Tailwind CDN (requis) ═══ -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- ═══ Telegram WebApp SDK (nécessaire au boot pour le contexte TG) ═══ -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- ═══ Iconify (defer : ne bloque plus le first paint) ═══ -->
+    <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+
+    <!-- ═══ CSS non-critique (async via media trick) ═══ -->
+    <link rel="stylesheet" href="styles.css?v=20260327d" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260327d" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="styles.css?v=20260327d"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260327d"></noscript>
+
+    <!-- TON Connect : lazy-load (chargé par app.js uniquement quand le panel paiement s'ouvre) -->
 </head>
 <body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200 text-slate-300" style="background-color: #0f172a;">
 
+    <!-- Skip to content (accessibilité) -->
+    <a href="#screen-home" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[99999] focus:bg-indigo-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold" id="skip-to-content">Aller au contenu principal</a>
+
+    <!-- Splash plein écran (mobile / tablette) -->
+    <div id="bipbip-splash" class="bipbip-splash-hidden" aria-hidden="true" hidden>
+        <video id="bipbip-splash-video" autoplay muted playsinline preload="auto" poster="assets/logo-bip.webp">
+            <source src="bipbip-logo-anim.mp4" type="video/mp4">
+        </video>
+        <div id="bipbip-splash-fallback" aria-hidden="true">
+            <picture>
+                <source srcset="assets/logo-bip.webp" type="image/webp">
+                <img src="assets/logo-bip.png" alt="" width="200" height="200" decoding="async">
+            </picture>
+            <span class="text-sm text-white/60 font-medium">Chargement…</span>
+        </div>
+        <button type="button" id="bipbip-splash-skip" class="hidden" aria-label="Passer l'animation de démarrage">Passer</button>
+    </div>
+    <script>
+    (function () {
+        function qs(name) {
+            try { return new URLSearchParams(window.location.search || '').get(name) === '1'; } catch (e) { return false; }
+        }
+        if (qs('nosplash')) return;
+        if (!qs('splash')) {
+            try { if (window.sessionStorage.getItem('bipbip_splash_done') === '1') return; } catch (e) {}
+        }
+        var qForce = '';
+        try { qForce = new URLSearchParams(window.location.search || '').get('force_mobile'); } catch (e) {}
+        if (qForce === '1') {
+            try { window.sessionStorage.setItem('bipbip_force_mobile', '1'); } catch (e) {}
+        }
+        var tw = window.Telegram && window.Telegram.WebApp;
+        var inTg = false;
+        try {
+            inTg = !!(tw && (String(tw.initData || '').trim() || (tw.initDataUnsafe && tw.initDataUnsafe.user)));
+        } catch (e2) {}
+        var ua = navigator.userAgent || '';
+        var mobile = inTg || /webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || /iPad|Tablet|Kindle|Silk|PlayBook/i.test(ua) || /Android/i.test(ua);
+        try {
+            if (!mobile && navigator.maxTouchPoints > 1 && /MacIntel|Macintosh/i.test(navigator.platform || '')) mobile = true;
+        } catch (e3) {}
+        var iw = window.innerWidth || 0;
+        var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
+        if (!mobile && Math.min(iw, sw) > 0 && Math.min(iw, sw) <= 900) mobile = true;
+        try {
+            if (window.sessionStorage.getItem('bipbip_force_mobile') === '1') mobile = true;
+        } catch (e5) {}
+        if (!mobile) return;
+        if (document.documentElement.classList.contains('bipbip-lite')) return;
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        } catch (e4) {}
+        document.documentElement.classList.add('bipbip-splash-pending');
+        var sp = document.getElementById('bipbip-splash');
+        if (sp) {
+            sp.removeAttribute('hidden');
+            sp.classList.remove('bipbip-splash-hidden');
+            sp.setAttribute('aria-hidden', 'false');
+        }
+    })();
+    </script>
+
     <!-- PC / grand écran : QR Telegram + lien site (app réservée mobile & tablette) -->
     <div id="bipbip-desktop-gate" class="text-slate-300" role="dialog" aria-labelledby="bipbip-gate-title" aria-modal="true">
-        <img src="assets/logo%202.PNG" alt="" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" />
+        <picture><source srcset="assets/logo-bip.webp" type="image/webp"><img src="assets/logo-bip.png" alt="Logo Bipbip Recharge CI" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" width="64" height="64" decoding="async"></picture>
         <h1 id="bipbip-gate-title" class="text-xl font-bold text-white mb-2 max-w-md mx-auto">Bipbip Recharge CI</h1>
         <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">Cette application est utilisable sur <strong class="text-slate-300">smartphone</strong> et <strong class="text-slate-300">tablette</strong> (navigateur ou Telegram). Sur ordinateur, scannez un QR avec votre téléphone ou passez votre navigateur en <strong class="text-slate-300">mode mobile</strong>.</p>
         <div class="flex flex-col sm:flex-row gap-8 items-center justify-center w-full max-w-2xl mx-auto mb-8">
             <div class="flex flex-col items-center">
                 <p class="text-xs font-semibold text-sky-300 uppercase tracking-wide mb-2">Ouvrir dans Telegram</p>
-                <img id="bipbip-gate-qr-telegram" src="" alt="QR code Telegram" width="200" height="200" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <img id="bipbip-gate-qr-telegram" src="" alt="QR code Telegram" width="200" height="200" loading="lazy" decoding="async" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
                 <p id="bipbip-gate-qr-telegram-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
                 <a id="bipbip-gate-tg-link" href="https://telegram.org" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-sky-500 text-white hover:bg-sky-400 transition-colors text-sm">Ouvrir le bot Telegram</a>
             </div>
             <div class="flex flex-col items-center">
                 <p class="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-2">Ce site sur mobile</p>
-                <img id="bipbip-gate-qr-site" src="" alt="QR code du site" width="200" height="200" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <img id="bipbip-gate-qr-site" src="" alt="QR code du site" width="200" height="200" loading="lazy" decoding="async" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
                 <p id="bipbip-gate-qr-site-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
                 <button type="button" id="bipbip-gate-copy-url" class="mt-3 px-4 py-2 rounded-xl text-sm font-medium border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">Copier le lien du site</button>
             </div>
@@ -103,11 +267,24 @@
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] bg-cyan-300/10"></div>
     </div>
 
+    <!-- Top Announcement Bar -->
+    <div id="bipbip-topbar" class="fixed w-full z-50 top-0" style="height:26px;background:#1e2a3a;border-bottom:1px solid rgba(255,255,255,.08);">
+        <div class="max-w-lg mx-auto px-4 h-full flex items-center justify-center">
+            <div class="flex items-center gap-1.5">
+                <span class="relative flex h-1.5 w-1.5 flex-shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400"></span>
+                    <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span id="topbar-text" class="text-[10px] font-medium text-slate-400">Service disponible 24/7</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Navigation -->
-    <nav class="fixed w-full z-50 top-0 border-b backdrop-blur-md border-white/10 bg-slate-900/80">
+    <nav class="fixed w-full z-50 border-b backdrop-blur-md border-white/10 bg-slate-900/80" style="top:26px;">
         <div class="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
             <a href="#" onclick="navigateTo('home'); return false;" class="flex items-center gap-2" id="app-logo-admin-trigger">
-                <img src="assets/logo%202.PNG" alt="Bipbip Recharge Pro" class="h-10 w-auto object-contain rounded-lg" />
+                <picture><source srcset="assets/logo-minia.webp" type="image/webp"><img src="assets/logo-minia.png" alt="Bipbip Recharge CI" class="h-8 w-auto object-contain" width="80" height="40" decoding="async"></picture>
             </a>
             <div class="flex items-center gap-2">
                 <div class="flex flex-col items-end">
@@ -122,7 +299,7 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="relative z-10 pt-20 pb-28 px-4 max-w-lg mx-auto">
+    <main class="relative z-10 pb-28 px-4 max-w-lg mx-auto" style="padding-top:calc(3.5rem + 26px + 1rem);">
         
         <!-- Home Screen -->
         <div id="screen-home" class="screen active">
@@ -142,9 +319,9 @@
                     <!-- Overlay content on scene -->
                     <div class="scene-overlay absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
                         <div class="scene-main-content">
-                            <img src="assets/logo%202.PNG" alt="Bipbip" class="w-24 h-24 rounded-2xl object-contain mb-1" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));" onerror="this.style.display='none';">
-                            <h1 class="scene-hero-title font-bold tracking-tight text-white" style="text-shadow:0 2px 12px rgba(0,0,0,0.6);">Bienvenue !</h1>
-                            <p class="scene-hero-subtitle text-white/70" style="text-shadow:0 1px 6px rgba(0,0,0,0.5);">Rechargez votre crédit mobile en quelques clics</p>
+                            <picture><source srcset="assets/logo-bip.webp" type="image/webp"><img src="assets/logo-bip.png" alt="Bipbip" class="w-24 h-24 rounded-2xl object-contain mb-1" width="96" height="96" decoding="async" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));" onerror="this.style.display='none';"></picture>
+                            <h1 class="scene-hero-title font-bold tracking-tight text-white" style="color:#fff;text-shadow:0 3px 20px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.6);">Bienvenue !</h1>
+                            <p class="scene-hero-subtitle" style="color:rgba(255,255,255,.92);text-shadow:0 2px 12px rgba(0,0,0,.85);">Rechargez votre crédit mobile en quelques clics</p>
                         </div>
                     </div>
                 </div>
@@ -562,7 +739,7 @@
             </p>
         </div>
 
-        <!-- Profil (photo, points totale, convertir en BIP, annonces LED) -->
+        <!-- Profil (photo, points totale, convertir en BBR, annonces LED) -->
         <div id="screen-profil" class="screen">
             <div class="flex items-center gap-3 mb-6">
                 <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
@@ -624,7 +801,15 @@
                 </div>
             </div>
             <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15 text-center">
-                <button type="button" id="btn-convert-points" class="w-full py-3 rounded-lg font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer">Convertir les Points en BIP</button>
+                <button type="button" id="btn-convert-points" class="w-full py-3 rounded-lg font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer">Convertir les Points en BBR</button>
+                <div id="convert-bbr-wip-block" class="hidden mt-4 text-left rounded-xl border border-amber-500/35 bg-amber-500/10 p-4">
+                    <p class="font-semibold text-amber-300 mb-2 flex items-center gap-2">
+                        <iconify-icon icon="solar:danger-triangle-bold" width="20" class="text-amber-400 flex-shrink-0"></iconify-icon>
+                        Travaux en cours
+                    </p>
+                    <p class="text-sm text-slate-400 leading-relaxed">La conversion des points en <strong class="text-slate-300">BBR</strong> n’est pas encore disponible. Cette fonctionnalité est en préparation — merci de votre patience.</p>
+                    <button type="button" onclick="hideConvertBbrWipBlock()" class="mt-3 text-xs font-medium px-3 py-1.5 rounded-lg border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">Fermer</button>
+                </div>
             </div>
             <div class="glass-panel rounded-xl p-5 border border-white/15">
                 <h3 class="font-semibold text-white mb-3">Annonces à passer dans le LED screen</h3>
@@ -833,16 +1018,16 @@
     <!-- Navigation bas: Recharge / Actualités / Quêtes -->
     <nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-slate-900/95 backdrop-blur-md max-w-lg mx-auto" style="padding-bottom:env(safe-area-inset-bottom, 0px);">
         <div class="flex items-center justify-around h-[60px]">
-            <button type="button" onclick="navigateTo('home')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
-                <iconify-icon icon="solar:card-linear" width="24"></iconify-icon>
+            <button type="button" onclick="navigateTo('home')" aria-label="Recharge — Écran d'accueil" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:card-linear" width="24" aria-hidden="true"></iconify-icon>
                 <span class="text-[11px] font-semibold">Recharge</span>
             </button>
-            <button type="button" onclick="navigateTo('actualites')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
-                <iconify-icon icon="solar:document-text-linear" width="24"></iconify-icon>
+            <button type="button" onclick="navigateTo('actualites')" aria-label="Actualités et tendances" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:document-text-linear" width="24" aria-hidden="true"></iconify-icon>
                 <span class="text-[11px] font-semibold">Actualités</span>
             </button>
-            <button type="button" onclick="navigateTo('quests')" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
-                <iconify-icon icon="solar:medal-ribbons-star-linear" width="24"></iconify-icon>
+            <button type="button" onclick="navigateTo('quests')" aria-label="Quêtes et récompenses" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-4 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:medal-ribbons-star-linear" width="24" aria-hidden="true"></iconify-icon>
                 <span class="text-[11px] font-semibold">Quêtes</span>
             </button>
         </div>
@@ -927,11 +1112,18 @@
         }
 
         function bipbipLoadAppScripts() {
+            var _v = '?v=20260327d';
+            var tgInt = document.createElement('script');
+            tgInt.src = 'bipbip-telegram.js' + _v;
+            document.body.appendChild(tgInt);
+            var tonLoader = document.createElement('script');
+            tonLoader.src = 'bipbip-ton-loader.js' + _v;
+            document.body.appendChild(tonLoader);
             var app = document.createElement('script');
-            app.src = 'app.js';
+            app.src = 'app.js' + _v;
             app.onload = function () {
                 var sc = document.createElement('script');
-                sc.src = 'bipbip-dynamic-scene.js';
+                sc.src = 'bipbip-dynamic-scene.js' + _v;
                 sc.onload = function () {
                     if (document.getElementById('bipbip-scene') && typeof BipbipDynamicScene !== 'undefined') {
                         try { new BipbipDynamicScene('#bipbip-scene'); } catch (err) {}
@@ -942,11 +1134,135 @@
             document.body.appendChild(app);
         }
 
+        function bipbipSplashQueryFlag(name) {
+            try {
+                var q = new URLSearchParams(window.location.search || '');
+                return q.get(name) === '1';
+            } catch (e) { return false; }
+        }
+
+        function bipbipShouldRunSplash() {
+            if (!bipbipAllowMobileOrTablet()) return false;
+            if (bipbipSplashQueryFlag('nosplash')) return false;
+            if (bipbipSplashQueryFlag('splash')) return true;
+            try {
+                if (window.sessionStorage.getItem('bipbip_splash_done') === '1') return false;
+            } catch (e) {}
+            return true;
+        }
+
+        function bipbipSplashLiteOrReduced() {
+            try {
+                if (document.documentElement.classList.contains('bipbip-lite')) return true;
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+            } catch (e) {}
+            return false;
+        }
+
+        function bipbipDismissSplash() {
+            try { document.documentElement.classList.remove('bipbip-splash-pending'); } catch (e0) {}
+            var el = document.getElementById('bipbip-splash');
+            if (!el) return;
+            var v = document.getElementById('bipbip-splash-video');
+            if (v) {
+                try { v.pause(); } catch (e) {}
+            }
+            el.classList.add('bipbip-splash-hidden');
+            el.setAttribute('aria-hidden', 'true');
+            try { window.sessionStorage.setItem('bipbip_splash_done', '1'); } catch (e2) {}
+            setTimeout(function () {
+                el.setAttribute('hidden', '');
+            }, 500);
+        }
+
+        function bipbipRunSplashThen(fn) {
+            var splash = document.getElementById('bipbip-splash');
+            if (!splash || !bipbipShouldRunSplash() || bipbipSplashLiteOrReduced()) {
+                if (splash) {
+                    splash.classList.add('bipbip-splash-hidden');
+                    splash.setAttribute('hidden', '');
+                }
+                fn();
+                return;
+            }
+            splash.removeAttribute('hidden');
+            splash.classList.remove('bipbip-splash-hidden');
+            splash.setAttribute('aria-hidden', 'false');
+            var skipBtn = document.getElementById('bipbip-splash-skip');
+            var v = document.getElementById('bipbip-splash-video');
+            var finished = false;
+            function done() {
+                if (finished) return;
+                finished = true;
+                document.body.style.backgroundColor = '#0f172a';
+                bipbipDismissSplash();
+                fn();
+            }
+            if (skipBtn) {
+                skipBtn.classList.remove('hidden');
+                skipBtn.addEventListener('click', done);
+            }
+            var maxMs = 14000;
+            var t = window.setTimeout(done, maxMs);
+            function clearT() { try { window.clearTimeout(t); } catch (e) {} }
+            if (v) {
+                var useFallback = function () {
+                    clearT();
+                    splash.classList.add('bipbip-splash-fallback-only');
+                    window.setTimeout(done, 900);
+                };
+                v.addEventListener('ended', function () { clearT(); done(); });
+                v.addEventListener('error', function () { clearT(); useFallback(); });
+                var p = v.play();
+                if (p && typeof p.then === 'function') {
+                    p.catch(function () { clearT(); useFallback(); });
+                }
+            } else {
+                clearT();
+                done();
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').catch(function () {});
+            });
+        }
+
         if (bipbipAllowMobileOrTablet()) {
-            bipbipLoadAppScripts();
+            bipbipRunSplashThen(bipbipLoadAppScripts);
         } else {
+            var sp = document.getElementById('bipbip-splash');
+            if (sp) {
+                sp.classList.add('bipbip-splash-hidden');
+                sp.setAttribute('hidden', '');
+            }
             bipbipShowDesktopGate();
         }
+    })();
+    </script>
+
+    <!-- Top bar : messages rotatifs -->
+    <script>
+    (function () {
+        var textEl = document.getElementById('topbar-text');
+        if (!textEl) return;
+        var msgs = [
+            'Service disponible 24/7',
+            'MTN \u00b7 Orange \u00b7 Moov',
+            'Paiement Djamo, MoMo & Crypto',
+            'Recharge rapide & s\u00e9curis\u00e9e'
+        ];
+        var idx = 0;
+        textEl.style.transition = 'opacity .3s ease';
+        setInterval(function () {
+            idx = (idx + 1) % msgs.length;
+            textEl.style.opacity = '0';
+            setTimeout(function () {
+                textEl.textContent = msgs[idx];
+                textEl.style.opacity = '1';
+            }, 300);
+        }, 5000);
     })();
     </script>
 </body>

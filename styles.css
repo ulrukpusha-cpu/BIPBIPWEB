@@ -1,6 +1,191 @@
 /* ==================== BIPBIP - Compléments au design Tailwind ==================== */
 :root {
     --accent-warning: #fbbf24;
+    --tg-csa-top: 0px;
+    --tg-sa-bottom: 0px;
+}
+
+/* ── Renforcement contraste navigateur / tablette ── */
+body {
+    color: #cbd5e1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.glass-panel {
+    background: rgba(30, 41, 59, .85);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .glass-panel {
+        background: rgba(255, 255, 255, .08);
+    }
+}
+
+nav.fixed {
+    background: rgba(15, 23, 42, .95) !important;
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    nav.fixed {
+        background: rgba(15, 23, 42, .8) !important;
+    }
+}
+
+#bipbip-topbar {
+    background: #1a2536 !important;
+}
+
+.scene-hero-title {
+    color: #fff !important;
+    text-shadow: 0 2px 16px rgba(0,0,0,.85), 0 0 40px rgba(0,0,0,.5) !important;
+}
+.scene-hero-subtitle {
+    color: rgba(255,255,255,.9) !important;
+    text-shadow: 0 1px 10px rgba(0,0,0,.8) !important;
+}
+
+.scene-status-pill {
+    background: rgba(15, 23, 42, .75) !important;
+    border-color: rgba(255,255,255,.25) !important;
+}
+#service-status-text {
+    color: #bfdbfe !important;
+}
+
+.faq-item h4,
+.faq-item p,
+h2, h3, h4 {
+    color: #f1f5f9;
+}
+
+.order-summary p,
+.order-details p,
+.order-status-info p {
+    color: #e2e8f0;
+}
+
+#article-overlay {
+    background: rgba(15, 23, 42, .98) !important;
+}
+#article-overlay .prose,
+#article-overlay .text-slate-300 {
+    color: #e2e8f0;
+    line-height: 1.7;
+}
+
+.sort-btn {
+    color: #94a3b8 !important;
+    background: rgba(30, 41, 59, .7) !important;
+    border-color: rgba(255, 255, 255, .18) !important;
+}
+.sort-btn.active {
+    color: #fff !important;
+    background: rgba(255, 255, 255, .14) !important;
+}
+
+.operator-btn,
+.amount-btn {
+    color: #e2e8f0;
+}
+
+.faq-item {
+    color: #cbd5e1;
+}
+
+#screen-actualites h2,
+#screen-actualites h3,
+#screen-actualites h4,
+#screen-quests h2,
+#screen-quests h3,
+#screen-profil h2,
+#screen-help h2 {
+    color: #f1f5f9 !important;
+}
+
+#annonces-list p,
+#actualites-list p,
+#actualites-list h4,
+.empty-state p {
+    color: #cbd5e1;
+}
+#actualites-list h4,
+#annonces-list .text-white {
+    color: #f1f5f9 !important;
+}
+
+#actualites-list .glass-panel h4,
+#annonces-list .glass-panel p.text-sm,
+#actualites-list a h4 {
+    color: #f1f5f9;
+}
+#actualites-list .glass-panel p.text-sm,
+#actualites-list .glass-panel .text-slate-400 {
+    color: #94a3b8;
+}
+
+.amount-btn .font-bold,
+.amount-btn .text-white {
+    color: #fff;
+}
+.amount-btn .text-slate-400 {
+    color: #94a3b8;
+}
+.operator-btn .text-white,
+.operator-btn .font-semibold {
+    color: #f1f5f9;
+}
+.operator-btn .text-slate-400 {
+    color: #94a3b8;
+}
+
+@media (min-width: 768px) {
+    .glass-panel {
+        background: rgba(30, 41, 59, .8);
+    }
+    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+        .glass-panel {
+            background: rgba(255, 255, 255, .1);
+        }
+    }
+    .scene-hero-title {
+        font-size: 2rem;
+    }
+    .scene-hero-subtitle {
+        font-size: 0.95rem;
+        max-width: 340px;
+    }
+}
+
+/* ── Telegram Theme Adaptation ── */
+html.tg-light body {
+    background-color: var(--tg-bg, #f0f2f5);
+    color: var(--tg-text, #1a1a2e);
+}
+html.tg-light .glass-panel {
+    background: rgba(0,0,0,.04);
+    border-color: rgba(0,0,0,.1);
+}
+html.tg-light nav.fixed {
+    background: rgba(255,255,255,.85);
+    border-color: rgba(0,0,0,.08);
+}
+html.tg-light nav.fixed .text-white,
+html.tg-light .text-white {
+    color: var(--tg-text, #1a1a2e);
+}
+html.tg-light .text-slate-400 {
+    color: var(--tg-hint, #8e8e93);
+}
+html.tg-light #bipbip-topbar {
+    background: rgba(240,242,245,.95) !important;
+    border-color: rgba(0,0,0,.06) !important;
+}
+html.tg-light #bipbip-topbar .text-slate-400,
+html.tg-light #bipbip-topbar .text-slate-500 {
+    color: var(--tg-hint, #8e8e93);
+}
+html.tg-light .btn-primary {
+    background: var(--tg-button, #007aff);
+    color: var(--tg-button-text, #fff);
 }
 
 /* ── Hero Scene Layout ── */
