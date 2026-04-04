@@ -1,7 +1,7 @@
 /**
  * Anti-spam : rate limiting par IP et par user - comme BipbipRecharge v2
  */
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const createLimiter = (windowMs = 60 * 1000, max = 30, message = 'Trop de requêtes') =>
     rateLimit({
@@ -10,7 +10,12 @@ const createLimiter = (windowMs = 60 * 1000, max = 30, message = 'Trop de requê
         message: { error: message, code: 'RATE_LIMIT' },
         standardHeaders: true,
         legacyHeaders: false,
-        keyGenerator: (req) => req.userId || req.ip || 'anon',
+        keyGenerator: (req) => {
+            if (req.userId) return String(req.userId);
+            const ip = req.ip;
+            if (!ip) return 'anon';
+            return ipKeyGenerator(ip, 56);
+        },
     });
 
 const apiLimiter = createLimiter(60 * 1000, 100, 'Trop de requêtes. Réessayez plus tard.');

@@ -10,12 +10,13 @@ function prefersReducedMotion() {
 }
 
 const CONFIG = {
-    FRAIS_PERCENT: 5,
+    FRAIS_PERCENT: 10,
     ADMIN_ID: '6735995998',
+    /** Préfixes numéros CI (aligné server.js USSD) */
     OPERATORS: {
-        MTN: { prefix: '05', icon: '📲', color: '#ffcc00' },
-        Orange: { prefix: '07', icon: '📶', color: '#ff6600' },
-        Moov: { prefix: '01', icon: '📡', color: '#0066cc' }
+        MTN: { prefixes: ['05', '06'], icon: '📲', color: '#ffcc00' },
+        Orange: { prefixes: ['07', '08', '09'], icon: '📶', color: '#ff6600' },
+        Moov: { prefixes: ['01', '02'], icon: '📡', color: '#0066cc' }
     },
     AMOUNTS: [500, 1000, 2000, 5000, 10000, 15000, 20000, 25000]
 };
@@ -61,6 +62,22 @@ let currentOrder = {
 };
 
 let orders = JSON.parse(localStorage.getItem('bipbip_orders') || '[]');
+/** Brouillon recharge (opérateur + montant) — survit à un rechargement de la Mini App */
+var ORDER_DRAFT_KEY = 'bipbip_order_draft';
+
+// ID navigateur persistant pour les utilisateurs hors Telegram
+function getBrowserUserId() {
+    try {
+        var id = localStorage.getItem('bipbip_browser_uid');
+        if (!id) {
+            id = 'web_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+            localStorage.setItem('bipbip_browser_uid', id);
+        }
+        return id;
+    } catch (e) {
+        return null;
+    }
+}
 let currentScreen = 'home';
 let momoReferenceId = null;
 let userPoints = parseInt(localStorage.getItem('bipbip_points') || '0', 10);
@@ -70,15 +87,53 @@ var annoncePaymentRef = null;
 
 // Bannières pub par défaut (tant que /api/config n’a pas répondu ou si le tableau serveur est vide côté config — le serveur renvoie toujours une liste)
 var DEFAULT_PUB_BANNERS = [
-    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci' },
-    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci' },
-    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci' }
+    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci', placement: 'home1', scrollSpeed: 5 },
+    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci', placement: 'home2', scrollSpeed: 5 },
+    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci', placement: 'actualites', scrollSpeed: 5 }
 ];
 var pubBannerInterval = null;
 
+var PUB_PLACEMENT_LABELS = {
+    home1: 'Accueil — bannière 1 (sous le bandeau LED)',
+    home2: 'Accueil — bannière 2 (sous la bannière 1)',
+    actualites: 'Actualités — bandeau publicitaire'
+};
+
 function getPubBannerList() {
-    if (Array.isArray(serverConfig.pubBanners)) return serverConfig.pubBanners;
-    return DEFAULT_PUB_BANNERS;
+    if (Array.isArray(serverConfig.pubBanners) && serverConfig.pubBanners.length > 0) return serverConfig.pubBanners;
+    return DEFAULT_PUB_BANNERS.slice();
+}
+
+function findBannerByPlacement(placement) {
+    var list = getPubBannerList();
+    for (var i = 0; i < list.length; i++) {
+        var p = list[i].placement || 'actualites';
+        if (p === placement) return list[i];
+    }
+    return null;
+}
+
+/** Durée d’animation (secondes) : scrollSpeed 1 = lent, 10 = rapide (ancien scrollSeconds encore pris en charge). */
+function pubMarqueeDurationSec(banner) {
+    if (!banner) return 45;
+    var sp = parseInt(banner.scrollSpeed, 10);
+    if (Number.isFinite(sp) && sp >= 1 && sp <= 10) {
+        return Math.min(120, Math.max(6, Math.round(118 - (sp - 1) * (112 / 9))));
+    }
+    var leg = parseInt(banner.scrollSeconds, 10);
+    if (Number.isFinite(leg)) return Math.min(180, Math.max(6, leg));
+    return 45;
+}
+
+function adminBannerScrollSpeedUi(b) {
+    var sp = parseInt(b && b.scrollSpeed, 10);
+    if (Number.isFinite(sp) && sp >= 1 && sp <= 10) return sp;
+    var dur = parseInt(b && b.scrollSeconds, 10);
+    if (Number.isFinite(dur)) {
+        var d = Math.min(180, Math.max(8, dur));
+        return Math.min(10, Math.max(1, Math.round(10 - ((d - 8) / 172) * 9)));
+    }
+    return 5;
 }
 
 // ==================== TELEGRAM WEBAPP ====================
@@ -515,76 +570,104 @@ function setActualitesSort(sort) {
     loadActualites(sort);
 }
 
+/** Défilement horizontal type bandeau LED (image dupliquée pour boucle) — sans cadre visible */
+function renderPubBannerIntoContainer(container, banner) {
+    if (!container) return;
+    if (!banner || !banner.image) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+    container.classList.remove('hidden');
+    var dur = pubMarqueeDurationSec(banner);
+    if (isBipbipLite()) dur = Math.min(120, Math.round(dur * 1.12));
+
+    var imgEsc = escapeHtml(banner.image);
+    var textUnder = (banner.text || '').trim();
+    var url = (banner.url || '').trim();
+    var open = function (e) {
+        if (!url) return;
+        e && e.preventDefault();
+        try {
+            if (window.tg && window.tg.openTelegramLink && /t\.me\//i.test(url)) window.tg.openTelegramLink(url);
+            else window.open(url, '_blank');
+        } catch (_) {}
+    };
+
+    container.innerHTML =
+        '<div class="pub-marquee-root overflow-hidden bg-transparent border-0 shadow-none">' +
+        '  <div class="pub-marquee-view overflow-hidden h-[4.5rem] sm:h-[5rem] flex items-center bg-transparent">' +
+        '    <div class="pub-marquee-strip flex" style="--pub-dur:' + dur + 's">' +
+        '      <div class="pub-marquee-seg flex items-center justify-center px-1 h-[4.5rem] sm:h-[5rem] flex-shrink-0">' +
+        '        <img src="' + imgEsc + '" alt="" class="max-h-[4rem] sm:max-h-[4.5rem] w-auto max-w-[min(92vw,28rem)] object-contain select-none pointer-events-none" draggable="false" /></div>' +
+        '      <div class="pub-marquee-seg flex items-center justify-center px-1 h-[4.5rem] sm:h-[5rem] flex-shrink-0" aria-hidden="true">' +
+        '        <img src="' + imgEsc + '" alt="" class="max-h-[4rem] sm:max-h-[4.5rem] w-auto max-w-[min(92vw,28rem)] object-contain select-none pointer-events-none" draggable="false" /></div>' +
+        '    </div>' +
+        '  </div>' +
+        (textUnder ? '<p class="text-[11px] text-slate-400/90 px-0 py-1 truncate">' + escapeHtml(textUnder) + '</p>' : '') +
+        '  <span class="sr-only">Publicité</span>' +
+        '</div>';
+
+    var strip = container.querySelector('.pub-marquee-strip');
+    if (strip && !prefersReducedMotion()) {
+        strip.style.animation = 'none';
+        void strip.offsetWidth;
+        strip.style.animation = 'pub-marquee-scroll ' + dur + 's linear infinite';
+    } else if (strip) {
+        strip.style.transform = 'translateX(0)';
+        strip.style.justifyContent = 'center';
+    }
+
+    var root = container.querySelector('.pub-marquee-root');
+    if (root) {
+        root.style.cursor = url ? 'pointer' : 'default';
+        root.onclick = url ? open : null;
+    }
+
+    if (prefersReducedMotion()) {
+        var segs = container.querySelectorAll('.pub-marquee-seg');
+        if (segs.length > 1) segs[1].style.display = 'none';
+        var s2 = container.querySelector('.pub-marquee-strip');
+        if (s2) {
+            s2.style.animation = 'none';
+            s2.style.justifyContent = 'center';
+        }
+    }
+}
+
+function initHomePubBanners() {
+    var b1 = findBannerByPlacement('home1');
+    var b2 = findBannerByPlacement('home2');
+    var el1 = document.getElementById('home-pub-slot-1');
+    var el2 = document.getElementById('home-pub-slot-2');
+    renderPubBannerIntoContainer(el1, b1);
+    renderPubBannerIntoContainer(el2, b2);
+    var wrap = document.getElementById('home-pub-banners-wrap');
+    if (wrap) {
+        var show1 = el1 && !el1.classList.contains('hidden');
+        var show2 = el2 && !el2.classList.contains('hidden');
+        wrap.classList.toggle('hidden', !show1 && !show2);
+    }
+}
+
 function initPubBanner() {
     var container = document.getElementById('tendances-list');
     var section = document.getElementById('actualites-section-tendances');
     if (!container) return;
 
-    var list = getPubBannerList();
     if (pubBannerInterval) {
         clearInterval(pubBannerInterval);
         pubBannerInterval = null;
     }
 
-    if (!list.length) {
+    var b = findBannerByPlacement('actualites');
+    if (!b || !b.image) {
         if (section) section.classList.add('hidden');
         container.innerHTML = '';
-        delete container.dataset.initialized;
         return;
     }
     if (section) section.classList.remove('hidden');
-
-    if (!container.dataset.initialized) {
-        container.dataset.initialized = '1';
-        container.innerHTML = '' +
-            '<button type="button" id="pub-banner-card" class="relative w-full text-left glass-panel rounded-xl border border-white/15 bg-slate-900/60 overflow-hidden hover:bg-white/5 transition-colors cursor-pointer">' +
-            '  <img id="pub-banner-img" src="" alt="Publicité" class="w-full h-24 md:h-28 object-cover block" />' +
-            '  <div class="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex items-center justify-between gap-2">' +
-            '    <p id="pub-banner-text" class="text-xs sm:text-sm text-slate-50 truncate"></p>' +
-            '    <span class="text-[9px] sm:text-[10px] uppercase tracking-wide text-slate-400 flex-shrink-0">Publicité</span>' +
-            '  </div>' +
-            '</button>';
-    }
-
-    var btnEl = document.getElementById('pub-banner-card');
-    var textEl = document.getElementById('pub-banner-text');
-    var imgEl = document.getElementById('pub-banner-img');
-    if (!textEl || !imgEl) return;
-
-    var index = 0;
-    function applyBanner(i) {
-        var banners = getPubBannerList();
-        if (!banners.length) return;
-        var b = banners[i % banners.length];
-        textEl.textContent = b.text || '';
-        if (b.image) {
-            imgEl.src = b.image;
-            imgEl.classList.remove('hidden');
-        } else {
-            imgEl.classList.add('hidden');
-        }
-        if (btnEl) {
-            if (b.url) {
-                btnEl.onclick = function () {
-                    try {
-                        window.open(b.url, '_blank');
-                    } catch (_) {}
-                };
-            } else {
-                btnEl.onclick = null;
-            }
-        }
-    }
-
-    applyBanner(0);
-
-    var slideMs = (prefersReducedMotion() || isBipbipLite()) ? 12000 : 7000;
-    pubBannerInterval = setInterval(function () {
-        var banners = getPubBannerList();
-        if (banners.length < 2) return;
-        index = (index + 1) % banners.length;
-        applyBanner(index);
-    }, slideMs);
+    renderPubBannerIntoContainer(container, b);
 }
 
 function loadActualites(sort) {
@@ -994,23 +1077,51 @@ function getRestorableScreen() {
 }
 
 function navigateTo(screen) {
+    var target = screen;
+
+    if (target === 'amount') {
+        if (!currentOrder.operator) {
+            var loA = typeof window.__bipbipLastOperator === 'string' ? window.__bipbipLastOperator : '';
+            if (loA && CONFIG.OPERATORS[loA]) currentOrder.operator = loA;
+        }
+        if (!currentOrder.operator) {
+            currentOrder = { id: null, operator: null, amount: null, amountTotal: null, phone: null, proof: null, status: 'pending', createdAt: null, paymentMethod: null };
+            target = 'buy';
+        }
+    }
+
+    if (target === 'phone') {
+        if (!currentOrder.operator) {
+            var loP = typeof window.__bipbipLastOperator === 'string' ? window.__bipbipLastOperator : '';
+            if (loP && CONFIG.OPERATORS[loP]) currentOrder.operator = loP;
+        }
+        if (!currentOrder.operator) {
+            showToast('Choisissez d’abord un opérateur', 'info');
+            currentOrder = { id: null, operator: null, amount: null, amountTotal: null, phone: null, proof: null, status: 'pending', createdAt: null, paymentMethod: null };
+            target = 'buy';
+        } else if (currentOrder.amount == null) {
+            target = 'amount';
+        }
+    }
+
     document.querySelectorAll('.screen').forEach(s => {
         s.classList.remove('active');
     });
     
-    var targetScreen = document.getElementById('screen-' + screen);
+    var targetScreen = document.getElementById('screen-' + target);
     if (targetScreen) {
         targetScreen.classList.add('active');
-        currentScreen = screen;
-        if (typeof window.__bipbipTgUpdateBackButton === 'function') window.__bipbipTgUpdateBackButton(screen);
-        if (typeof window.__bipbipTgClosingGuard === 'function') window.__bipbipTgClosingGuard(screen);
+        currentScreen = target;
+        if (typeof window.__bipbipTgUpdateBackButton === 'function') window.__bipbipTgUpdateBackButton(target);
+        if (typeof window.__bipbipTgClosingGuard === 'function') window.__bipbipTgClosingGuard(target);
         if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
-        if (screen === 'status') renderOrdersList();
-        if (screen === 'home') {
+        if (target === 'status') renderOrdersList();
+        if (target === 'home') {
             updateHeaderUserInfo();
             loadHomeWeather();
+            initHomePubBanners();
         }
-        if (screen === 'profil') {
+        if (target === 'profil') {
             fetchTelegramMe();
             updateProfilPoints();
             updateProfilPhoto();
@@ -1026,14 +1137,14 @@ function navigateTo(screen) {
                 if (storedCity) wSel.value = storedCity;
             }
         }
-        if (screen === 'actualites') loadActualites(actualitesSort);
-        if (screen === 'quests') loadQuests();
-        if (screen === 'payment-method' && currentOrder.id) {
+        if (target === 'actualites') loadActualites(actualitesSort);
+        if (target === 'quests') loadQuests();
+        if (target === 'payment-method' && currentOrder.id) {
             var pmEl = document.getElementById('payment-method-order-id');
             if (pmEl) pmEl.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
             applyPaymentMethodScreenFromConfig();
         }
-        if (screen === 'crypto-pay') {
+        if (target === 'crypto-pay') {
             var totalC = (currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0;
             var cref = document.getElementById('crypto-pay-order-ref');
             if (cref && currentOrder.id) cref.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber(totalC) + ' FCFA';
@@ -1051,7 +1162,7 @@ function navigateTo(screen) {
             var qr = document.getElementById('crypto-pay-qr');
             if (qr) {
                 if (addr) {
-                    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(addr);
+                    qr.src = API_BASE + '/api/qr?size=220&margin=2&data=' + encodeURIComponent(addr);
                     qr.classList.remove('hidden');
                 } else {
                     qr.removeAttribute('src');
@@ -1065,12 +1176,12 @@ function navigateTo(screen) {
                 est.classList.remove('hidden');
             } else if (est) est.classList.add('hidden');
         }
-        if (screen === 'proof' && currentOrder.id) {
+        if (target === 'proof' && currentOrder.id) {
             var odEl = document.getElementById('order-id-display');
             if (odEl) odEl.textContent = 'Commande #' + currentOrder.id;
             syncProofScreenInstructions();
         }
-        if (screen === 'admin') {
+        if (target === 'admin') {
             var speedVal = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
             var speedInput = document.getElementById('admin-led-speed');
             var speedSpan = document.getElementById('admin-led-speed-value');
@@ -1078,9 +1189,17 @@ function navigateTo(screen) {
             if (speedSpan) speedSpan.textContent = speedVal;
             renderAdminPubBanners();
         }
+        if (target === 'amount' && currentOrder.operator) {
+            renderAmountScreenOperatorBanner(currentOrder.operator);
+        }
+        if (target === 'phone') {
+            refreshPhoneOrderSummary();
+            var phoneInputEl = document.getElementById('phone-input');
+            if (phoneInputEl) formatPhoneInput(phoneInputEl);
+        }
         try {
             if (typeof sessionStorage !== 'undefined') {
-                sessionStorage.setItem(SCREEN_SESSION_KEY, screen);
+                sessionStorage.setItem(SCREEN_SESSION_KEY, target);
             }
         } catch (e) { /* quota / mode privé */ }
     }
@@ -1089,7 +1208,7 @@ function navigateTo(screen) {
         var isRecharge = (btn.textContent || '').indexOf('Recharge') !== -1;
         var isActualites = (btn.textContent || '').indexOf('Actualités') !== -1;
         var isQuests = (btn.textContent || '').indexOf('Quêtes') !== -1;
-        var active = (screen === 'home' && isRecharge) || (screen === 'actualites' && isActualites) || (screen === 'quests' && isQuests);
+        var active = (target === 'home' && isRecharge) || (target === 'actualites' && isActualites) || (target === 'quests' && isQuests);
         btn.classList.toggle('text-amber-400', active);
         btn.classList.toggle('text-slate-400', !active);
     });
@@ -1106,9 +1225,66 @@ function formatNumber(num) {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
+function operatorPrefixes(operatorName) {
+    var o = CONFIG.OPERATORS[operatorName];
+    if (!o) return [];
+    if (Array.isArray(o.prefixes)) return o.prefixes;
+    return [];
+}
+
+function operatorPrefixHint(operatorName) {
+    var p = operatorPrefixes(operatorName);
+    return p.length ? p.join(', ') + '…' : '…';
+}
+
 function verifyNetwork(operator, phone) {
-    const prefix = CONFIG.OPERATORS[operator]?.prefix;
-    return phone.startsWith(prefix);
+    if (!phone || !operator) return false;
+    return operatorPrefixes(operator).some(function (prefix) {
+        return phone.startsWith(prefix);
+    });
+}
+
+function persistOrderDraft() {
+    try {
+        if (typeof sessionStorage === 'undefined') return;
+        if (!currentOrder.operator) {
+            sessionStorage.removeItem(ORDER_DRAFT_KEY);
+            return;
+        }
+        sessionStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify({
+            operator: currentOrder.operator,
+            amount: currentOrder.amount,
+            amountTotal: currentOrder.amountTotal
+        }));
+    } catch (e) { /* quota / privé */ }
+}
+
+function loadOrderDraft() {
+    try {
+        if (typeof sessionStorage === 'undefined') return;
+        var raw = sessionStorage.getItem(ORDER_DRAFT_KEY);
+        if (!raw) return;
+        var d = JSON.parse(raw);
+        if (!d || !CONFIG.OPERATORS[d.operator]) return;
+        currentOrder.operator = d.operator;
+        if (typeof d.amount === 'number') {
+            currentOrder.amount = d.amount;
+            currentOrder.amountTotal = d.amountTotal != null ? d.amountTotal : d.amount + Math.floor(d.amount * CONFIG.FRAIS_PERCENT / 100);
+        }
+    } catch (e) { /* JSON / quota */ }
+}
+
+function refreshPhoneOrderSummary() {
+    var summary = document.getElementById('order-summary-phone');
+    if (!summary || !currentOrder.operator || currentOrder.amount == null) return;
+    var amount = currentOrder.amount;
+    var frais = currentOrder.amountTotal != null ? (currentOrder.amountTotal - amount) : Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
+    var total = currentOrder.amountTotal != null ? currentOrder.amountTotal : amount + frais;
+    summary.innerHTML =
+        '<p><span>Opérateur</span><span>' + currentOrder.operator + '</span></p>' +
+        '<p><span>Montant</span><span>' + formatNumber(amount) + ' FCFA</span></p>' +
+        '<p><span>Frais (' + CONFIG.FRAIS_PERCENT + '%)</span><span>' + formatNumber(frais) + ' FCFA</span></p>' +
+        '<p><span>Total à payer</span><span>' + formatNumber(total) + ' FCFA</span></p>';
 }
 
 function showToast(message, type = 'info') {
@@ -1153,9 +1329,28 @@ function clearLocalOrders() {
 }
 
 // ==================== BUY FLOW ====================
+function renderAmountScreenOperatorBanner(operator) {
+    if (!operator || !CONFIG.OPERATORS[operator]) return;
+    var operatorColors = {
+        MTN: { bg: 'linear-gradient(135deg, #FFCC00, #FFB300)', text: '#000' },
+        Orange: { bg: 'linear-gradient(135deg, #FF6600, #E65100)', text: '#fff' },
+        Moov: { bg: 'linear-gradient(135deg, #0066CC, #1565C0)', text: '#fff' }
+    };
+    var display = document.getElementById('selected-operator-display');
+    var colors = operatorColors[operator];
+    if (display && colors) {
+        display.innerHTML =
+            '<span class="operator-badge-display" style="background: ' + colors.bg + '; color: ' + colors.text + '; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 14px;">' + operator + '</span>' +
+            '<span style="flex: 1; font-weight: 600;">Opérateur sélectionné</span>' +
+            '<span style="color: #4CAF50;">✓</span>';
+    }
+}
+
 function selectOperator(operator) {
-    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('selection');
-    if (typeof window.__bipbipDeviceStorage === 'object') window.__bipbipDeviceStorage.set('last_operator', operator);
+    if (!CONFIG.OPERATORS[operator]) {
+        showToast('Opérateur inconnu', 'error');
+        return;
+    }
     currentOrder = {
         id: null,
         operator: operator,
@@ -1167,50 +1362,48 @@ function selectOperator(operator) {
         createdAt: null,
         paymentMethod: null
     };
-    
-    // Couleurs des opérateurs
-    const operatorColors = {
-        MTN: { bg: 'linear-gradient(135deg, #FFCC00, #FFB300)', text: '#000' },
-        Orange: { bg: 'linear-gradient(135deg, #FF6600, #E65100)', text: '#fff' },
-        Moov: { bg: 'linear-gradient(135deg, #0066CC, #1565C0)', text: '#fff' }
-    };
-    
-    // Afficher l'opérateur sélectionné
-    const display = document.getElementById('selected-operator-display');
-    const colors = operatorColors[operator];
-    display.innerHTML = `
-        <span class="operator-badge-display" style="background: ${colors.bg}; color: ${colors.text}; padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 14px;">${operator}</span>
-        <span style="flex: 1; font-weight: 600;">Opérateur sélectionné</span>
-        <span style="color: #4CAF50;">✓</span>
-    `;
-    
+    try {
+        if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('selection');
+        if (typeof window.__bipbipDeviceStorage === 'object') window.__bipbipDeviceStorage.set('last_operator', operator);
+        window.__bipbipLastOperator = operator;
+    } catch (err) {
+        console.error('[Bipbip] selectOperator side-effects:', err);
+    }
+    persistOrderDraft();
+
+    renderAmountScreenOperatorBanner(operator);
+
     navigateTo('amount');
 }
 
 function selectAmount(amount) {
+    if (!currentOrder.operator) {
+        var lo = typeof window.__bipbipLastOperator === 'string' ? window.__bipbipLastOperator : '';
+        if (lo && CONFIG.OPERATORS[lo]) currentOrder.operator = lo;
+    }
+    if (!currentOrder.operator) {
+        showToast('Choisissez d’abord un opérateur', 'info');
+        navigateTo('buy');
+        return;
+    }
+
     if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
     const frais = Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
     const total = amount + frais;
-    
+
     currentOrder.amount = amount;
     currentOrder.amountTotal = total;
-    
-    // Afficher le résumé
-    const summary = document.getElementById('order-summary-phone');
-    summary.innerHTML = `
-        <p><span>Opérateur</span><span>${currentOrder.operator}</span></p>
-        <p><span>Montant</span><span>${formatNumber(amount)} FCFA</span></p>
-        <p><span>Frais (${CONFIG.FRAIS_PERCENT}%)</span><span>${formatNumber(frais)} FCFA</span></p>
-        <p><span>Total à payer</span><span>${formatNumber(total)} FCFA</span></p>
-    `;
-    
+    persistOrderDraft();
+
+    refreshPhoneOrderSummary();
+
     var phoneInput = document.getElementById('phone-input');
     var lastPhone = window.__bipbipLastPhone || '';
     phoneInput.value = lastPhone;
     document.getElementById('btn-continue-phone').disabled = !lastPhone || lastPhone.length < 10;
     document.getElementById('phone-hint').textContent = 'Entrez un numéro valide';
     document.getElementById('phone-hint').className = 'input-hint';
-    
+
     navigateTo('phone');
 }
 
@@ -1223,25 +1416,39 @@ function formatPhoneInput(input) {
     const hint = document.getElementById('phone-hint');
     
     if (value.length >= 10) {
-        if (verifyNetwork(currentOrder.operator, value)) {
+        if (!currentOrder.operator) {
+            btn.disabled = true;
+            hint.textContent = '❌ Opérateur non choisi — touchez « Changer d’opérateur » ci-dessus';
+            hint.className = 'input-hint error';
+        } else if (verifyNetwork(currentOrder.operator, value)) {
             btn.disabled = false;
             hint.textContent = '✅ Numéro valide';
             hint.className = 'input-hint success';
         } else {
             btn.disabled = true;
-            hint.textContent = `❌ Ce numéro ne correspond pas à ${currentOrder.operator}`;
+            hint.textContent = '❌ Ce numéro ne correspond pas à ' + currentOrder.operator + ' (' + operatorPrefixHint(currentOrder.operator) + ')';
             hint.className = 'input-hint error';
         }
     } else {
         btn.disabled = true;
-        hint.textContent = `Entrez un numéro ${currentOrder.operator} (${CONFIG.OPERATORS[currentOrder.operator].prefix}...)`;
+        if (currentOrder.operator && CONFIG.OPERATORS[currentOrder.operator]) {
+            hint.textContent = 'Entrez un numéro ' + currentOrder.operator + ' (' + operatorPrefixHint(currentOrder.operator) + ')';
+        } else {
+            hint.textContent = 'Choisissez un opérateur à l’étape précédente';
+        }
         hint.className = 'input-hint';
     }
 }
 
 function validatePhone() {
     const phone = document.getElementById('phone-input').value.trim();
-    
+
+    if (!currentOrder.operator) {
+        showToast('Choisissez d’abord un opérateur', 'info');
+        navigateTo('buy');
+        return;
+    }
+
     if (phone.length < 10) {
         showToast('Numéro invalide', 'error');
         return;
@@ -1286,12 +1493,13 @@ function validatePhone() {
 }
 
 function confirmOrder() {
+    var tgUserId = tg?.initDataUnsafe?.user?.id?.toString() || null;
     const payload = {
         operator: currentOrder.operator,
         amount: currentOrder.amount,
         amountTotal: currentOrder.amountTotal,
         phone: currentOrder.phone,
-        userId: tg?.initDataUnsafe?.user?.id?.toString() || null,
+        userId: tgUserId || getBrowserUserId(),
         username: tg?.initDataUnsafe?.user?.username || null
     };
 
@@ -1300,30 +1508,26 @@ function confirmOrder() {
         headers: getApiHeaders(),
         body: JSON.stringify(payload)
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.order) {
-            currentOrder.id = data.order.id;
-            currentOrder.createdAt = data.order.createdAt || new Date().toISOString();
-        } else {
-            currentOrder.id = generateOrderId();
-            currentOrder.createdAt = new Date().toISOString();
-        }
-        orders.push({...currentOrder});
-        saveOrders();
-        // Points attribués uniquement après validation admin (pas à la création)
-        showToast('Commande créée ! Choisissez votre mode de paiement.', 'success');
-        goToPaymentMethodScreen();
+    .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
     })
-    .catch(err => {
+    .then(function (result) {
+        if (result.ok && result.data.order) {
+            currentOrder.id = result.data.order.id;
+            currentOrder.createdAt = result.data.order.createdAt || new Date().toISOString();
+            orders.push({...currentOrder});
+            saveOrders();
+            try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ORDER_DRAFT_KEY); } catch (e) {}
+            showToast('Commande créée ! Choisissez votre mode de paiement.', 'success');
+            goToPaymentMethodScreen();
+        } else {
+            var msg = (result.data && result.data.error) ? result.data.error : ('Erreur serveur (' + result.status + ')');
+            showToast(msg, 'error');
+        }
+    })
+    .catch(function (err) {
         console.error('Erreur API /api/orders:', err);
-        currentOrder.id = generateOrderId();
-        currentOrder.createdAt = new Date().toISOString();
-        orders.push({...currentOrder});
-        saveOrders();
-        // Points attribués uniquement après validation admin (pas à la création)
-        showToast('Commande créée (hors ligne). Choisissez votre mode de paiement.', 'info');
-        goToPaymentMethodScreen();
+        showToast('Erreur réseau. Vérifiez votre connexion et réessayez.', 'error');
     });
 }
 
@@ -1729,7 +1933,7 @@ function openTelegramWalletPay() {
 
 function requestMomoPayment(orderId) {
     currentOrder.paymentMethod = 'momo';
-    const telegramChatId = tg?.initDataUnsafe?.user?.id?.toString() || null;
+    const telegramChatId = tg?.initDataUnsafe?.user?.id?.toString() || getBrowserUserId();
     return fetch(API_BASE + '/api/momo/request-to-pay', {
         method: 'POST',
         headers: getApiHeaders(),
@@ -2074,6 +2278,19 @@ function getAdminKey() {
     return (keyInput && keyInput.value) ? keyInput.value.trim() : '';
 }
 
+function hasAdminAuth() {
+    return !!(getAdminKey() || (tg && tg.initData));
+}
+
+function getAdminAuthHeaders(jsonBody) {
+    var h = {};
+    if (jsonBody) h['Content-Type'] = 'application/json';
+    var k = getAdminKey();
+    if (k) h['X-Admin-Key'] = k;
+    if (tg && tg.initData) h['X-Telegram-Init-Data'] = tg.initData;
+    return h;
+}
+
 function loadAdminOrders() {
     var headers = {};
     if (tg && tg.initData) headers['X-Telegram-Init-Data'] = tg.initData;
@@ -2241,31 +2458,39 @@ function renderAdminPubBanners() {
     var wrap = document.getElementById('admin-pub-banners-rows');
     if (!wrap) return;
     wrap.innerHTML = '';
-    var list = Array.isArray(serverConfig.pubBanners) ? serverConfig.pubBanners.slice() : DEFAULT_PUB_BANNERS.slice();
-    if (list.length === 0) list.push({ text: '', image: '', url: '' });
-    list.forEach(function (b) { addAdminPubBannerRow(b); });
+    var map = {};
+    var list = Array.isArray(serverConfig.pubBanners) && serverConfig.pubBanners.length ? serverConfig.pubBanners : DEFAULT_PUB_BANNERS.slice();
+    list.forEach(function (b) {
+        var pl = b.placement || 'actualites';
+        map[pl] = b;
+    });
+    ['home1', 'home2', 'actualites'].forEach(function (place) {
+        addAdminPubBannerRowFixed(place, map[place] || { text: '', image: '', url: '', scrollSpeed: 5 });
+    });
 }
 
-function addAdminPubBannerRow(b) {
+function addAdminPubBannerRowFixed(place, b) {
     var wrap = document.getElementById('admin-pub-banners-rows');
     if (!wrap) return;
-    b = b || { text: '', image: '', url: '' };
+    b = b || { text: '', image: '', url: '', scrollSpeed: 5 };
+    var label = PUB_PLACEMENT_LABELS[place] || place;
+    var speedVal = adminBannerScrollSpeedUi(b);
     var row = document.createElement('div');
     row.className = 'admin-pub-row glass-panel rounded-lg p-3 border border-white/10 space-y-2';
+    row.setAttribute('data-placement', place);
     row.innerHTML =
-        '<input type="text" class="pub-text w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Texte sous la bannière" value="' + escapeHtml(b.text || '') + '">' +
-        '<input type="text" class="pub-image w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Image : /img/... ou https://..." value="' + escapeHtml(b.image || '') + '">' +
+        '<p class="text-xs font-semibold text-rose-300">' + escapeHtml(label) + '</p>' +
+        '<p class="text-[11px] text-slate-500">Image conseillée : <strong class="text-slate-300">1200 × 200 px</strong> (bannière large, ratio ~6:1). Fichier JPG, WebP ou PNG.</p>' +
+        '<label class="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">Vitesse de défilement :' +
+        '  <input type="number" class="pub-scroll w-16 px-2 py-1 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" min="1" max="10" value="' + speedVal + '">' +
+        '  <span class="text-slate-500">1 = très lent · 10 = très rapide</span></label>' +
+        '<input type="text" class="pub-text w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Texte sous la bannière (optionnel)" value="' + escapeHtml(b.text || '') + '">' +
+        '<input type="text" class="pub-image w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Image : /uploads/... ou https://..." value="' + escapeHtml(b.image || '') + '">' +
         '<div class="flex flex-wrap gap-2 items-center">' +
         '  <input type="file" accept="image/*" class="pub-file text-xs text-slate-400 max-w-[200px]">' +
         '  <button type="button" class="pub-upload-btn px-3 py-1.5 rounded-lg bg-slate-700 border border-white/15 text-slate-200 text-xs">Uploader image</button>' +
         '</div>' +
-        '<input type="text" class="pub-url w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Lien au clic (https://...)" value="' + escapeHtml(b.url || '') + '">' +
-        '<button type="button" class="pub-remove w-full py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs">Retirer cette ligne</button>';
-    row.querySelector('.pub-remove').addEventListener('click', function () {
-        row.remove();
-        var w = document.getElementById('admin-pub-banners-rows');
-        if (w && !w.querySelector('.admin-pub-row')) addAdminPubBannerRow({ text: '', image: '', url: '' });
-    });
+        '<input type="text" class="pub-url w-full px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="Lien au clic (https://...)" value="' + escapeHtml(b.url || '') + '">';
     row.querySelector('.pub-upload-btn').addEventListener('click', function () {
         uploadAdminPubBannerForRow(row);
     });
@@ -2279,16 +2504,15 @@ function uploadAdminPubBannerForRow(row) {
         showToast('Choisis une image', 'error');
         return;
     }
-    var adminKey = getAdminKey();
-    if (!adminKey) {
-        showToast('Saisis la clé admin pour uploader', 'error');
+    if (!hasAdminAuth()) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot (compte admin)', 'error');
         return;
     }
     var fd = new FormData();
     fd.append('image', fileInput.files[0]);
     fetch(API_BASE + '/api/admin/pub-banner-image', {
         method: 'POST',
-        headers: { 'X-Admin-Key': adminKey },
+        headers: getAdminAuthHeaders(false),
         body: fd
     })
         .then(function (r) { return r.json(); })
@@ -2308,26 +2532,33 @@ function collectAdminPubBannersFromForm() {
     var rows = document.querySelectorAll('#admin-pub-banners-rows .admin-pub-row');
     var arr = [];
     rows.forEach(function (row) {
+        var place = row.getAttribute('data-placement') || 'actualites';
         var text = (row.querySelector('.pub-text') && row.querySelector('.pub-text').value) || '';
         var image = (row.querySelector('.pub-image') && row.querySelector('.pub-image').value) || '';
         var url = (row.querySelector('.pub-url') && row.querySelector('.pub-url').value) || '';
+        var sc = parseInt(row.querySelector('.pub-scroll') && row.querySelector('.pub-scroll').value, 10);
         if (String(image).trim()) {
-            arr.push({ text: String(text).trim(), image: String(image).trim(), url: String(url).trim() });
+            arr.push({
+                text: String(text).trim(),
+                image: String(image).trim(),
+                url: String(url).trim(),
+                placement: place,
+                scrollSpeed: Math.min(10, Math.max(1, Number.isFinite(sc) ? sc : 5))
+            });
         }
     });
     return arr;
 }
 
 function savePubBanners() {
-    var adminKey = getAdminKey();
-    if (!adminKey) {
-        showToast('Saisis la clé admin pour enregistrer les bannières', 'error');
+    if (!hasAdminAuth()) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot Telegram (compte admin)', 'error');
         return;
     }
     var arr = collectAdminPubBannersFromForm();
     fetch(API_BASE + '/api/admin/config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+        headers: getAdminAuthHeaders(true),
         body: JSON.stringify({ pubBanners: arr })
     })
         .then(function (res) { return res.json(); })
@@ -2342,6 +2573,7 @@ function savePubBanners() {
                 serverConfig.pubBanners = arr;
             }
             initPubBanner();
+            initHomePubBanners();
             renderAdminPubBanners();
             showToast(arr.length ? arr.length + ' bannière(s) enregistrée(s)' : 'Bannières désactivées (liste vide)', 'success');
         })
@@ -2350,20 +2582,18 @@ function savePubBanners() {
 
 function saveLedSpeed() {
     var input = document.getElementById('admin-led-speed');
-    var keyInput = document.getElementById('admin-key-input');
     var seconds = parseInt(input && input.value ? input.value : 60, 10);
     if (seconds < 15 || seconds > 300) {
         showToast('Entre 15 et 300 secondes', 'error');
         return;
     }
-    var adminKey = (keyInput && keyInput.value) ? keyInput.value.trim() : '';
-    if (!adminKey) {
-        showToast('Saisis la clé admin (ADMIN_SECRET_KEY du .env) pour enregistrer', 'error');
+    if (!hasAdminAuth()) {
+        showToast('Saisis la clé admin ou ouvre l’app depuis le bot Telegram (compte admin)', 'error');
         return;
     }
     fetch(API_BASE + '/api/admin/config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+        headers: getAdminAuthHeaders(true),
         body: JSON.stringify({ ledScrollSeconds: seconds })
     })
     .then(function (res) { return res.json(); })
@@ -2421,7 +2651,7 @@ document.addEventListener('keydown', (e) => {
 
 // ==================== INIT ====================
 function loadServerConfig() {
-    fetch(API_BASE + '/api/config')
+    fetch(API_BASE + '/api/config', { cache: 'no-store' })
         .then(res => res.json())
         .then(function (data) {
             serverConfig.momoEnabled = !!data.momoEnabled;
@@ -2446,6 +2676,7 @@ function loadServerConfig() {
             applyPaymentMethodScreenFromConfig();
             applyLedAnimation();
             initPubBanner();
+            initHomePubBanners();
             loadLedMessages();
         })
         .catch(function () {
@@ -2459,7 +2690,46 @@ function initApp() {
     loadServerConfig();
     updateHeaderPoints();
     updateHeaderUserInfo();
+    loadOrderDraft();
     navigateTo(getRestorableScreen());
+
+    // Boutons opérateurs : event delegation (plus fiable que onclick inline dans certains navigateurs mobiles)
+    var buyScreen = document.getElementById('screen-buy');
+    if (buyScreen) {
+        buyScreen.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('[data-operator]') : null;
+            if (!btn) {
+                var el = e.target;
+                while (el && el !== buyScreen) {
+                    if (el.dataset && el.dataset.operator) { btn = el; break; }
+                    el = el.parentNode;
+                }
+            }
+            if (!btn || !btn.dataset || !btn.dataset.operator) return;
+            e.preventDefault();
+            e.stopPropagation();
+            selectOperator(btn.dataset.operator);
+        });
+    }
+
+    // Boutons montant : event delegation
+    var amountScreen = document.getElementById('screen-amount');
+    if (amountScreen) {
+        amountScreen.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('[data-amount]') : null;
+            if (!btn) {
+                var el = e.target;
+                while (el && el !== amountScreen) {
+                    if (el.dataset && el.dataset.amount) { btn = el; break; }
+                    el = el.parentNode;
+                }
+            }
+            if (!btn || !btn.dataset || !btn.dataset.amount) return;
+            e.preventDefault();
+            e.stopPropagation();
+            selectAmount(parseInt(btn.dataset.amount, 10));
+        });
+    }
 
     // Boutons Profil : liaison par addEventListener (obligatoire car script en fin de body, DOMContentLoaded deja passe)
     var btnSaveLink = document.getElementById('btn-save-social-link');

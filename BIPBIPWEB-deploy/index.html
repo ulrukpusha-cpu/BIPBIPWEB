@@ -41,7 +41,7 @@
     <nav class="fixed w-full z-50 top-0 border-b backdrop-blur-md border-white/10 bg-slate-900/80">
         <div class="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
             <a href="#" onclick="navigateTo('home'); return false;" class="flex items-center gap-2">
-                <img src="assets/logo%202.PNG" alt="Bipbip Recharge Pro" class="h-10 w-auto object-contain rounded-lg" />
+                <picture><source srcset="assets/logo-minia.webp" type="image/webp"><img src="assets/logo-minia.png" alt="Bipbip Recharge Pro" class="h-10 w-auto object-contain rounded-lg" /></picture>
             </a>
             <div class="flex items-center gap-2">
                 <button type="button" onclick="navigateTo('home')" class="p-2 rounded-full transition-colors text-white hover:bg-white/10">
@@ -65,7 +65,7 @@
                     Service disponible 24/7
                 </div>
                 <div class="mb-4">
-                    <img src="assets/logo%202.PNG" alt="Bipbip" class="w-24 h-24 mx-auto rounded-2xl object-contain shadow-xl" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
+                    <img src="assets/bipbip_logo1.png" alt="Bipbip" class="w-24 h-24 mx-auto rounded-2xl object-contain shadow-xl" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
                     <div class="welcome-icon-fallback hidden w-24 h-24 mx-auto rounded-2xl bg-white/10 flex items-center justify-center text-4xl">👋</div>
                 </div>
                 <h1 class="text-2xl md:text-3xl font-semibold tracking-tight mb-2 gradient-text text-white">Bienvenue !</h1>
@@ -407,7 +407,7 @@
 
     <script src="app.js"></script>
     <script>
-        document.querySelector('img[src="assets/logo%202.PNG"]')?.addEventListener('error', function() {
+        document.querySelector('img[src="assets/bipbip_logo1.png"]')?.addEventListener('error', function() {
             this.style.display = 'none';
             const fallback = document.querySelector('.welcome-icon-fallback');
             if (fallback) fallback.classList.remove('hidden');

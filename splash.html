@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#08080D">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Bipbip Recharge</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#08080D;overflow:hidden;height:100dvh}
+    .splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:#08080D}
+    .splash video{width:100%;height:100%;object-fit:contain;background:#08080D}
+    .splash-fallback{display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center}
+    .splash-fallback img{width:min(200px,50vw);height:auto;border-radius:1rem;animation:splashPulse 1.8s ease-in-out infinite}
+    .splash-fallback span{color:rgba(255,255,255,.5);font:500 .85rem/1 system-ui,sans-serif}
+    .splash.no-video video{display:none}
+    .splash.no-video .splash-fallback{display:flex}
+    @keyframes splashPulse{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
+    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="splash" id="splash">
+    <video autoplay muted playsinline preload="auto" id="vid">
+      <source src="bipbip-logo-anim.mp4" type="video/mp4">
+    </video>
+    <div class="splash-fallback">
+      <img src="assets/bipbip_logo1.png" alt="Bipbip Recharge">
+      <span>Chargement…</span>
+    </div>
+  </div>
+  <script>
+    var v = document.getElementById('vid');
+    var splash = document.getElementById('splash');
+    var done = false;
+
+    function goApp() {
+      if (done) return;
+      done = true;
+      window.location.replace('index.html?nosplash=1');
+    }
+
+    function showFallback() {
+      splash.classList.add('no-video');
+      setTimeout(goApp, 1500);
+    }
+
+    v.addEventListener('ended', goApp);
+    v.addEventListener('error', showFallback);
+
+    var canPlay = false;
+    v.addEventListener('canplay', function () { canPlay = true; });
+
+    var p = v.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(showFallback);
+    }
+
+    setTimeout(function () {
+      if (!canPlay && !done) showFallback();
+    }, 3000);
+
+    setTimeout(goApp, 15000);
+  </script>
+</body>
+</html>

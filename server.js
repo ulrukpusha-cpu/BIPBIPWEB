@@ -8,6 +8,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const fs = require('fs');
+const QRCode = require('qrcode');
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const orderStorage = require('./storage');
@@ -72,14 +73,17 @@ const DATA_DIR = './data';
 const APP_CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
 
 const DEFAULT_PUB_BANNERS = [
-    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci' },
-    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci' },
-    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci' }
+    { text: 'Recharge ton crédit en ligne sur Bipbip Recharge CI.', image: '/img/recharge-banner.jpg', url: 'https://bipbiprecharge.ci', placement: 'home1', scrollSpeed: 5 },
+    { text: 'Service 24/7 — MTN, Orange, Moov en quelques secondes.', image: '/img/recharge-banner-2.jpg', url: 'https://bipbiprecharge.ci', placement: 'home2', scrollSpeed: 5 },
+    { text: 'Gagne du temps : recharge directement depuis Bipbip Recharge CI.', image: '/img/recharge-banner-3.jpg', url: 'https://bipbiprecharge.ci', placement: 'actualites', scrollSpeed: 5 }
 ];
+
+const PUB_PLACEMENTS = ['home1', 'home2', 'actualites'];
 
 function sanitizePubBanners(arr) {
     if (!Array.isArray(arr)) return [];
-    const out = [];
+    const byPlace = new Map();
+    let legacyIndex = 0;
     for (const x of arr.slice(0, 12)) {
         if (!x || typeof x !== 'object') continue;
         const text = String(x.text || '').slice(0, 200);
@@ -87,9 +91,26 @@ function sanitizePubBanners(arr) {
         const url = String(x.url || '').trim().slice(0, 512);
         if (!image) continue;
         if (!/^https?:\/\//i.test(image) && !image.startsWith('/')) continue;
-        const row = { text, image };
+        let placement = String(x.placement || '').trim();
+        if (!PUB_PLACEMENTS.includes(placement)) {
+            placement = PUB_PLACEMENTS[legacyIndex % 3];
+            legacyIndex += 1;
+        }
+        let scrollSpeed = parseInt(x.scrollSpeed, 10);
+        if (!Number.isFinite(scrollSpeed) || scrollSpeed < 1 || scrollSpeed > 10) {
+            const durLegacy = Math.min(180, Math.max(8, parseInt(x.scrollSeconds, 10) || 45));
+            scrollSpeed = Math.round(10 - ((durLegacy - 8) / 172) * 9);
+            scrollSpeed = Math.min(10, Math.max(1, scrollSpeed));
+        } else {
+            scrollSpeed = Math.min(10, Math.max(1, scrollSpeed));
+        }
+        const row = { text, image, placement, scrollSpeed };
         if (url && (/^https?:\/\//i.test(url) || url.startsWith('/'))) row.url = url;
-        out.push(row);
+        byPlace.set(placement, row);
+    }
+    const out = [];
+    for (const p of PUB_PLACEMENTS) {
+        if (byPlace.has(p)) out.push(byPlace.get(p));
     }
     return out;
 }
@@ -162,20 +183,60 @@ function buildProofTelegramCaption(order, paymentMethod) {
 }
 
 // ==================== MIDDLEWARE ====================
-// CORS : comme v2 - en production, restreindre aux origines (CORS_ORIGIN) ou désactiver si non défini
+// CORS : origines + en-têtes admin (sinon le navigateur peut supprimer X-Admin-Key après le preflight)
+const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Admin-Key', 'X-Telegram-Init-Data'];
+const CORS_ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+
+function buildProductionCorsOrigin() {
+    const raw = (process.env.CORS_ORIGIN || '').trim();
+    if (!raw) return false;
+    const list = raw.split(',').map((o) => o.trim()).filter(Boolean);
+    const expanded = new Set(list);
+    list.forEach((o) => {
+        try {
+            const u = new URL(o);
+            if (u.hostname && !u.hostname.startsWith('www.')) {
+                expanded.add(u.protocol + '//www.' + u.hostname + (u.port ? ':' + u.port : ''));
+            }
+        } catch (_) { /* ignore */ }
+    });
+    const arr = [...expanded];
+    return function corsOriginCallback(origin, cb) {
+        if (!origin) return cb(null, true);
+        if (arr.includes(origin)) return cb(null, true);
+        return cb(null, false);
+    };
+}
+
 const corsOptions = NODE_ENV === 'production'
-  ? {
-      origin: process.env.CORS_ORIGIN
-        ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
-        : false,
-      credentials: true,
+    ? {
+        origin: buildProductionCorsOrigin(),
+        credentials: true,
+        methods: CORS_ALLOWED_METHODS,
+        allowedHeaders: CORS_ALLOWED_HEADERS,
+        optionsSuccessStatus: 204,
     }
-  : {};
+    : {
+        origin: true,
+        methods: CORS_ALLOWED_METHODS,
+        allowedHeaders: CORS_ALLOWED_HEADERS,
+    };
 app.use(cors(corsOptions));
 
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Health check endpoint pour Agent #8
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    service: 'bipbip-api',
+    uptime: process.uptime(),
+    version: '1.0.0'
+  });
+});
 
 app.get('/tonconnect-manifest.json', (req, res) => {
     const base = publicBaseUrlFromReq(req);
@@ -456,11 +517,39 @@ app.get('/api/rates/ton', async (req, res) => {
     });
 });
 
+/** QR en PNG (même origine) — remplace api.qrserver.com, souvent bloqué (Brave, pare-feu, etc.) */
+app.get('/api/qr', async (req, res) => {
+    const data = String(req.query.data || '').trim();
+    if (!data || data.length > 4096) {
+        return res.status(400).type('text/plain').send('data requis (max 4096 caractères)');
+    }
+    const size = Math.min(512, Math.max(64, parseInt(req.query.size, 10) || 200));
+    const margin = Math.min(4, Math.max(1, parseInt(req.query.margin, 10) || 2));
+    try {
+        const buf = await QRCode.toBuffer(data, {
+            type: 'png',
+            width: size,
+            margin,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#000000', light: '#ffffff' },
+        });
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(buf);
+    } catch (e) {
+        console.error('[api/qr]', e);
+        res.status(500).type('text/plain').send('Erreur génération QR');
+    }
+});
+
 // Config publique (MoMo, vitesse bandeau LED, bannières pub)
 app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();
     const appConfig = readAppConfig();
-    const banners = Array.isArray(appConfig.pubBanners) ? appConfig.pubBanners : DEFAULT_PUB_BANNERS;
+    let banners = Array.isArray(appConfig.pubBanners) ? appConfig.pubBanners : DEFAULT_PUB_BANNERS;
+    if (!banners.length) banners = DEFAULT_PUB_BANNERS;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
     const cryptoAddr = getCryptoDepositAddress();
     const cryptoNetwork = (process.env.CRYPTO_DEPOSIT_NETWORK || 'TON').trim();
     const tgUser = (process.env.TELEGRAM_BOT_USERNAME || '').trim().replace(/^@/, '');
@@ -537,10 +626,9 @@ app.get('/api/weather', async (req, res) => {
 
 // Admin : mettre à jour la config (ex. vitesse bandeau, bannières pub)
 app.put('/api/admin/config', (req, res) => {
-    const secret = process.env.ADMIN_SECRET_KEY;
-    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
-    const key = req.headers['x-admin-key'];
-    if (key !== secret) return res.status(401).json({ error: 'Non autorisé' });
+    if (!isAdminRequest(req)) {
+        return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    }
     const body = req.body || {};
     const current = readAppConfig();
     if (body.ledScrollSeconds != null) {
@@ -565,10 +653,9 @@ app.put('/api/admin/config', (req, res) => {
 
 // Admin : image bannière pub → /uploads/...
 app.post('/api/admin/pub-banner-image', upload.single('image'), (req, res) => {
-    const secret = process.env.ADMIN_SECRET_KEY;
-    if (!secret) return res.status(503).json({ error: 'ADMIN_SECRET_KEY non configuré' });
-    const key = req.headers['x-admin-key'];
-    if (key !== secret) return res.status(401).json({ error: 'Non autorisé' });
+    if (!isAdminRequest(req)) {
+        return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    }
     if (!req.file) return res.status(400).json({ error: 'Fichier image manquant (champ "image")' });
     const url = '/uploads/' + req.file.filename;
     res.json({ success: true, url });
@@ -617,9 +704,10 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             console.warn('[Telegram] Aucun ADMIN_CHAT_ID/ADMIN_CHAT_IDS dans .env - pas de notif admin');
         } else {
             console.log('[Telegram] Envoi notif nouvelle commande #' + orderId + ' à ' + adminIds.length + ' admin(s)');
+            const userLabel = username ? '@' + username : (userId && userId.startsWith('web_')) ? '🌐 Navigateur' : userId || 'WebApp';
             await sendTelegramToAllAdmins(
                 `🔔 <b>NOUVELLE COMMANDE #${orderId}</b>\n\n` +
-                `👤 User: ${username ? '@' + username : userId || 'WebApp'}\n` +
+                `👤 User: ${userLabel}\n` +
                 `📲 Opérateur: ${operator}\n` +
                 `💰 Montant: ${amountTotal} FCFA\n` +
                 `📞 Numéro: ${phone}\n` +
@@ -744,8 +832,9 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
 
 // Vérifier admin : clé OU identité Telegram (initData)
 function isAdminRequest(req) {
-    const secret = process.env.ADMIN_SECRET_KEY;
-    if (secret && req.headers['x-admin-key'] === secret) return true;
+    const secret = (process.env.ADMIN_SECRET_KEY || '').trim();
+    const key = String(req.headers['x-admin-key'] || '').trim();
+    if (secret && key && key === secret) return true;
     const adminIds = getAdminChatIds();
     const chatId = req.userId; // défini par authTelegram
     if (chatId && adminIds.length && adminIds.includes(String(chatId))) return true;

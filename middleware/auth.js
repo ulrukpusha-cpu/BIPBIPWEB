@@ -34,7 +34,9 @@ function authTelegram(req, res, next) {
         req.userId = String(user.id);
     } else {
         req.telegramUser = null;
-        req.userId = null;
+        // Accepter le userId du body pour les utilisateurs navigateur (préfixé web_)
+        const bodyUid = req.body?.userId || req.query?.userId || null;
+        req.userId = (typeof bodyUid === 'string' && bodyUid.startsWith('web_')) ? bodyUid : null;
     }
     next();
 }

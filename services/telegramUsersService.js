@@ -315,6 +315,7 @@ function yesterdayStr() {
 
 /**
  * État du daily check-in (série 7 jours).
+ * Après le 7e jour réclamé, le lendemain la grille repart à 0 (nouveau cycle) et next_streak = 1.
  */
 async function getDailyCheckin(telegramId) {
     const supabase = db.getSupabase();
@@ -323,22 +324,49 @@ async function getDailyCheckin(telegramId) {
     const { data } = await supabase.from(tableName).select('last_checkin_at, checkin_streak').eq('telegram_id', Number(telegramId)).single();
     if (!data) return null;
     const last = data.last_checkin_at ? (typeof data.last_checkin_at === 'string' ? data.last_checkin_at.slice(0, 10) : null) : null;
-    const streak = Math.min(7, Math.max(0, Number(data.checkin_streak) || 0));
+    const dbStreak = Math.min(7, Math.max(0, Number(data.checkin_streak) || 0));
     const today = todayStr();
     const yesterday = yesterdayStr();
+
+    // Jours « remplis » sur la grille pour le cycle en cours (pas le brut DB si on attend le jour 1 d’un nouveau cycle)
+    let displayStreak = 0;
+    if (!last) {
+        displayStreak = 0;
+    } else if (last === today) {
+        displayStreak = dbStreak;
+    } else if (last === yesterday) {
+        if (dbStreak >= 7) {
+            displayStreak = 0;
+        } else {
+            displayStreak = dbStreak;
+        }
+    } else {
+        displayStreak = 0;
+    }
+
     let canClaim = false;
-    let nextStreak = streak;
+    let nextStreak = 1;
     if (last === today) {
         canClaim = false;
+        nextStreak = dbStreak;
     } else if (!last || last === yesterday) {
         canClaim = true;
-        nextStreak = last === yesterday ? Math.min(7, streak + 1) : 1;
+        if (!last) {
+            nextStreak = 1;
+        } else if (last === yesterday) {
+            if (dbStreak >= 7) {
+                nextStreak = 1;
+            } else {
+                nextStreak = Math.min(7, dbStreak + 1);
+            }
+        }
     } else {
         canClaim = true;
         nextStreak = 1;
     }
+
     return {
-        streak,
+        streak: displayStreak,
         next_streak: nextStreak,
         last_checkin_at: last,
         can_claim: canClaim,

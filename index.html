@@ -36,16 +36,16 @@
     <meta property="og:title" content="Bipbip Recharge CI — Recharge mobile rapide">
     <meta property="og:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
     <meta property="og:url" content="https://bipbiprecharge.ci/">
-    <meta property="og:image" content="https://bipbiprecharge.ci/assets/logo-bip-512.webp">
-    <meta property="og:image:width" content="512">
-    <meta property="og:image:height" content="512">
+    <meta property="og:image" content="https://bipbiprecharge.ci/assets/bipbip_logo1.png">
+    <meta property="og:image:width" content="180">
+    <meta property="og:image:height" content="180">
     <meta property="og:locale" content="fr_CI">
 
     <!-- ═══ Twitter Card ═══ -->
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Bipbip Recharge CI — Recharge mobile rapide">
     <meta name="twitter:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
-    <meta name="twitter:image" content="https://bipbiprecharge.ci/assets/logo-bip-512.webp">
+    <meta name="twitter:image" content="https://bipbiprecharge.ci/assets/bipbip_logo1.png">
 
     <!-- ═══ PWA & Icônes ═══ -->
     <meta name="theme-color" content="#0f172a">
@@ -54,9 +54,10 @@
     <meta name="apple-mobile-web-app-title" content="Bipbip">
     <meta name="application-name" content="Bipbip Recharge">
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/webp" sizes="192x192" href="/assets/logo-bip-192.webp">
-    <link rel="icon" type="image/png" sizes="269x279" href="/assets/logo-bip.png">
-    <link rel="apple-touch-icon" href="/assets/logo-bip.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/bipbip_logo.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/bipbip_logo1.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/bipbip_logo1.png">
+    <link rel="apple-touch-icon" href="/assets/bipbip_logo1.png">
 
     <!-- ═══ Structured Data (JSON-LD) ═══ -->
     <script type="application/ld+json">
@@ -69,7 +70,7 @@
             "applicationCategory": "FinanceApplication",
             "description": "Rechargez votre crédit mobile MTN, Orange et Moov. Paiement sécurisé via Djamo, MTN MoMo ou crypto.",
             "url": "https://bipbiprecharge.ci/",
-            "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+            "image": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "XOF" },
             "provider": { "@type": "Organization", "name": "Bipbip Recharge CI", "url": "https://bipbiprecharge.ci/" },
             "areaServed": { "@type": "Country", "name": "CI" }
@@ -80,8 +81,8 @@
             "name": "Bipbip Recharge CI",
             "description": "Service de recharge de crédit mobile en ligne en Côte d'Ivoire. MTN, Orange et Moov. Paiement via Djamo, MTN MoMo ou crypto TON.",
             "url": "https://bipbiprecharge.ci/",
-            "logo": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
-            "image": "https://bipbiprecharge.ci/assets/logo-bip-512.webp",
+            "logo": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
+            "image": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
             "address": {
                 "@type": "PostalAddress",
                 "addressCountry": "CI",
@@ -170,6 +171,8 @@
         ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1e293b}::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#64748b}
         .led-wrap{overflow:hidden;white-space:nowrap}.led-text{display:inline-block;padding-left:100%;will-change:transform}
         @keyframes led-scroll{to{transform:translate3d(-100%,0,0)}}
+        @keyframes pub-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+        .pub-marquee-strip{will-change:transform}
         #bipbip-desktop-gate{display:none;position:fixed;inset:0;z-index:50000;flex-direction:column;align-items:center;justify-content:flex-start;padding:2rem 1.25rem 2.5rem;overflow-y:auto;background:#0f172a;text-align:center}
         #bipbip-desktop-gate.bipbip-gate-visible{display:flex}
         #bipbip-splash{position:fixed;inset:0;z-index:60000;display:flex;align-items:center;justify-content:center;background:#08080D;transition:opacity .45s ease,visibility .45s ease}
@@ -198,9 +201,9 @@
     <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
     <!-- ═══ CSS non-critique (async via media trick) ═══ -->
-    <link rel="stylesheet" href="styles.css?v=20260328b" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260328b" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="styles.css?v=20260328b"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260328b"></noscript>
+    <link rel="stylesheet" href="styles.css?v=20260330a" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260330a" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="styles.css?v=20260330a"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260330a"></noscript>
 
     <!-- TON Connect : lazy-load (chargé par app.js uniquement quand le panel paiement s'ouvre) -->
 </head>
@@ -211,14 +214,11 @@
 
     <!-- Splash plein écran (mobile / tablette) -->
     <div id="bipbip-splash" class="bipbip-splash-hidden" aria-hidden="true" hidden>
-        <video id="bipbip-splash-video" autoplay muted playsinline preload="auto" poster="assets/logo-bip.webp">
+        <video id="bipbip-splash-video" autoplay muted playsinline preload="auto" poster="assets/bipbip_logo1.png">
             <source src="bipbip-logo-anim.mp4" type="video/mp4">
         </video>
         <div id="bipbip-splash-fallback" aria-hidden="true">
-            <picture>
-                <source srcset="assets/logo-bip.webp" type="image/webp">
-                <img src="assets/logo-bip.png" alt="" width="200" height="200" decoding="async">
-            </picture>
+            <img src="assets/bipbip_logo1.png" alt="" width="200" height="200" decoding="async">
             <span class="text-sm text-white/60 font-medium">Chargement…</span>
         </div>
         <button type="button" id="bipbip-splash-skip" class="hidden" aria-label="Passer l'animation de démarrage">Passer</button>
@@ -270,7 +270,7 @@
 
     <!-- PC / grand écran : QR Telegram + lien site (app réservée mobile & tablette) -->
     <div id="bipbip-desktop-gate" class="text-slate-300" role="dialog" aria-labelledby="bipbip-gate-title" aria-modal="true">
-        <picture><source srcset="assets/logo-bip.webp" type="image/webp"><img src="assets/logo-bip.png" alt="Logo Bipbip Recharge CI" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" width="64" height="64" decoding="async"></picture>
+        <img src="assets/bipbip_logo1.png" alt="Logo Bipbip Recharge CI" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" width="64" height="64" decoding="async">
         <h1 id="bipbip-gate-title" class="text-xl font-bold text-white mb-2 max-w-md mx-auto">Bipbip Recharge CI</h1>
         <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">Cette application est utilisable sur <strong class="text-slate-300">smartphone</strong> et <strong class="text-slate-300">tablette</strong> (navigateur ou Telegram). Sur ordinateur, scannez un QR avec votre téléphone ou passez votre navigateur en <strong class="text-slate-300">mode mobile</strong>.</p>
         <div class="flex flex-col sm:flex-row gap-8 items-center justify-center w-full max-w-2xl mx-auto mb-8">
@@ -357,7 +357,7 @@
                     <!-- Overlay content on scene -->
                     <div class="scene-overlay absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
                         <div class="scene-main-content">
-                            <picture><source srcset="assets/logo-bip.webp" type="image/webp"><img src="assets/logo-bip.png" alt="Bipbip" class="w-24 h-24 rounded-2xl object-contain mb-1" width="96" height="96" decoding="async" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));" onerror="this.style.display='none';"></picture>
+                            <img src="assets/bipbip_logo1.png" alt="Bipbip" class="w-24 h-24 object-contain mb-1" width="96" height="96" decoding="async" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));background:transparent !important;" onerror="this.style.display='none';">
                             <h1 class="scene-hero-title font-bold tracking-tight text-white" style="color:#fff;text-shadow:0 3px 20px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.6);">Bienvenue !</h1>
                             <p class="scene-hero-subtitle" style="color:rgba(255,255,255,.92);text-shadow:0 2px 12px rgba(0,0,0,.85);">Rechargez votre crédit mobile en quelques clics</p>
                         </div>
@@ -395,6 +395,11 @@
                 <div class="led-wrap h-10 flex items-center">
                     <div id="led-text" class="led-text text-sm text-amber-300 font-medium">Bienvenue sur Bipbip Recharge — Rechargez en un clic</div>
                 </div>
+            </div>
+            <!-- Bannières pub (2 emplacements, défilement type bandeau LED) -->
+            <div id="home-pub-banners-wrap" class="mt-4 space-y-3 hidden" aria-label="Publicités">
+                <div id="home-pub-slot-1" class="hidden"></div>
+                <div id="home-pub-slot-2" class="hidden"></div>
             </div>
         </div>
 
@@ -463,27 +468,27 @@
                 <h2 class="text-xl font-semibold text-white">Choisir l'opérateur</h2>
             </div>
             <div class="space-y-3">
-                <button type="button" data-operator="MTN" onclick="selectOperator('MTN')" class="operator-btn mtn w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                <button type="button" data-operator="MTN" class="operator-btn mtn w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge mtn-badge px-4 py-2 rounded-lg font-bold text-sm bg-amber-400/20 text-amber-400 border border-amber-400/30">MTN</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">MTN Mobile Money</span>
-                        <span class="operator-prefix text-xs text-slate-400">Préfixe: 05XX XXX XXX</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 05, 06</span>
                     </div>
                     <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
-                <button type="button" data-operator="Orange" onclick="selectOperator('Orange')" class="operator-btn orange w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                <button type="button" data-operator="Orange" class="operator-btn orange w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge orange-badge px-4 py-2 rounded-lg font-bold text-sm bg-orange-500/20 text-orange-400 border border-orange-500/30">Orange</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">Orange Money</span>
-                        <span class="operator-prefix text-xs text-slate-400">Préfixe: 07XX XXX XXX</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 07, 08, 09</span>
                     </div>
                     <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
-                <button type="button" data-operator="Moov" onclick="selectOperator('Moov')" class="operator-btn moov w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                <button type="button" data-operator="Moov" class="operator-btn moov w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
                     <span class="operator-badge moov-badge px-4 py-2 rounded-lg font-bold text-sm bg-blue-500/20 text-blue-400 border border-blue-500/30">Moov</span>
                     <div class="operator-info flex-1">
                         <span class="operator-name block font-semibold text-white">Moov Africa</span>
-                        <span class="operator-prefix text-xs text-slate-400">Préfixe: 01XX XXX XXX</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 01, 02</span>
                     </div>
                     <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
                 </button>
@@ -500,35 +505,35 @@
             </div>
             <div class="selected-operator glass-panel rounded-xl p-4 mb-6 flex items-center gap-3 border border-white/15" id="selected-operator-display"></div>
             <div class="grid grid-cols-2 gap-3">
-                <button type="button" data-amount="500" onclick="selectAmount(500)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="500" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">500</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="1000" onclick="selectAmount(1000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="1000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">1 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="2000" onclick="selectAmount(2000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="2000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">2 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="5000" onclick="selectAmount(5000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="5000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">5 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="10000" onclick="selectAmount(10000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="10000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">10 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="15000" onclick="selectAmount(15000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="15000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">15 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="20000" onclick="selectAmount(20000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="20000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">20 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
-                <button type="button" data-amount="25000" onclick="selectAmount(25000)" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                <button type="button" data-amount="25000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
                     <span class="amount-value text-xl font-bold text-white">25 000</span>
                     <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
                 </button>
@@ -543,6 +548,7 @@
                 </button>
                 <h2 class="text-xl font-semibold text-white">Numéro à recharger</h2>
             </div>
+            <button type="button" class="text-sm text-sky-400 hover:text-sky-300 underline underline-offset-2 mb-3 w-full text-left pl-0.5" onclick="navigateTo('buy')">← Changer d’opérateur</button>
             <div class="order-summary glass-panel rounded-xl p-4 mb-6 border border-white/15" id="order-summary-phone"></div>
             <div class="phone-input-container mb-6">
                 <div class="input-group flex rounded-xl border border-white/15 bg-slate-800/60 overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
@@ -908,7 +914,6 @@
                 <div id="actualites-list" class="space-y-3"></div>
             </div>
             <div id="actualites-section-tendances" class="mb-6">
-                <h3 class="text-sm font-semibold text-rose-400 mb-3 flex items-center gap-2"><iconify-icon icon="solar:ad-linear" width="18"></iconify-icon> Bannière publicitaire</h3>
                 <div id="tendances-list">
                     <!-- contenu injecté via app.js (bannière qui change toutes les 7s) -->
                 </div>
@@ -1037,11 +1042,10 @@
                 <p class="text-xs text-slate-500 mt-1">Accès : <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Ctrl+Shift+A</kbd> · Appui long sur le logo · 5 taps rapides · <code class="px-1 py-0.5 rounded bg-white/10 text-slate-400">?admin</code></p>
             </div>
             <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
-                <h3 class="font-semibold text-white mb-2">Bannières publicitaires</h3>
-                <p class="text-sm text-slate-400 mb-3">Affichées sur l’écran Actualités (rotation ~7 s). Image : URL, chemin <code class="text-slate-500">/img/...</code> ou envoi fichier vers <code class="text-slate-500">/uploads/</code>.</p>
+                <h3 class="font-semibold text-white mb-2">Bannières publicitaires (3 emplacements)</h3>
+                <p class="text-sm text-slate-400 mb-3">Deux bannières sur l’<strong class="text-slate-300">Accueil</strong> (sous le bandeau LED) et une dans <strong class="text-slate-300">Actualités</strong>. Défilement sans cadre visible ; la zone Accueil n’apparaît que si au moins une bannière est configurée. <strong class="text-slate-300">Vitesse 1–10</strong> : plus le chiffre est grand, plus c’est rapide. Image : URL ou <code class="text-slate-500">/uploads/</code>.</p>
                 <div id="admin-pub-banners-rows" class="space-y-3 mb-3"></div>
                 <div class="flex flex-wrap gap-2">
-                    <button type="button" onclick="addAdminPubBannerRow()" class="px-4 py-2 rounded-lg bg-white/10 border border-white/15 text-white text-sm hover:bg-white/15">+ Ajouter une bannière</button>
                     <button type="button" onclick="savePubBanners()" class="px-4 py-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-sm font-medium hover:bg-rose-500/30">Enregistrer les bannières</button>
                 </div>
             </div>
@@ -1128,7 +1132,7 @@
                 img.onerror = function () {
                     if (ld) { ld.textContent = 'QR indisponible'; ld.classList.remove('hidden'); }
                 };
-                img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=' + encodeURIComponent(data);
+                img.src = base + '/api/qr?size=200&margin=2&data=' + encodeURIComponent(data);
             }
             fetch(base + '/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
                 var bot = (cfg.telegramBotUsername || '').replace(/^@/, '').trim();
@@ -1157,18 +1161,23 @@
         }
 
         function bipbipLoadAppScripts() {
-            var _v = '?v=20260328b';
+            var _v = '?v=20260404a';
             var tgInt = document.createElement('script');
             tgInt.src = 'bipbip-telegram.js' + _v;
             document.body.appendChild(tgInt);
             var tonLoader = document.createElement('script');
             tonLoader.src = 'bipbip-ton-loader.js' + _v;
             document.body.appendChild(tonLoader);
-            var app = document.createElement('script');
-            app.src = 'app.js' + _v;
-            app.onload = function () {
-                var sc = document.createElement('script');
-                sc.src = 'bipbip-dynamic-scene.js' + _v;
+  var app = document.createElement('script');
+    app.src = 'app.js' + _v;
+    app.onload = function () {
+      // Boss: Fix boutons amount (charger APRÈS app.js pour avoir selectAmount)
+      var fix = document.createElement('script');
+      fix.src = 'bipbip-buy-fix.js' + _v;
+      document.body.appendChild(fix);
+      
+      var sc = document.createElement('script');
+      sc.src = 'bipbip-dynamic-scene.js' + _v;
                 sc.onload = function () {
                     if (document.getElementById('bipbip-scene') && typeof BipbipDynamicScene !== 'undefined') {
                         try { new BipbipDynamicScene('#bipbip-scene'); } catch (err) {}

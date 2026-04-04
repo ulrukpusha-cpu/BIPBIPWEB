@@ -46,10 +46,16 @@
   will-change: opacity, transform;
 }
 .bds-scene-layer--active {
-  opacity: 1;
-  transition: opacity 2.5s ease, transform 0.3s ease-out;
+ opacity: 1;
+ transition: opacity 2.5s ease, transform 0.3s ease-out;
 }
-.bds-scene-day    { background-image: url('assets/scene-day1.jpg'); z-index: 2; }
+
+/* ── FORCE TRANSPARENCY FOR SCENE OVERLAY IMAGES ── */
+.scene-overlay img { background: transparent !important; }
+.scene-main-content img { background: transparent !important; }
+.bds-container img { background: transparent !important; }
+
+.bds-scene-day { background-image: url('assets/scene-day1.jpg'); z-index: 2; }
 .bds-scene-sunset { background-image: url('assets/scene-sunset2.jpg'); z-index: 3; }
 .bds-scene-night  { background-image: url('assets/scene-night2.jpg'); z-index: 4; }
 
