@@ -1,6 +1,8 @@
 /**
  * Bipbip Telegram Mini App Integration
  * Toutes les intégrations Telegram WebApp API (Bot API 8.0+/9.0+)
+ * Guard: les modifications UI (thème, safe areas, back button, swipes)
+ * ne s'appliquent QUE dans Telegram (initData présent).
  */
 (function () {
     'use strict';
@@ -8,26 +10,32 @@
     var tg = window.Telegram && window.Telegram.WebApp;
     if (!tg) return;
 
+    // Le SDK Telegram crée window.Telegram.WebApp même dans un navigateur classique.
+    // On distingue le vrai contexte Telegram par la présence de initData.
+    var isInsideTelegram = !!(tg.initData && String(tg.initData).trim());
+
     var BIPBIP_BG = '#0f172a';
     var BIPBIP_HEADER = '#0e1726';
 
     // ═══════════════════════════════════════════════════════
-    // 1. BASE : ready + expand + couleurs
+    // 1. BASE : ready + expand + couleurs (Telegram uniquement)
     // ═══════════════════════════════════════════════════════
 
-    try { tg.ready(); } catch (e) {}
-    try { tg.expand(); } catch (e) {}
+    if (isInsideTelegram) {
+        try { tg.ready(); } catch (e) {}
+        try { tg.expand(); } catch (e) {}
 
-    try { tg.setHeaderColor(BIPBIP_HEADER); } catch (e) {}
-    try { tg.setBackgroundColor(BIPBIP_BG); } catch (e) {}
-    try {
-        if (typeof tg.setBottomBarColor === 'function') {
-            tg.setBottomBarColor(BIPBIP_BG);
-        }
-    } catch (e) {}
+        try { tg.setHeaderColor(BIPBIP_HEADER); } catch (e) {}
+        try { tg.setBackgroundColor(BIPBIP_BG); } catch (e) {}
+        try {
+            if (typeof tg.setBottomBarColor === 'function') {
+                tg.setBottomBarColor(BIPBIP_BG);
+            }
+        } catch (e) {}
+    }
 
     // ═══════════════════════════════════════════════════════
-    // 2. SAFE AREAS : adapter les marges au device
+    // 2. SAFE AREAS : adapter les marges au device (Telegram uniquement)
     // ═══════════════════════════════════════════════════════
 
     function applySafeAreas() {
@@ -64,11 +72,13 @@
         }
     }
 
-    try { applySafeAreas(); } catch (e) {}
-    try {
-        tg.onEvent('contentSafeAreaChanged', applySafeAreas);
-        tg.onEvent('safeAreaChanged', applySafeAreas);
-    } catch (e) {}
+    if (isInsideTelegram) {
+        try { applySafeAreas(); } catch (e) {}
+        try {
+            tg.onEvent('contentSafeAreaChanged', applySafeAreas);
+            tg.onEvent('safeAreaChanged', applySafeAreas);
+        } catch (e) {}
+    }
 
     // ═══════════════════════════════════════════════════════
     // 3. BACK BUTTON natif Telegram
@@ -78,7 +88,7 @@
 
     function updateTgBackButton(screen) {
         try {
-            if (!tg.BackButton) return;
+            if (!isInsideTelegram || !tg.BackButton) return;
             if (homeScreens[screen]) {
                 tg.BackButton.hide();
             } else {
@@ -106,24 +116,26 @@
         admin: 'home'
     };
 
-    try {
-        tg.BackButton.onClick(function () {
-            var current = window.currentScreen || 'home';
-            var overlay = document.getElementById('article-overlay');
-            if (overlay && !overlay.classList.contains('hidden')) {
-                if (typeof window.closeArticleOverlay === 'function') {
-                    window.closeArticleOverlay();
-                } else {
-                    overlay.classList.add('hidden');
+    if (isInsideTelegram) {
+        try {
+            tg.BackButton.onClick(function () {
+                var current = window.currentScreen || 'home';
+                var overlay = document.getElementById('article-overlay');
+                if (overlay && !overlay.classList.contains('hidden')) {
+                    if (typeof window.closeArticleOverlay === 'function') {
+                        window.closeArticleOverlay();
+                    } else {
+                        overlay.classList.add('hidden');
+                    }
+                    return;
                 }
-                return;
-            }
-            var target = backMap[current] || 'home';
-            if (typeof window.navigateTo === 'function') {
-                window.navigateTo(target);
-            }
-        });
-    } catch (e) {}
+                var target = backMap[current] || 'home';
+                if (typeof window.navigateTo === 'function') {
+                    window.navigateTo(target);
+                }
+            });
+        } catch (e) {}
+    }
 
     window.__bipbipTgUpdateBackButton = updateTgBackButton;
 
@@ -133,7 +145,7 @@
 
     window.__bipbipHaptic = function (type, style) {
         try {
-            if (!tg || !tg.HapticFeedback) return;
+            if (!isInsideTelegram || !tg.HapticFeedback) return;
             if (type === 'impact') {
                 tg.HapticFeedback.impactOccurred(style || 'light');
             } else if (type === 'notification') {
@@ -145,7 +157,7 @@
     };
 
     // ═══════════════════════════════════════════════════════
-    // 5. THEME ADAPTATIF
+    // 5. THEME ADAPTATIF (Telegram uniquement)
     // ═══════════════════════════════════════════════════════
 
     function applyTgTheme() {
@@ -169,8 +181,10 @@
         }
     }
 
-    try { applyTgTheme(); } catch (e) {}
-    try { tg.onEvent('themeChanged', applyTgTheme); } catch (e) {}
+    if (isInsideTelegram) {
+        try { applyTgTheme(); } catch (e) {}
+        try { tg.onEvent('themeChanged', applyTgTheme); } catch (e) {}
+    }
 
     // ═══════════════════════════════════════════════════════
     // 6. CLOSING CONFIRMATION (pendant les paiements)
@@ -183,6 +197,7 @@
 
     window.__bipbipTgClosingGuard = function (screen) {
         try {
+            if (!isInsideTelegram) return;
             if (paymentScreens[screen]) {
                 tg.enableClosingConfirmation();
             } else {
@@ -197,6 +212,7 @@
 
     window.__bipbipTgPromptHomeScreen = function () {
         try {
+            if (!isInsideTelegram) return;
             if (typeof tg.addToHomeScreen !== 'function') return;
             var prompted = false;
             try { prompted = sessionStorage.getItem('bipbip_hs_prompted') === '1'; } catch (e) {}
@@ -214,22 +230,24 @@
     };
 
     // ═══════════════════════════════════════════════════════
-    // 8. DETECTION PERFORMANCE ANDROID
+    // 8. DETECTION PERFORMANCE ANDROID (Telegram uniquement)
     // ═══════════════════════════════════════════════════════
 
-    (function detectAndroidPerformance() {
-        try {
-            var ua = navigator.userAgent || '';
-            var match = ua.match(/Telegram-Android\/[\d.]+ \([^)]*;\s*(LOW|AVERAGE|HIGH)\)/i);
-            if (match) {
-                var perfClass = match[1].toUpperCase();
-                document.documentElement.dataset.tgPerf = perfClass;
-                if (perfClass === 'LOW' && !document.documentElement.classList.contains('bipbip-lite')) {
-                    document.documentElement.classList.add('bipbip-lite');
+    if (isInsideTelegram) {
+        (function detectAndroidPerformance() {
+            try {
+                var ua = navigator.userAgent || '';
+                var match = ua.match(/Telegram-Android\/[\d.]+ \([^)]*;\s*(LOW|AVERAGE|HIGH)\)/i);
+                if (match) {
+                    var perfClass = match[1].toUpperCase();
+                    document.documentElement.dataset.tgPerf = perfClass;
+                    if (perfClass === 'LOW' && !document.documentElement.classList.contains('bipbip-lite')) {
+                        document.documentElement.classList.add('bipbip-lite');
+                    }
                 }
-            }
-        } catch (e) {}
-    })();
+            } catch (e) {}
+        })();
+    }
 
     // ═══════════════════════════════════════════════════════
     // 9. FULLSCREEN (optionnel, activé par le user)
@@ -237,6 +255,7 @@
 
     window.__bipbipTgFullscreen = function (enable) {
         try {
+            if (!isInsideTelegram) return;
             if (enable && typeof tg.requestFullscreen === 'function') {
                 tg.requestFullscreen();
             } else if (!enable && typeof tg.exitFullscreen === 'function') {
@@ -246,10 +265,10 @@
     };
 
     // ═══════════════════════════════════════════════════════
-    // 10. DEVICE STORAGE (préférences utilisateur)
+    // 10. DEVICE STORAGE (préférences utilisateur — fonctionne aussi en navigateur via localStorage)
     // ═══════════════════════════════════════════════════════
 
-    var ds = tg.DeviceStorage || null;
+    var ds = (isInsideTelegram && tg.DeviceStorage) ? tg.DeviceStorage : null;
 
     window.__bipbipDeviceStorage = {
         set: function (key, value, cb) {
@@ -284,21 +303,23 @@
     });
 
     // ═══════════════════════════════════════════════════════
-    // DISABLE VERTICAL SWIPES pendant les interactions
+    // DISABLE VERTICAL SWIPES (Telegram uniquement)
     // ═══════════════════════════════════════════════════════
 
     window.__bipbipTgSwipes = function (enable) {
         try {
+            if (!isInsideTelegram) return;
             if (enable) tg.enableVerticalSwipes();
             else tg.disableVerticalSwipes();
         } catch (e) {}
     };
 
-    // Désactiver les swipes par défaut (l'app a son propre scroll)
-    try {
-        if (typeof tg.disableVerticalSwipes === 'function') {
-            tg.disableVerticalSwipes();
-        }
-    } catch (e) {}
+    if (isInsideTelegram) {
+        try {
+            if (typeof tg.disableVerticalSwipes === 'function') {
+                tg.disableVerticalSwipes();
+            }
+        } catch (e) {}
+    }
 
 })();
