@@ -147,13 +147,13 @@ function writeAppConfig(obj) {
 
 function normalizePaymentMethod(raw) {
     const s = String(raw == null || raw === '' ? 'djamo' : raw).toLowerCase().trim();
-    const allowed = new Set(['djamo', 'usdt', 'usdc', 'ton', 'momo']);
+    const allowed = new Set(['djamo', 'usdt', 'usdc', 'ton', 'momo', 'wave']);
     return allowed.has(s) ? s : 'djamo';
 }
 
 function paymentMethodAdminLabel(method) {
     const m = normalizePaymentMethod(method);
-    const map = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' };
+    const map = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo', wave: 'Wave' };
     return map[m] || m;
 }
 

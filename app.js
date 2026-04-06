@@ -1143,6 +1143,12 @@ function navigateTo(screen) {
             var pmEl = document.getElementById('payment-method-order-id');
             if (pmEl) pmEl.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
             applyPaymentMethodScreenFromConfig();
+            var wblk = document.getElementById('wave-pay-block');
+            var wbtn = document.getElementById('btn-wave-toggle');
+            var wch = document.getElementById('icon-wave-chevron');
+            if (wblk) wblk.classList.add('hidden');
+            if (wbtn) wbtn.setAttribute('aria-expanded', 'false');
+            if (wch) wch.classList.remove('rotate-180');
         }
         if (target === 'crypto-pay') {
             var totalC = (currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0;
@@ -1205,10 +1211,12 @@ function navigateTo(screen) {
     }
     
     document.querySelectorAll('.nav-bottom-btn').forEach(function (btn) {
-        var isRecharge = (btn.textContent || '').indexOf('Recharge') !== -1;
-        var isActualites = (btn.textContent || '').indexOf('Actualités') !== -1;
-        var isQuests = (btn.textContent || '').indexOf('Quêtes') !== -1;
-        var active = (target === 'home' && isRecharge) || (target === 'actualites' && isActualites) || (target === 'quests' && isQuests);
+        var t = (btn.textContent || '').trim();
+        var isRecharge = t.indexOf('Recharge') !== -1;
+        var isCartes = t.indexOf('Cartes') !== -1;
+        var isActualites = t.indexOf('Actualités') !== -1;
+        var isQuests = t.indexOf('Quêtes') !== -1;
+        var active = (target === 'home' && isRecharge) || (target === 'cartes' && isCartes) || (target === 'actualites' && isActualites) || (target === 'quests' && isQuests);
         btn.classList.toggle('text-amber-400', active);
         btn.classList.toggle('text-slate-400', !active);
     });
@@ -1542,6 +1550,24 @@ function goToPaymentMethodScreen() {
     navigateTo('payment-method');
 }
 
+function toggleWavePayBlock() {
+    var block = document.getElementById('wave-pay-block');
+    var btn = document.getElementById('btn-wave-toggle');
+    var chev = document.getElementById('icon-wave-chevron');
+    if (!block) return;
+    block.classList.toggle('hidden');
+    var isOpen = !block.classList.contains('hidden');
+    if (btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (chev) chev.classList.toggle('rotate-180', isOpen);
+}
+
+function chooseWavePayment() {
+    currentOrder.paymentMethod = 'wave';
+    showToast('Après paiement Wave, envoyez une capture d’écran à l’étape suivante.', 'info');
+    resetProofUploadUi();
+    navigateTo('proof');
+}
+
 function setPaymentMethodTab(tab) {
     if (tab !== 'djamo' && tab !== 'momo' && tab !== 'ton') tab = 'djamo';
     bipbipPayTab = tab;
@@ -1837,7 +1863,7 @@ function syncProofScreenInstructions() {
     var hint = document.getElementById('proof-selected-method');
     var body = document.getElementById('proof-instructions-body');
     var pm = currentOrder.paymentMethod || 'djamo';
-    var labels = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' };
+    var labels = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo', wave: 'Wave' };
     if (hint) {
         hint.textContent = 'Mode : ' + (labels[pm] || pm);
         hint.classList.remove('hidden');
@@ -1850,6 +1876,9 @@ function syncProofScreenInstructions() {
             '<a href="' + escapeHtml(payUrl) + '" target="_blank" rel="noopener" class="inline-block mt-2 text-emerald-400 font-mono text-sm break-all underline">' + escapeHtml(payUrl) + '</a>';
     } else if (pm === 'momo') {
         body.innerHTML = '<p>Demande MoMo ou preuve manuelle : joignez une capture ci-dessous pour validation par l’admin.</p>';
+    } else if (pm === 'wave') {
+        body.innerHTML = '<p>Payez le montant indiqué via <strong class="text-white">Wave</strong> (QR affiché à l’étape précédente), puis joignez une <strong class="text-white">capture d’écran</strong> de la confirmation Wave ci-dessous.</p>' +
+            '<p class="text-xs text-slate-500 mt-2">Vérifiez que le montant et la référence / date sont visibles sur la capture.</p>';
     } else if (pm === 'usdt' || pm === 'usdc' || pm === 'ton') {
         var addr = serverConfig.cryptoDepositAddress || '';
         body.innerHTML = '<p>Réseau indiqué : <strong class="text-white">' + escapeHtml(serverConfig.cryptoDepositNetwork || '—') + '</strong></p>' +
@@ -1862,11 +1891,9 @@ function syncProofScreenInstructions() {
 
 function chooseDjamoPayment() {
     currentOrder.paymentMethod = 'djamo';
-    var url = serverConfig.djamoPayUrl || DJAMO_PAY_URL;
-    if (typeof window !== 'undefined' && window.open) window.open(url, '_blank');
-    showToast('Ouvrez Djamo pour payer, puis envoyez la preuve.', 'info');
     resetProofUploadUi();
     navigateTo('proof');
+    showToast('Ajoutez une capture d’écran de votre paiement Djamo.', 'info');
 }
 
 function djamoPaid() {
@@ -2369,7 +2396,7 @@ function renderAdminOrders(filter = 'pending') {
             '<p><strong>💰 Montant:</strong> ' + formatNumber(order.amountTotal) + ' FCFA</p>' +
             '<p><strong>📞 Numéro:</strong> +225 ' + (order.phone || '') + '</p>' +
             '<p><strong>📅 Date:</strong> ' + formatDate(order.createdAt) + '</p>' +
-            (order.paymentMethod ? '<p><strong>💳 Mode paiement:</strong> ' + escapeHtml(({ djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' }[order.paymentMethod] || order.paymentMethod)) + '</p>' : '') +
+            (order.paymentMethod ? '<p><strong>💳 Mode paiement:</strong> ' + escapeHtml(({ djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo', wave: 'Wave' }[order.paymentMethod] || order.paymentMethod)) + '</p>' : '') +
             '</div>' +
             proofHtml + actionsHtml + '</div>';
     }).join('');

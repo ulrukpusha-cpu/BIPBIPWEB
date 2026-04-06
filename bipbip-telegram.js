@@ -113,6 +113,7 @@
         profil: 'home',
         actualites: 'home',
         quests: 'home',
+        cartes: 'home',
         admin: 'home'
     };
 
