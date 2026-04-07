@@ -8,3 +8,8 @@ data/
 *.log
 .DS_Store
 .claude/
+
+# Next static export debug dumps
+__next.*.txt
+index.txt
+_not-found/**/*.txt

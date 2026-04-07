@@ -2,7 +2,7 @@
     "name": "Bipbip Recharge CI",
     "short_name": "Bipbip",
     "description": "Rechargez votre crédit mobile MTN, Orange et Moov en quelques clics. Service 24/7 en Côte d'Ivoire.",
-    "start_url": "/?source=pwa",
+    "start_url": "/app?source=pwa",
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#0f172a",

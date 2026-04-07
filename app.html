@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="fr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <!-- Lite mode detection (synchrone : doit tourner avant le premier paint) -->
+<script>
+    (function () {
+        try {
+            var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var save = navigator.connection && navigator.connection.saveData;
+            var mem = navigator.deviceMemory;
+            var cores = navigator.hardwareConcurrency || 0;
+            var smallMobile = window.matchMedia && window.matchMedia('(max-width: 480px)').matches;
+            var coarse = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+            var lite = reduced || save || (mem && mem <= 2) || (cores && cores <= 2);
+            if (!lite && smallMobile && coarse && mem && mem <= 4 && cores && cores <= 4) lite = true;
+            if (lite) document.documentElement.classList.add('bipbip-lite');
+        } catch (e) {}
+    })();
+    </script>
+
+    <!-- ═══ SEO ═══ -->
+    <title>Bipbip Recharge CI — Recharge mobile rapide en Côte d'Ivoire</title>
+    <meta name="description" content="Rechargez votre crédit mobile MTN, Orange et Moov en quelques clics. Paiement sécurisé via Djamo, MTN MoMo ou crypto (TON). Service disponible 24/7 en Côte d'Ivoire.">
+    <meta name="keywords" content="recharge mobile, Côte d'Ivoire, MTN, Orange, Moov, crédit téléphone, Bipbip, Djamo, MoMo, TON, crypto">
+    <meta name="author" content="Bipbip Recharge CI">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://bipbiprecharge.ci/">
+
+    <!-- ═══ Open Graph ═══ -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Bipbip Recharge CI">
+    <meta property="og:title" content="Bipbip Recharge CI — Recharge mobile rapide">
+    <meta property="og:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
+    <meta property="og:url" content="https://bipbiprecharge.ci/">
+    <meta property="og:image" content="https://bipbiprecharge.ci/assets/bipbip_logo1.png">
+    <meta property="og:image:width" content="180">
+    <meta property="og:image:height" content="180">
+    <meta property="og:locale" content="fr_CI">
+
+    <!-- ═══ Twitter Card ═══ -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Bipbip Recharge CI — Recharge mobile rapide">
+    <meta name="twitter:description" content="Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.">
+    <meta name="twitter:image" content="https://bipbiprecharge.ci/assets/bipbip_logo1.png">
+
+    <!-- ═══ PWA & Icônes ═══ -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bipbip">
+    <meta name="application-name" content="Bipbip Recharge">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/bipbip_logo.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/bipbip_logo1.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/bipbip_logo1.png">
+    <link rel="apple-touch-icon" href="/assets/bipbip_logo1.png">
+
+    <!-- ═══ Structured Data (JSON-LD) ═══ -->
+    <script type="application/ld+json">
+    [
+        {
+            "@context": "https://schema.org",
+            "@type": "MobileApplication",
+            "name": "Bipbip Recharge CI",
+            "operatingSystem": "Android, iOS",
+            "applicationCategory": "FinanceApplication",
+            "description": "Rechargez votre crédit mobile MTN, Orange et Moov. Paiement sécurisé via Djamo, MTN MoMo ou crypto.",
+            "url": "https://bipbiprecharge.ci/",
+            "image": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "XOF" },
+            "provider": { "@type": "Organization", "name": "Bipbip Recharge CI", "url": "https://bipbiprecharge.ci/" },
+            "areaServed": { "@type": "Country", "name": "CI" }
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "LocalBusiness",
+            "name": "Bipbip Recharge CI",
+            "description": "Service de recharge de crédit mobile en ligne en Côte d'Ivoire. MTN, Orange et Moov. Paiement via Djamo, MTN MoMo ou crypto TON.",
+            "url": "https://bipbiprecharge.ci/",
+            "logo": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
+            "image": "https://bipbiprecharge.ci/assets/bipbip_logo1.png",
+            "address": {
+                "@type": "PostalAddress",
+                "addressCountry": "CI",
+                "addressLocality": "Abidjan"
+            },
+            "geo": {
+                "@type": "GeoCoordinates",
+                "latitude": "5.3600",
+                "longitude": "-4.0083"
+            },
+            "openingHours": "Mo-Su 00:00-23:59",
+            "priceRange": "500 - 25000 FCFA",
+            "paymentAccepted": "Djamo, MTN MoMo, Crypto TON",
+            "currenciesAccepted": "XOF",
+            "areaServed": { "@type": "Country", "name": "CI" },
+            "sameAs": []
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Bipbip Recharge CI",
+            "url": "https://bipbiprecharge.ci/",
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://bipbiprecharge.ci/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+            }
+        }
+    ]
+    </script>
+
+    <!-- ═══ Preconnect (réduit latence DNS+TLS sur 3G) ═══ -->
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+    <link rel="dns-prefetch" href="https://code.iconify.design">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    <link rel="dns-prefetch" href="https://telegram.org">
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+
+    <!-- ═══ CSS : Google Fonts (swap) ═══ -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- ═══ CSS critique (inline — above the fold) ═══ -->
+    <style>
+        body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0f172a;margin:0;color:#e2e8f0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+        h1,h2,h3,h4,.font-semibold,.font-bold{color:#f1f5f9}
+        p,span,a,button,label,li{color:inherit}
+        .text-white{color:#fff !important}
+        .text-slate-300{color:#cbd5e1 !important}
+        .text-slate-400{color:#94a3b8 !important}
+        .text-slate-500{color:#64748b !important}
+        .text-amber-400{color:#fbbf24 !important}
+        .text-emerald-400{color:#34d399 !important}
+        .text-rose-400{color:#fb7185 !important}
+        .text-indigo-400{color:#818cf8 !important}
+        .text-sky-300{color:#7dd3fc !important}
+        .text-purple-400{color:#c084fc !important}
+        .text-blue-200{color:#bfdbfe !important}
+        .glass-panel{background:rgba(30,41,59,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.15);color:#e2e8f0}
+        @supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){.glass-panel{background:rgba(255,255,255,.08)}}
+        .glass-panel h4,.glass-panel .font-semibold{color:#f1f5f9}
+        .glass-panel p{color:#cbd5e1}
+        nav.fixed{background:rgba(15,23,42,.95) !important;color:#f1f5f9}
+        @supports (backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)){nav.fixed{background:rgba(15,23,42,.8) !important}}
+        .scene-hero-title{color:#fff !important;text-shadow:0 3px 20px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.6) !important;font-weight:700}
+        .scene-hero-subtitle{color:rgba(255,255,255,.92) !important;text-shadow:0 2px 12px rgba(0,0,0,.85) !important}
+        .scene-status-pill{background:rgba(15,23,42,.8) !important;border-color:rgba(255,255,255,.3) !important;color:#bfdbfe}
+        #service-status-text{color:#bfdbfe !important}
+        #bipbip-topbar{background:#1a2536 !important;color:#94a3b8}
+        .sort-btn{color:#94a3b8 !important;background:rgba(30,41,59,.7) !important;border-color:rgba(255,255,255,.18) !important}
+        .sort-btn.active{color:#fff !important;background:rgba(255,255,255,.14) !important}
+        #article-overlay{background:rgba(15,23,42,.98) !important}
+        main{color:#e2e8f0}
+        main h1,main h2,main h3,main h4{color:#f1f5f9 !important}
+        main p{color:#cbd5e1}
+        main a{color:#e2e8f0}
+        main button{color:#e2e8f0}
+        main .text-sm{color:#cbd5e1}
+        main .text-xs{color:#94a3b8}
+        nav.fixed span,nav.fixed a,nav.fixed button{color:inherit}
+        .nav-bottom-btn{color:#94a3b8}
+        .nav-bottom-btn.text-amber-400{color:#fbbf24 !important}
+        .gradient-text{background:linear-gradient(to right,#fff,#cbd5e1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1e293b}::-webkit-scrollbar-thumb{background:#475569;border-radius:3px}::-webkit-scrollbar-thumb:hover{background:#64748b}
+        .led-wrap{overflow:hidden;white-space:nowrap}.led-text{display:inline-block;padding-left:100%;will-change:transform}
+        @keyframes led-scroll{to{transform:translate3d(-100%,0,0)}}
+        @keyframes pub-marquee-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+        .pub-marquee-strip{will-change:transform}
+        #bipbip-desktop-gate{display:none;position:fixed;inset:0;z-index:50000;flex-direction:column;align-items:center;justify-content:flex-start;padding:2rem 1.25rem 2.5rem;overflow-y:auto;background:#0f172a;text-align:center}
+        #bipbip-desktop-gate.bipbip-gate-visible{display:flex}
+        #bipbip-splash{position:fixed;inset:0;z-index:60000;display:flex;align-items:center;justify-content:center;background:#08080D;transition:opacity .45s ease,visibility .45s ease}
+        #bipbip-splash.bipbip-splash-hidden{opacity:0;visibility:hidden;pointer-events:none}
+        #bipbip-splash video{width:100%;height:100%;object-fit:contain;background:#08080D}
+        #bipbip-splash-fallback{display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;text-align:center}
+        #bipbip-splash.bipbip-splash-fallback-only video{display:none}
+        #bipbip-splash.bipbip-splash-fallback-only #bipbip-splash-fallback{display:flex}
+        #bipbip-splash-fallback img{width:min(200px,50vw);height:auto;object-fit:contain;border-radius:1rem}
+        #bipbip-splash-skip{position:absolute;bottom:max(1.25rem,env(safe-area-inset-bottom));right:max(1rem,env(safe-area-inset-right));z-index:2;padding:.5rem .85rem;font-size:.75rem;font-weight:600;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:.75rem;cursor:pointer}
+        #bipbip-splash-skip:hover{color:#fff;background:rgba(255,255,255,.12)}
+        html.bipbip-splash-pending body>*:not(#bipbip-splash){visibility:hidden}
+        html.bipbip-splash-pending{background:#08080D}
+        @media(prefers-reduced-motion:reduce){#bipbip-splash{transition:none}}
+        .screen:not(.active){content-visibility:auto;contain-intrinsic-size:0 500px}
+        #bipbip-topbar{will-change:auto;-webkit-font-smoothing:antialiased;box-sizing:border-box}
+    </style>
+
+    <!-- ═══ Tailwind CDN (requis) ═══ -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- ═══ Telegram WebApp SDK (nécessaire au boot pour le contexte TG) ═══ -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- ═══ Iconify (defer : ne bloque plus le first paint) ═══ -->
+    <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+
+    <!-- ═══ CSS non-critique (async via media trick) ═══ -->
+    <link rel="stylesheet" href="styles.css?v=20260330a" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260330a" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="styles.css?v=20260330a"><link rel="stylesheet" href="bipbip-dynamic-scene.css?v=20260330a"></noscript>
+
+    <!-- TON Connect : lazy-load (chargé par app.js uniquement quand le panel paiement s'ouvre) -->
+</head>
+<body class="antialiased selection:bg-indigo-500/30 selection:text-indigo-200 text-slate-300" style="background-color: #0f172a;">
+
+    <!-- Skip to content (accessibilité) -->
+    <a href="#screen-home" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[99999] focus:bg-indigo-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold" id="skip-to-content">Aller au contenu principal</a>
+
+    <!-- Splash plein écran (mobile / tablette) -->
+    <div id="bipbip-splash" class="bipbip-splash-hidden" aria-hidden="true" hidden>
+        <video id="bipbip-splash-video" autoplay muted playsinline preload="auto" poster="assets/bipbip_logo1.png">
+            <source src="bipbip-logo-anim.mp4" type="video/mp4">
+        </video>
+        <div id="bipbip-splash-fallback" aria-hidden="true">
+            <img src="assets/bipbip_logo1.png" alt="" width="200" height="200" decoding="async">
+            <span class="text-sm text-white/60 font-medium">Chargement…</span>
+        </div>
+        <button type="button" id="bipbip-splash-skip" class="hidden" aria-label="Passer l'animation de démarrage">Passer</button>
+    </div>
+    <script>
+    (function () {
+        function qs(name) {
+            try { return new URLSearchParams(window.location.search || '').get(name) === '1'; } catch (e) { return false; }
+        }
+        if (qs('nosplash')) return;
+        if (!qs('splash')) {
+            try { if (window.sessionStorage.getItem('bipbip_splash_done') === '1') return; } catch (e) {}
+        }
+        var qForce = '';
+        try { qForce = new URLSearchParams(window.location.search || '').get('force_mobile'); } catch (e) {}
+        if (qForce === '1') {
+            try { window.sessionStorage.setItem('bipbip_force_mobile', '1'); } catch (e) {}
+        }
+        var tw = window.Telegram && window.Telegram.WebApp;
+        var inTg = false;
+        try {
+            inTg = !!(tw && (String(tw.initData || '').trim() || (tw.initDataUnsafe && tw.initDataUnsafe.user)));
+        } catch (e2) {}
+        var ua = navigator.userAgent || '';
+        var mobile = inTg || /webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || /iPad|Tablet|Kindle|Silk|PlayBook/i.test(ua) || /Android/i.test(ua);
+        try {
+            if (!mobile && navigator.maxTouchPoints > 1 && /MacIntel|Macintosh/i.test(navigator.platform || '')) mobile = true;
+        } catch (e3) {}
+        var iw = window.innerWidth || 0;
+        var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
+        if (!mobile && Math.min(iw, sw) > 0 && Math.min(iw, sw) <= 900) mobile = true;
+        try {
+            if (window.sessionStorage.getItem('bipbip_force_mobile') === '1') mobile = true;
+        } catch (e5) {}
+        if (!mobile) return;
+        if (document.documentElement.classList.contains('bipbip-lite')) return;
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        } catch (e4) {}
+        document.documentElement.classList.add('bipbip-splash-pending');
+        var sp = document.getElementById('bipbip-splash');
+        if (sp) {
+            sp.removeAttribute('hidden');
+            sp.classList.remove('bipbip-splash-hidden');
+            sp.setAttribute('aria-hidden', 'false');
+        }
+    })();
+    </script>
+
+    <!-- PC / grand écran : QR Telegram + lien site (app réservée mobile & tablette) -->
+    <div id="bipbip-desktop-gate" class="text-slate-300" role="dialog" aria-labelledby="bipbip-gate-title" aria-modal="true">
+        <img src="assets/bipbip_logo1.png" alt="Logo Bipbip Recharge CI" class="h-16 w-auto object-contain rounded-xl mb-4 mx-auto" width="64" height="64" decoding="async">
+        <h1 id="bipbip-gate-title" class="text-xl font-bold text-white mb-2 max-w-md mx-auto">Bipbip Recharge CI</h1>
+        <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed mb-6">Cette application est utilisable sur <strong class="text-slate-300">smartphone</strong> et <strong class="text-slate-300">tablette</strong> (navigateur ou Telegram). Sur ordinateur, scannez un QR avec votre téléphone ou passez votre navigateur en <strong class="text-slate-300">mode mobile</strong>.</p>
+        <div class="flex flex-col sm:flex-row gap-8 items-center justify-center w-full max-w-2xl mx-auto mb-8">
+            <div class="flex flex-col items-center">
+                <p class="text-xs font-semibold text-sky-300 uppercase tracking-wide mb-2">Ouvrir dans Telegram</p>
+                <img id="bipbip-gate-qr-telegram" src="" alt="QR code Telegram" width="200" height="200" loading="lazy" decoding="async" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <p id="bipbip-gate-qr-telegram-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
+                <a id="bipbip-gate-tg-link" href="https://telegram.org" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-sky-500 text-white hover:bg-sky-400 transition-colors text-sm">Ouvrir le bot Telegram</a>
+            </div>
+            <div class="flex flex-col items-center">
+                <p class="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-2">Ce site sur mobile</p>
+                <img id="bipbip-gate-qr-site" src="" alt="QR code du site" width="200" height="200" loading="lazy" decoding="async" class="rounded-xl bg-white p-2 shadow-lg shadow-black/30 hidden" />
+                <p id="bipbip-gate-qr-site-loading" class="text-xs text-slate-500 py-16">Chargement…</p>
+                <button type="button" id="bipbip-gate-copy-url" class="mt-3 px-4 py-2 rounded-xl text-sm font-medium border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">Copier le lien du site</button>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-4 max-w-lg mx-auto border border-white/15 text-left text-xs text-slate-400 leading-relaxed">
+            <p class="font-semibold text-slate-300 mb-2">Mode mobile dans le navigateur (PC)</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong class="text-slate-400">Chrome / Edge</strong> : <kbd class="px-1 py-0.5 rounded bg-white/10">F12</kbd> puis <kbd class="px-1 py-0.5 rounded bg-white/10">Ctrl</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">Shift</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">M</kbd>, choisir un appareil, puis actualiser la page.</li>
+                <li><strong class="text-slate-400">Firefox</strong> : <kbd class="px-1 py-0.5 rounded bg-white/10">Ctrl</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">Shift</kbd>+<kbd class="px-1 py-0.5 rounded bg-white/10">M</kbd> (mode responsive).</li>
+                <li><strong class="text-slate-400">Safari (Mac)</strong> : menu Développement → « Entrer dans le mode Responsive Design » (activer le menu Développement dans les réglages avancés).</li>
+            </ul>
+            <p class="mt-3 text-slate-500">Astuce développeur : ajoutez <code class="text-sky-400/90 bg-white/5 px-1 rounded">?force_mobile=1</code> à l’URL une fois pour débloquer cette session sur PC (tests uniquement).</p>
+        </div>
+    </div>
+
+    <!-- Background Decoration (désactivé en mode bas de gamme : gros flous GPU) -->
+    <div id="page-ambient-blur" class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0" aria-hidden="true">
+        <div class="absolute top-[-10%] left-[20%] w-[500px] h-[500px] rounded-full blur-[120px] bg-sky-400/25"></div>
+        <div class="absolute bottom-[-10%] right-[20%] w-[400px] h-[400px] rounded-full blur-[100px] bg-indigo-400/20"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] bg-cyan-300/10"></div>
+    </div>
+
+    <!-- Top Announcement Bar -->
+    <div id="bipbip-topbar" class="fixed w-full z-50 top-0" style="height:26px;background:#1e2a3a;border-bottom:1px solid rgba(255,255,255,.08);">
+        <div class="max-w-lg mx-auto px-4 h-full flex items-center justify-center">
+            <div class="flex items-center gap-1.5">
+                <span class="relative flex h-1.5 w-1.5 flex-shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400"></span>
+                    <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span id="topbar-text" class="text-[10px] font-medium text-slate-400">Service disponible 24/7</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 border-b backdrop-blur-md border-white/10 bg-slate-900/80" style="top:26px;">
+        <div class="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+            <a href="#" onclick="navigateTo('home'); return false;" class="flex items-center gap-2" id="app-logo-admin-trigger">
+                <picture><source srcset="assets/logo-minia.webp" type="image/webp"><img src="assets/logo-minia.png" alt="Bipbip Recharge CI" class="h-8 w-auto object-contain" width="80" height="40" decoding="async"></picture>
+            </a>
+            <div class="flex items-center gap-2">
+                <div class="flex flex-col items-end">
+                    <span id="header-user-name" class="text-xs font-medium text-white leading-tight">—</span>
+                    <span class="text-xs text-amber-400 whitespace-nowrap">Points: <span id="header-points">0</span></span>
+                </div>
+                <button type="button" onclick="navigateTo('profil')" class="p-0.5 rounded-full transition-colors text-white hover:bg-white/10 flex-shrink-0" title="Profil">
+                    <div id="header-photo" class="w-10 h-10 rounded-full bg-white/10 border-2 border-amber-500/40 flex items-center justify-center overflow-hidden text-xl text-slate-400">👤</div>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="relative z-10 pb-28 px-4 max-w-lg mx-auto" style="padding-top:calc(3.5rem + 26px + 1rem);">
+        
+        <!-- Home Screen -->
+        <div id="screen-home" class="screen active">
+            <!-- Hero Scene Dynamique -->
+            <div class="mb-6 relative hero-scene-shell">
+                <div class="hero-status-row">
+                    <div class="scene-status-pill inline-flex items-start gap-2 px-3 py-1.5 rounded-full border border-white/20 bg-black/30 text-xs font-medium text-blue-200 pointer-events-auto" style="backdrop-filter:blur(4px);">
+                        <span class="relative flex h-2 w-2 flex-shrink-0 mt-1">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-blue-400"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                        </span>
+                        <span id="service-status-text">Service disponible 24/7</span>
+                    </div>
+                </div>
+                <div class="hero-scene-stage relative">
+                    <div id="bipbip-scene"></div>
+                    <!-- Overlay content on scene -->
+                    <div class="scene-overlay absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
+                        <div class="scene-main-content">
+                            <img src="assets/bipbip_logo1.png" alt="Bipbip" class="w-24 h-24 object-contain mb-1" width="96" height="96" decoding="async" style="filter:drop-shadow(0 6px 18px rgba(0,0,0,0.6));background:transparent !important;" onerror="this.style.display='none';">
+                            <h1 class="scene-hero-title font-bold tracking-tight text-white" style="color:#fff;text-shadow:0 3px 20px rgba(0,0,0,.9),0 0 50px rgba(0,0,0,.6);">Bienvenue !</h1>
+                            <p class="scene-hero-subtitle" style="color:rgba(255,255,255,.92);text-shadow:0 2px 12px rgba(0,0,0,.85);">Rechargez votre crédit mobile en quelques clics</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="navigateTo('buy')" class="glass-panel rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:bg-white/15 border-white/15">
+                    <div class="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                        <iconify-icon icon="solar:card-linear" width="24"></iconify-icon>
+                    </div>
+                    <span class="font-semibold text-white text-sm">Acheter</span>
+                </button>
+                <button type="button" onclick="navigateTo('prices')" class="glass-panel rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:bg-white/15 border-white/15">
+                    <div class="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <iconify-icon icon="solar:wallet-money-linear" width="24"></iconify-icon>
+                    </div>
+                    <span class="font-semibold text-white text-sm">Tarifs</span>
+                </button>
+                <button type="button" onclick="navigateTo('status')" class="glass-panel rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:bg-white/15 border-white/15">
+                    <div class="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400">
+                        <iconify-icon icon="solar:chart-2-linear" width="24"></iconify-icon>
+                    </div>
+                    <span class="font-semibold text-white text-sm">Mes commandes</span>
+                </button>
+                <button type="button" onclick="navigateTo('help')" class="glass-panel rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:bg-white/15 border-white/15">
+                    <div class="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                        <iconify-icon icon="solar:question-circle-linear" width="24"></iconify-icon>
+                    </div>
+                    <span class="font-semibold text-white text-sm">Aide</span>
+                </button>
+            </div>
+            <!-- Bandeau LED (message défilant) -->
+            <div class="mt-6 rounded-xl overflow-hidden border border-amber-500/30 bg-amber-500/10">
+                <div class="led-wrap h-10 flex items-center">
+                    <div id="led-text" class="led-text text-sm text-amber-300 font-medium">Bienvenue sur Bipbip Recharge — Rechargez en un clic</div>
+                </div>
+            </div>
+            <!-- Bannières pub (2 emplacements, défilement type bandeau LED) -->
+            <div id="home-pub-banners-wrap" class="mt-4 space-y-3 hidden" aria-label="Publicités">
+                <div id="home-pub-slot-1" class="hidden"></div>
+                <div id="home-pub-slot-2" class="hidden"></div>
+            </div>
+        </div>
+
+        <!-- Prices Screen -->
+        <div id="screen-prices" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Tarifs</h2>
+            </div>
+            <div class="space-y-3 mb-4">
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">500 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 50 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 550 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">1 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 100 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 1 100 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">2 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 200 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 2 200 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">5 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 5 500 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">10 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 1 000 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 11 000 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">15 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 1 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 16 500 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">20 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 2 000 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 22 000 FCFA</span>
+                </div>
+                <div class="glass-panel rounded-xl p-4 flex justify-between items-center border-l-4 border-indigo-500">
+                    <span class="font-semibold text-white">25 000 FCFA</span>
+                    <span class="text-slate-400 text-sm">+ 2 500 FCFA frais</span>
+                    <span class="font-semibold text-emerald-400">= 27 500 FCFA</span>
+                </div>
+            </div>
+            <div class="glass-panel rounded-xl p-4 flex items-center gap-3 text-amber-400/90">
+                <iconify-icon icon="solar:wallet-money-linear" width="24"></iconify-icon>
+                <span class="text-sm font-medium">Frais de service : 10%</span>
+            </div>
+        </div>
+
+        <!-- Buy - Operator Selection -->
+        <div id="screen-buy" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Choisir l'opérateur</h2>
+            </div>
+            <div class="space-y-3">
+                <button type="button" data-operator="MTN" class="operator-btn mtn w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                    <span class="operator-badge mtn-badge px-4 py-2 rounded-lg font-bold text-sm bg-amber-400/20 text-amber-400 border border-amber-400/30">MTN</span>
+                    <div class="operator-info flex-1">
+                        <span class="operator-name block font-semibold text-white">MTN Mobile Money</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 05, 06</span>
+                    </div>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
+                </button>
+                <button type="button" data-operator="Orange" class="operator-btn orange w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                    <span class="operator-badge orange-badge px-4 py-2 rounded-lg font-bold text-sm bg-orange-500/20 text-orange-400 border border-orange-500/30">Orange</span>
+                    <div class="operator-info flex-1">
+                        <span class="operator-name block font-semibold text-white">Orange Money</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 07, 08, 09</span>
+                    </div>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
+                </button>
+                <button type="button" data-operator="Moov" class="operator-btn moov w-full glass-panel rounded-xl p-4 flex items-center gap-4 transition-all hover:bg-white/15 border border-white/15 text-left cursor-pointer">
+                    <span class="operator-badge moov-badge px-4 py-2 rounded-lg font-bold text-sm bg-blue-500/20 text-blue-400 border border-blue-500/30">Moov</span>
+                    <div class="operator-info flex-1">
+                        <span class="operator-name block font-semibold text-white">Moov Africa</span>
+                        <span class="operator-prefix text-xs text-slate-400">Préfixes: 01, 02</span>
+                    </div>
+                    <span class="text-slate-400 flex-shrink-0" aria-hidden="true">→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Buy - Amount Selection -->
+        <div id="screen-amount" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('buy')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Choisir le montant</h2>
+            </div>
+            <div class="selected-operator glass-panel rounded-xl p-4 mb-6 flex items-center gap-3 border border-white/15" id="selected-operator-display"></div>
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" data-amount="500" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">500</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="1000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">1 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="2000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">2 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="5000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">5 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="10000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">10 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="15000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">15 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="20000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">20 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+                <button type="button" data-amount="25000" class="amount-btn glass-panel rounded-xl p-5 flex flex-col items-center gap-1 transition-all hover:bg-white/10 border border-white/15 cursor-pointer">
+                    <span class="amount-value text-xl font-bold text-white">25 000</span>
+                    <span class="amount-currency text-xs text-slate-400 uppercase">FCFA</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Buy - Phone Input -->
+        <div id="screen-phone" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('amount')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Numéro à recharger</h2>
+            </div>
+            <button type="button" class="text-sm text-sky-400 hover:text-sky-300 underline underline-offset-2 mb-3 w-full text-left pl-0.5" onclick="navigateTo('buy')">← Changer d’opérateur</button>
+            <div class="order-summary glass-panel rounded-xl p-4 mb-6 border border-white/15" id="order-summary-phone"></div>
+            <div class="phone-input-container mb-6">
+                <div class="input-group flex rounded-xl border border-white/15 bg-slate-800/60 overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                    <span class="input-prefix px-4 py-3 bg-indigo-500/20 text-indigo-400 font-semibold text-sm">+225</span>
+                    <input type="tel" id="phone-input" placeholder="XX XX XX XX XX" maxlength="10" oninput="formatPhoneInput(this)" class="flex-1 py-3 px-4 bg-transparent text-white placeholder-slate-500 outline-none font-mono text-lg">
+                </div>
+                <p class="input-hint mt-2 text-sm text-slate-400 pl-1" id="phone-hint">Entrez un numéro valide</p>
+            </div>
+            <button type="button" id="btn-continue-phone" onclick="validatePhone()" disabled class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <span>Continuer</span>
+                <iconify-icon icon="solar:arrow-right-linear" width="18"></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Buy - Confirmation -->
+        <div id="screen-confirm" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('phone')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Confirmation</h2>
+            </div>
+            <div class="confirmation-card glass-panel rounded-xl p-6 mb-6 border border-white/15" id="confirmation-details"></div>
+            <button type="button" onclick="confirmOrder()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors">
+                <span>Confirmer la commande</span>
+                <iconify-icon icon="solar:check-circle-linear" width="18"></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Paiement MTN MoMo (demande envoyée, en attente acceptation) -->
+        <div id="screen-momo" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Paiement MTN MoMo</h2>
+            </div>
+            <div class="order-id-display glass-panel rounded-xl py-4 text-center font-bold text-lg text-white mb-4 border border-amber-500/30 bg-amber-500/10" id="momo-order-id"></div>
+            <div class="glass-panel rounded-xl p-5 mb-4 border border-white/15">
+                <div class="flex items-center justify-center gap-2 text-amber-400 mb-3">
+                    <iconify-icon icon="solar:smartphone-linear" width="28"></iconify-icon>
+                    <span class="font-semibold">Demande envoyée sur votre téléphone</span>
+                </div>
+                <p class="text-sm text-slate-400 text-center mb-4" id="momo-phone-display">Acceptez le paiement sur votre MoMo pour confirmer la recharge.</p>
+                <p class="text-xs text-slate-500 text-center mb-2">Référence paiement</p>
+                <p class="text-center font-mono text-sm text-white break-all" id="momo-ref"></p>
+            </div>
+            <button type="button" id="btn-momo-check" onclick="checkMomoStatus()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-amber-500 text-black hover:bg-amber-400 transition-colors mb-3">
+                <iconify-icon icon="solar:refresh-linear" width="18"></iconify-icon>
+                <span>Vérifier le statut</span>
+            </button>
+            <div id="momo-status-message" class="hidden glass-panel rounded-xl p-4 mb-4 border border-white/15 text-center"></div>
+            <button type="button" onclick="navigateTo('home')" class="w-full py-3 rounded-xl font-medium border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">
+                Retour à l'accueil
+            </button>
+        </div>
+
+        <!-- Choix du mode de paiement (après création commande ou promo) -->
+        <div id="screen-payment-method" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Mode de paiement</h2>
+            </div>
+            <div class="order-id-display glass-panel rounded-xl py-4 text-center font-bold text-lg text-white mb-4 border border-amber-500/30 bg-amber-500/10" id="payment-method-order-id"></div>
+            <p id="payment-method-hint" class="text-slate-400 text-sm text-center mb-4">Choisissez comment payer, puis envoyez une capture à l’étape suivante.</p>
+
+            <div class="flex rounded-2xl p-1 gap-1 mb-4 bg-slate-800/80 border border-white/10" role="tablist">
+                <button type="button" id="pay-tab-djamo" onclick="setPaymentMethodTab('djamo')" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors bg-white/15 text-white">Djamo</button>
+                <button type="button" id="pay-tab-momo" onclick="setPaymentMethodTab('momo')" class="hidden flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors text-slate-400">MoMo</button>
+                <button type="button" id="pay-tab-ton" onclick="setPaymentMethodTab('ton')" class="hidden flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors text-slate-400">TON</button>
+            </div>
+
+            <div id="pay-panel-djamo" class="space-y-3 mb-4">
+                <div class="glass-panel rounded-xl p-5 border border-emerald-500/30 bg-emerald-500/10">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-11 h-11 rounded-xl bg-emerald-500/25 flex items-center justify-center text-emerald-300 flex-shrink-0" aria-hidden="true">
+                            <iconify-icon icon="solar:card-linear" width="26"></iconify-icon>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white">Djamo</h3>
+                            <p class="text-xs text-slate-400">Paiement FCFA — capture d’écran à l’étape suivante</p>
+                        </div>
+                    </div>
+                    <a href="https://pay.djamo.com/pkbyg" target="_blank" rel="noopener" id="djamo-pay-link" class="inline-block w-full text-center px-4 py-3 rounded-xl font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-colors mb-2">Ouvrir Djamo Pay</a>
+                    <p class="text-[11px] text-slate-500 text-center break-all" id="djamo-pay-url-text">pay.djamo.com/pkbyg</p>
+                    <button type="button" onclick="chooseDjamoPayment()" class="w-full py-3 mt-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-emerald-800 text-white hover:bg-emerald-700 active:bg-emerald-900 transition-colors border border-emerald-600/40 shadow-sm">
+                        <iconify-icon icon="solar:arrow-right-linear" width="18" style="color:#fff"></iconify-icon>
+                        <span>Continuer vers la preuve</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="pay-panel-momo" class="hidden mb-4">
+                <div class="glass-panel rounded-xl p-5 border border-amber-500/40 bg-amber-500/10">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">📲</span>
+                        <div>
+                            <h3 class="font-bold text-white">MTN MoMo</h3>
+                            <p class="text-xs text-slate-400">Demande de paiement sur le numéro de la commande</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="startMomoFromPaymentScreen()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-amber-500 text-black hover:bg-amber-400 transition-colors">
+                        <iconify-icon icon="solar:smartphone-linear" width="20"></iconify-icon>
+                        <span>Lancer le paiement MoMo</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="pay-panel-ton" class="hidden mb-4">
+                <div class="glass-panel rounded-xl p-5 border-2 border-sky-500/35 bg-sky-500/5">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-11 h-11 rounded-xl bg-sky-500/20 flex items-center justify-center text-xl" aria-hidden="true">◆</div>
+                        <div>
+                            <h3 class="font-bold text-white">Paiement en TON</h3>
+                            <p class="text-xs text-slate-400">Cours en temps réel — connexion wallet et envoi du montant en une étape</p>
+                        </div>
+                    </div>
+                    <p id="ton-rate-loading" class="text-sm text-slate-400 mb-3 hidden">Chargement du cours TON…</p>
+                    <p id="ton-rate-error" class="text-sm text-amber-400 mb-3 hidden"></p>
+                    <div id="ton-rate-box" class="hidden mb-4 p-3 rounded-xl bg-slate-900/60 border border-white/10">
+                        <p class="text-sm text-slate-300">Montant à envoyer</p>
+                        <p id="ton-rate-amount" class="text-lg font-bold text-sky-300 mt-1">—</p>
+                        <p id="ton-rate-usd" class="text-[11px] text-slate-500 mt-1">—</p>
+                    </div>
+                    <button type="button" id="btn-ton-connect-wallet" onclick="openTelegramWalletPay()" class="w-full py-3 rounded-xl font-semibold border border-sky-500/50 text-sky-300 hover:bg-sky-500/10 transition-colors mb-2">Connecter le wallet</button>
+                    <p id="ton-wallet-connected-line" class="text-sm text-emerald-400 mb-3 hidden text-center"></p>
+                    <button type="button" id="btn-bipbip-ton-pay" onclick="bipbipTonWalletPay()" disabled class="w-full py-3.5 rounded-xl font-bold text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-95 transition-opacity disabled:opacity-45 disabled:cursor-not-allowed shadow-lg shadow-sky-500/20">
+                        Connecte ton wallet pour payer
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-4 mb-4 border border-violet-500/35 bg-violet-500/10">
+                <button type="button" id="btn-wave-toggle" onclick="toggleWavePayBlock()" class="w-full flex items-center justify-between gap-2 text-left py-0.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50" aria-expanded="false" aria-controls="wave-pay-block">
+                    <span class="flex items-center gap-2 font-bold text-white">
+                        <span class="w-9 h-9 rounded-lg bg-violet-500/25 flex items-center justify-center text-violet-200 flex-shrink-0" aria-hidden="true">
+                            <iconify-icon icon="solar:qr-code-linear" width="22"></iconify-icon>
+                        </span>
+                        Wave
+                    </span>
+                    <iconify-icon id="icon-wave-chevron" icon="solar:alt-arrow-down-linear" width="22" class="text-slate-400 transition-transform flex-shrink-0" aria-hidden="true"></iconify-icon>
+                </button>
+                <div id="wave-pay-block" class="hidden mt-4 pt-4 border-t border-white/10">
+                    <p class="text-center text-lg font-semibold text-white mb-1">Scanne-moi</p>
+                    <p class="text-xs text-slate-400 text-center mb-4">Scannez le QR Wave Business, payez le montant de la commande, puis continuez pour envoyer une capture d’écran.</p>
+                    <div class="flex justify-center mb-4">
+                        <img src="assets/wave-business-qr.png" alt="QR Code Wave Business" width="240" height="240" decoding="async" class="rounded-xl bg-white p-3 max-w-[min(260px,88vw)] w-full h-auto object-contain">
+                    </div>
+                    <button type="button" onclick="chooseWavePayment()" class="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 bg-violet-600 text-white hover:bg-violet-500 transition-colors border border-violet-500/50">
+                        <iconify-icon icon="solar:check-circle-linear" width="18"></iconify-icon>
+                        <span>Continuer vers la preuve</span>
+                    </button>
+                </div>
+            </div>
+
+            <p id="payment-manual-crypto-wrap" class="text-center text-xs text-slate-500 mb-2 hidden">
+                <button type="button" onclick="goToCryptoPayment('usdt')" class="text-sky-400 hover:underline font-medium">USDT / USDC — envoi manuel vers l’adresse</button>
+            </p>
+        </div>
+
+        <!-- Détail paiement crypto (adresse + QR + TON Connect) -->
+        <div id="screen-crypto-pay" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('payment-method')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Paiement crypto</h2>
+            </div>
+            <div class="order-id-display glass-panel rounded-xl py-3 px-4 text-center font-bold text-base text-white mb-4 border border-sky-500/30 bg-sky-500/10" id="crypto-pay-order-ref"></div>
+            <div class="glass-panel rounded-xl p-5 mb-4 border border-white/15">
+                <p class="text-xs text-slate-500">Actif indiqué</p>
+                <p id="crypto-pay-asset-label" class="text-lg font-bold text-white">USDT</p>
+                <p class="text-xs text-slate-500 mt-2">Réseau (config serveur)</p>
+                <p id="crypto-pay-network" class="text-sm text-slate-300">TON</p>
+                <p class="text-xs text-amber-400/90 mt-4">Référence / mémo : indiquez le n° de commande si le wallet le permet.</p>
+                <p id="crypto-pay-memo" class="font-mono text-sm text-white mt-1">#</p>
+                <p class="text-xs text-slate-500 mt-4">Adresse de dépôt</p>
+                <p id="crypto-pay-address" class="font-mono text-xs text-emerald-400 break-all mt-1"></p>
+                <div class="flex justify-center my-4">
+                    <img id="crypto-pay-qr" src="" alt="QR adresse" width="220" height="220" class="rounded-lg bg-white p-2 max-w-full hidden" />
+                </div>
+                <p id="crypto-pay-estimate" class="text-sm text-slate-400 text-center hidden"></p>
+            </div>
+            <p class="text-xs text-slate-500 mb-3 text-center">Pour payer en TON en un clic, utilise l’onglet <strong class="text-sky-300">TON</strong> à l’étape précédente.</p>
+            <button type="button" onclick="continueCryptoToProof()" class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors">
+                <span>Continuer vers la preuve</span>
+                <iconify-icon icon="solar:arrow-right-linear" width="18"></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Proof Upload -->
+        <div id="screen-proof" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('payment-method')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Preuve de paiement</h2>
+            </div>
+            <div class="order-id-display glass-panel rounded-xl py-4 text-center font-bold text-lg text-white mb-6 border border-indigo-500/30 bg-indigo-500/10" id="order-id-display"></div>
+            <div class="payment-instructions glass-panel rounded-xl p-5 mb-6 border border-white/15">
+                <h3 class="font-semibold text-white mb-4 flex items-center gap-2">
+                    <iconify-icon icon="solar:wallet-money-linear" width="20"></iconify-icon>
+                    Effectuez votre paiement
+                </h3>
+                <p id="proof-selected-method" class="text-emerald-400 text-sm mb-3">Paiement via Djamo</p>
+                <div id="proof-instructions-body" class="text-sm text-slate-400 space-y-2 mb-2"></div>
+            </div>
+            <div class="upload-container mb-6">
+                <div class="upload-area border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer transition-all hover:border-indigo-500/50 hover:bg-white/5" id="upload-area" onclick="document.getElementById('proof-input').click()">
+                    <div class="upload-icon text-5xl mb-3">📷</div>
+                    <p class="text-white font-medium">Cliquez pour ajouter une capture d'écran</p>
+                    <p class="upload-hint text-sm text-slate-400 mt-1">PNG, JPG (max 5MB)</p>
+                </div>
+                <input type="file" id="proof-input" accept="image/*" onchange="handleProofUpload(event)" hidden>
+                <div class="preview-container rounded-xl overflow-hidden mt-3 relative hidden" id="preview-container">
+                    <img id="proof-preview" src="" alt="Aperçu" class="w-full max-h-64 object-cover">
+                    <button type="button" class="remove-preview absolute top-2 right-2 w-9 h-9 rounded-full bg-red-500 text-white flex items-center justify-center text-lg hover:bg-red-600 transition-colors" onclick="removePreview()">✕</button>
+                </div>
+            </div>
+            <button type="button" id="btn-send-proof" onclick="sendProof()" disabled class="btn-primary w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-white text-black hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <span>Envoyer la preuve</span>
+                <iconify-icon icon="solar:upload-linear" width="18"></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="screen-success" class="screen">
+            <div class="success-container text-center py-8">
+                <div class="success-icon w-24 h-24 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center text-5xl text-emerald-400 mb-6">✅</div>
+                <h2 class="text-2xl font-semibold text-white mb-2">Preuve envoyée !</h2>
+                <p class="text-slate-400 mb-6">Votre commande est en cours de traitement</p>
+                <div class="order-status-info glass-panel rounded-xl p-5 mb-6 text-left border border-white/15" id="success-order-info"></div>
+                <button type="button" onclick="navigateTo('home')" class="btn-primary w-full py-3.5 rounded-xl font-semibold bg-white text-black hover:bg-gray-200 transition-colors">
+                    Retour à l'accueil
+                </button>
+            </div>
+        </div>
+
+        <!-- Status / Orders Screen -->
+        <div id="screen-status" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Mes commandes</h2>
+            </div>
+            <div class="orders-list space-y-3" id="orders-list">
+                <div class="empty-state glass-panel rounded-xl p-12 text-center">
+                    <span class="empty-icon block text-6xl mb-4 opacity-50">📭</span>
+                    <p class="text-slate-400">Aucune commande pour le moment</p>
+                </div>
+            </div>
+            <p class="text-center mt-4">
+                <button type="button" onclick="clearLocalOrders()" class="text-sm text-slate-500 hover:text-slate-400 underline">Vider la liste locale (libérer l’espace)</button>
+            </p>
+        </div>
+
+        <!-- Profil (photo, points totale, convertir en BBR, annonces LED) -->
+        <div id="screen-profil" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Profil</h2>
+            </div>
+            <div class="text-center mb-6">
+                <div id="profil-photo" class="w-24 h-24 mx-auto rounded-full bg-white/10 border-2 border-amber-500/40 flex items-center justify-center text-4xl text-slate-400 overflow-hidden">👤</div>
+                <p id="profil-user-name" class="text-sm font-medium text-white mt-2">—</p>
+                <p id="profil-telegram-hint" class="text-xs text-slate-500 mt-0.5">Connecté avec Telegram</p>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-4 border border-white/15 text-center">
+                <p class="text-slate-400 text-sm">Points totale</p>
+                <p class="text-2xl font-bold text-amber-400" id="profil-points-totale">0</p>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-4 border border-sky-500/20 bg-sky-500/5">
+                <h3 class="font-semibold text-white mb-2 flex items-center gap-2">🌤️ Ville pour la météo</h3>
+                <p class="text-xs text-slate-400 mb-3">Choisis ta ville pour la météo affichée sur l’accueil.</p>
+                <select id="profil-weather-city" class="w-full px-3 py-2 rounded-lg bg-slate-800/60 border border-white/15 text-white text-sm outline-none focus:border-sky-500/60">
+                    <option value="">Par défaut (Abidjan)</option>
+                    <option value="Abidjan">Abidjan</option>
+                    <option value="Bouake">Bouaké</option>
+                    <option value="Yamoussoukro">Yamoussoukro</option>
+                    <option value="Korhogo">Korhogo</option>
+                    <option value="San-Pedro">San Pedro</option>
+                    <option value="Man">Man</option>
+                    <option value="Gagnoa">Gagnoa</option>
+                    <option value="Daloa">Daloa</option>
+                    <option value="Abengourou">Abengourou</option>
+                </select>
+            </div>
+            <div id="profil-referral-section" class="glass-panel rounded-xl p-4 mb-4 border border-emerald-500/20 bg-emerald-500/5">
+                <h3 class="font-semibold text-white mb-1 flex items-center gap-2">👥 Inviter des amis</h3>
+                <p class="text-slate-400 text-sm mb-3">Partage ton lien et gagne <strong class="text-amber-400">20 points</strong> par ami inscrit.</p>
+                <div class="flex gap-2">
+                    <input type="text" id="profil-referral-link" readonly class="flex-1 px-3 py-2 rounded-lg bg-slate-800/60 border border-white/15 text-white text-sm font-mono truncate" value="">
+                    <button type="button" id="btn-copy-referral" class="px-4 py-2 rounded-lg font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors cursor-pointer whitespace-nowrap">Copier</button>
+                </div>
+                <button type="button" id="btn-share-referral" class="mt-3 w-full py-2.5 rounded-xl font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors cursor-pointer flex items-center justify-center gap-2">
+                    <iconify-icon icon="solar:share-linear" width="18"></iconify-icon>
+                    Partager le lien
+                </button>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-4 border border-white/15">
+                <h3 class="font-semibold text-white mb-2">Lien chaîne YouTube, compte X ou Telegram</h3>
+                <p class="text-xs text-slate-400 mb-2">Ajoutez votre lien pour recevoir des likes et vues. Choisissez une formule (150 F à 500 F).</p>
+                <input type="url" id="profil-social-link" placeholder="https://youtube.com/... ou https://x.com/... ou https://t.me/..." class="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-white/15 text-white placeholder-slate-500 outline-none focus:border-amber-500/50 mb-3">
+                <label class="block text-sm text-slate-400 mb-2">Formule (durée / tarif)</label>
+                <select id="profil-promo-formule" class="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-white/15 text-white outline-none focus:border-amber-500/50 mb-3">
+                    <option value="150" data-days="4">4 jours — 150 F</option>
+                    <option value="250" data-days="5">5 jours — 250 F</option>
+                    <option value="350" data-days="6">6 jours — 350 F</option>
+                    <option value="500" data-days="7">1 semaine — 500 F</option>
+                </select>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <button type="button" id="btn-save-social-link" class="px-4 py-2.5 rounded-xl font-medium border border-white/20 text-slate-300 hover:bg-white/10 transition-colors cursor-pointer">Enregistrer le lien</button>
+                    <button type="button" id="btn-request-promo-likes" class="px-4 py-2.5 rounded-xl font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer">Obtenir des likes/vues</button>
+                </div>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15 text-center">
+                <button type="button" id="btn-convert-points" class="w-full py-3 rounded-lg font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer">Convertir les Points en BBR</button>
+                <div id="convert-bbr-wip-block" class="hidden mt-4 text-left rounded-xl border border-amber-500/35 bg-amber-500/10 p-4">
+                    <p class="font-semibold text-amber-300 mb-2 flex items-center gap-2">
+                        <iconify-icon icon="solar:danger-triangle-bold" width="20" class="text-amber-400 flex-shrink-0"></iconify-icon>
+                        Travaux en cours
+                    </p>
+                    <p class="text-sm text-slate-400 leading-relaxed">La conversion des points en <strong class="text-slate-300">BBR</strong> n’est pas encore disponible. Cette fonctionnalité est en préparation — merci de votre patience.</p>
+                    <button type="button" onclick="hideConvertBbrWipBlock()" class="mt-3 text-xs font-medium px-3 py-1.5 rounded-lg border border-white/20 text-slate-300 hover:bg-white/10 transition-colors">Fermer</button>
+                </div>
+            </div>
+            <div class="glass-panel rounded-xl p-5 border border-white/15">
+                <h3 class="font-semibold text-white mb-3">Annonces à passer dans le LED screen</h3>
+                <textarea id="annonce-led-text" rows="3" maxlength="200" placeholder="Votre message (200 caractères max)..." class="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-white/15 text-white placeholder-slate-500 outline-none focus:border-amber-500/50 resize-none"></textarea>
+                <p class="text-xs text-slate-500 mt-1"><span id="annonce-char-count">0</span>/200</p>
+                <div class="mt-4">
+                    <label class="block text-sm text-slate-400 mb-2">Choisir la formule</label>
+                    <select id="annonce-prix" class="w-full px-4 py-3 rounded-xl bg-slate-800/60 border border-white/15 text-white outline-none focus:border-amber-500/50">
+                        <option value="150">150 F — ~15 passages (2 jours)</option>
+                        <option value="300">300 F — ~30 passages (3 jours)</option>
+                        <option value="500">500 F — ~50 passages (1 semaine)</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between gap-4 mt-4 flex-wrap">
+                    <button type="button" id="btn-publier-annonce" class="px-5 py-2.5 rounded-xl font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 transition-colors cursor-pointer">Publier</button>
+                    <p class="text-xs text-slate-400">Modération IA + validation admin avant diffusion</p>
+                </div>
+                <!-- Paiement MoMo annonce (affiché après création si MoMo activé) -->
+                <div id="annonce-payment-block" class="hidden mt-5 pt-5 border-t border-white/15">
+                    <h4 class="font-semibold text-amber-400 mb-2">Payer l'annonce avec MTN MoMo</h4>
+                    <p class="text-sm text-slate-400 mb-2">Montant : <strong id="annonce-payment-amount" class="text-white">0</strong> FCFA</p>
+                    <div class="flex rounded-xl overflow-hidden border border-white/15 mb-3">
+                        <span class="px-3 py-2.5 bg-amber-500/20 text-amber-400 text-sm font-medium">+225</span>
+                        <input type="tel" id="annonce-payment-phone" placeholder="07 XX XX XX XX" maxlength="10" class="flex-1 px-3 py-2.5 bg-slate-800/60 text-white outline-none font-mono">
+                    </div>
+                    <button type="button" id="btn-annonce-momo-request" class="w-full py-2.5 rounded-xl font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors mb-3 cursor-pointer">Envoyer la demande MoMo</button>
+                    <div id="annonce-momo-waiting" class="hidden mb-3">
+                        <p class="text-sm text-slate-400 mb-2">Acceptez le paiement sur votre téléphone MTN MoMo.</p>
+                        <button type="button" id="btn-annonce-momo-check" class="w-full py-2.5 rounded-xl font-semibold bg-amber-500 text-black hover:bg-amber-400 transition-colors cursor-pointer">Vérifier le statut</button>
+                    </div>
+                    <div id="annonce-momo-status-msg" class="hidden rounded-xl p-3 text-sm text-center"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actualités : Actualités IA, Annonces sponsorisées, Tendances + tri -->
+        <div id="screen-actualites" class="screen">
+            <div class="flex items-center gap-3 mb-4">
+                <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Actualités</h2>
+            </div>
+            <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+                <button type="button" data-sort="all" onclick="setActualitesSort('all')" class="sort-btn active px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/10 text-white whitespace-nowrap">🌍 Tout</button>
+                <button type="button" data-sort="region" onclick="setActualitesSort('region')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🏛️ Région</button>
+                <button type="button" data-sort="finance" onclick="setActualitesSort('finance')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">💰 Finance</button>
+                <button type="button" data-sort="tech" onclick="setActualitesSort('tech')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🚀 Tech</button>
+                <button type="button" data-sort="mode" onclick="setActualitesSort('mode')" class="sort-btn px-4 py-2 rounded-xl text-sm font-medium border border-white/15 bg-white/5 text-slate-400 whitespace-nowrap">🎤 Mode</button>
+            </div>
+            <!-- Annonces sponsorisées en premier -->
+            <div id="actualites-section-annonces" class="mb-6">
+                <h3 class="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2"><iconify-icon icon="solar:megaphone-linear" width="18"></iconify-icon> Annonces sponsorisées</h3>
+                <div id="annonces-list" class="space-y-3"></div>
+            </div>
+            <div id="actualites-section-ia" class="mb-6">
+                <h3 id="actualites-section-title" class="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2"><iconify-icon icon="solar:document-text-linear" width="18"></iconify-icon> Actualités IA</h3>
+                <div id="actualites-list" class="space-y-3"></div>
+            </div>
+            <div id="actualites-section-tendances" class="mb-6">
+                <div id="tendances-list">
+                    <!-- contenu injecté via app.js (bannière qui change toutes les 7s) -->
+                </div>
+            </div>
+            <!-- Overlay détail article -->
+            <div id="article-overlay" class="hidden fixed inset-0 z-50 bg-slate-900/95 overflow-y-auto p-4">
+                <div class="max-w-lg mx-auto">
+                    <div class="flex items-center gap-3 mb-4">
+                        <button type="button" onclick="closeArticleOverlay()" class="flex items-center gap-2 py-2.5 px-4 rounded-xl border border-white/15 bg-white/10 text-white hover:bg-white/20 transition-colors text-sm font-medium">
+                            <iconify-icon icon="solar:arrow-left-linear" width="18"></iconify-icon>
+                            Retour aux actualités
+                        </button>
+                        <button type="button" onclick="closeArticleOverlay()" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20" aria-label="Fermer">✕</button>
+                    </div>
+                    <div id="article-overlay-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quêtes (style maquette: daily check-in + quêtes générales) -->
+        <div id="screen-quests" class="screen">
+            <div class="flex items-center gap-3 mb-4">
+                <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors flex-shrink-0">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <span class="text-3xl flex-shrink-0" aria-hidden="true">📜</span>
+                    <h2 class="text-xl font-bold text-white truncate">QUÊTES</h2>
+                </div>
+            </div>
+
+            <!-- Daily check-in (récompenses de la semaine) -->
+            <div id="daily-checkin-section" class="mb-6">
+                <div class="glass-panel rounded-xl p-4 mb-3 border border-amber-500/20 bg-amber-500/5">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">📅</span>
+                            <div>
+                                <h3 class="font-semibold text-white">Daily check-in</h3>
+                                <p class="text-slate-400 text-xs">Connecte-toi chaque jour pour gagner des points.</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-amber-400 font-bold" id="daily-checkin-streak">0/7</p>
+                            <p class="text-slate-500 text-xs">jours</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1.5 mt-4" id="daily-checkin-grid"></div>
+                    <button type="button" id="btn-daily-claim" class="mt-4 w-full py-2.5 rounded-xl font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        RÉCLAMER
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quêtes générales -->
+            <div id="quests-general-section" class="mb-6">
+                <h3 class="text-sm font-semibold text-white mb-1">Quêtes générales</h3>
+                <p class="text-slate-400 text-xs mb-3">Rejoins la communauté, accomplis les missions et gagne des points.</p>
+                <div id="approved-links-list" class="space-y-2"></div>
+                <div id="quests-list-container" class="space-y-2 mt-3"></div>
+            </div>
+        </div>
+
+        <!-- Cartes cadeaux (bientôt disponible) -->
+        <div id="screen-cartes" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Cartes cadeaux</h2>
+            </div>
+            <div class="glass-panel rounded-xl p-8 border border-amber-500/35 bg-amber-500/10 text-center">
+                <span class="text-5xl block mb-4" aria-hidden="true">🎁</span>
+                <p class="font-semibold text-amber-300 text-lg mb-2">Travaux en cours</p>
+                <p class="text-sm text-slate-400 leading-relaxed">La vente de cartes cadeaux arrive bientôt sur Bipbip. Revenez plus tard pour découvrir les offres.</p>
+                <button type="button" onclick="navigateTo('home')" class="mt-6 w-full py-3 rounded-xl font-semibold border border-white/20 text-slate-200 hover:bg-white/10 transition-colors">
+                    Retour à l’accueil
+                </button>
+            </div>
+        </div>
+
+        <!-- Help Screen -->
+        <div id="screen-help" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Aide</h2>
+            </div>
+            <div class="help-content space-y-4">
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Comment acheter du crédit ?</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">1. Cliquez sur « Acheter »<br>2. Choisissez votre opérateur (MTN, Orange, Moov)<br>3. Sélectionnez le montant<br>4. Entrez le numéro à recharger<br>5. Confirmez la commande<br>6. Choisissez un mode de paiement (Djamo, MoMo si activé, ou TON)<br>7. Pour Djamo / MoMo / envoi crypto manuel : envoyez une capture d’écran à l’étape « Preuve ». Pour le TON via wallet, la preuve est générée automatiquement après l’envoi.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-sky-500/25 bg-sky-500/5">
+                    <h3 class="font-semibold text-white mb-2 flex items-center gap-2"><span class="text-sky-300" aria-hidden="true">◆</span> Paiement en TON (wallet)</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed mb-3">Disponible sur l’écran <strong class="text-slate-300">Mode de paiement</strong> : onglet <strong class="text-sky-300">TON</strong> (affiché lorsque le service est configuré).</p>
+                    <ol class="text-sm text-slate-400 leading-relaxed list-decimal list-inside space-y-2">
+                        <li>Ouvre l’onglet <strong class="text-slate-300">TON</strong> : le montant en TON est calculé à partir du cours du moment (conversion depuis ton total en FCFA).</li>
+                        <li>Appuie sur <strong class="text-slate-300">Connecter le wallet</strong> et choisis Tonkeeper, Wallet Telegram, etc. (TON Connect).</li>
+                        <li>Une fois connecté, appuie sur <strong class="text-slate-300">Payer ≈ … TON</strong> : une transaction envoie le montant vers l’adresse du marchand.</li>
+                        <li>Après validation dans ton wallet, une <strong class="text-slate-300">preuve automatique</strong> est envoyée aux équipes ; tu arrives sur l’écran de confirmation. La recharge est traitée après validation par l’admin, comme pour les autres modes.</li>
+                    </ol>
+                    <p class="text-sm text-slate-500 leading-relaxed mt-3"><strong class="text-slate-400">USDT / USDC</strong> : envoi manuel vers la même adresse affichée — utilise le lien « USDT / USDC — envoi manuel » sous les onglets, puis envoie une capture à l’étape Preuve.</p>
+                    <p class="text-xs text-slate-500 mt-3">Astuce : ouvre l’app depuis le <strong class="text-slate-400">bot Telegram</strong> pour un retour fluide après connexion au wallet. Le paiement TON nécessite une connexion internet stable et un site accessible en HTTPS.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Quels sont les frais ?</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">Les frais de service sont de 10% du montant de la recharge.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Délai de traitement ?</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">Après réception de la preuve de paiement (capture ou TON wallet), l’équipe valide la commande puis la recharge est effectuée. Le délai dépend du moment où la preuve est reçue et validée.</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Pourquoi ça ne s’ouvre pas sur mon ordinateur ?</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">L’app est pensée pour <strong class="text-slate-300">téléphone et tablette</strong> (navigateur ou Telegram). Sur PC, la page affiche des <strong class="text-slate-300">QR codes</strong> (bot Telegram + lien du site) : scanne-les avec ton mobile. Tu peux aussi activer le <strong class="text-slate-300">mode responsive</strong> du navigateur (voir les raccourcis sur l’écran d’accueil bloqué).</p>
+                </div>
+                <div class="faq-item glass-panel rounded-xl p-5 border border-white/15">
+                    <h3 class="font-semibold text-white mb-2">Contact support</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed">📱 WhatsApp: <a href="https://wa.me/22552597408" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">Envoyez un message à Bipbip Labs sur WhatsApp.</a><br>📧 Email: <a href="mailto:support_clients@bipbiprecharge.ci" class="text-indigo-400 hover:underline">support_clients@bipbiprecharge.ci</a><br>💬 Telegram: <a href="https://t.me/bipbiprecharge_support" target="_blank" rel="noopener" class="text-indigo-400 hover:underline">@bipbiprecharge_support</a></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Panel (accès : Ctrl+Shift+A) -->
+        <div id="screen-admin" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Administration</h2>
+            </div>
+            <!-- Réglage vitesse bandeau LED -->
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
+                <h3 class="font-semibold text-white mb-2">Vitesse du bandeau (message défilant)</h3>
+                <p class="text-sm text-slate-400 mb-3">Durée d’un passage complet du texte (un cycle). Plus le nombre est élevé, plus c’est lent. Réglage actuel : <span id="admin-led-speed-value">60</span> s.</p>
+                <div class="flex gap-2 items-center flex-wrap">
+                    <input type="number" id="admin-led-speed" min="15" max="300" value="60" class="w-24 px-3 py-2 rounded-lg bg-slate-800 border border-white/15 text-white text-sm" placeholder="60">
+                    <span class="text-slate-400 text-sm">secondes (15–300)</span>
+                    <button type="button" onclick="saveLedSpeed()" class="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 text-sm font-medium hover:bg-amber-500/30">Enregistrer</button>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">Clé admin : <input type="password" id="admin-key-input" placeholder="ADMIN_SECRET_KEY" class="w-40 px-2 py-1 rounded bg-slate-800 border border-white/10 text-white text-xs" autocomplete="off"> <button type="button" onclick="loadAdminOrders()" class="ml-2 px-3 py-1 rounded bg-indigo-500/30 border border-indigo-500/50 text-indigo-300 text-xs font-medium">Charger les commandes</button></p>
+                <p class="text-xs text-slate-500 mt-1">Accès : <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Ctrl+Shift+A</kbd> · Appui long sur le logo · 5 taps rapides · <code class="px-1 py-0.5 rounded bg-white/10 text-slate-400">?admin</code></p>
+            </div>
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-white/15">
+                <h3 class="font-semibold text-white mb-2">Bannières publicitaires (3 emplacements)</h3>
+                <p class="text-sm text-slate-400 mb-3">Deux bannières sur l’<strong class="text-slate-300">Accueil</strong> (sous le bandeau LED) et une dans <strong class="text-slate-300">Actualités</strong>. Défilement sans cadre visible ; la zone Accueil n’apparaît que si au moins une bannière est configurée. <strong class="text-slate-300">Vitesse 1–10</strong> : plus le chiffre est grand, plus c’est rapide. Image : URL ou <code class="text-slate-500">/uploads/</code>.</p>
+                <div id="admin-pub-banners-rows" class="space-y-3 mb-3"></div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="savePubBanners()" class="px-4 py-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-sm font-medium hover:bg-rose-500/30">Enregistrer les bannières</button>
+                </div>
+            </div>
+            <div class="admin-tabs flex gap-2 mb-6">
+                <button type="button" class="tab-btn active flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-indigo-500/20 text-indigo-400 border-indigo-500/30" onclick="switchAdminTab('pending')">En attente</button>
+                <button type="button" class="tab-btn flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-white/5 text-slate-400 hover:bg-white/15" onclick="switchAdminTab('validated')">Validées</button>
+            </div>
+            <div class="admin-orders space-y-4" id="admin-orders"></div>
+        </div>
+    </main>
+
+    <!-- Navigation bas: Recharge / Cartes / Actualités / Quêtes -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-slate-900/95 backdrop-blur-md max-w-lg mx-auto" style="padding-bottom:env(safe-area-inset-bottom, 0px);">
+        <div class="grid grid-cols-4 items-center h-[60px] px-1">
+            <button type="button" onclick="navigateTo('home')" aria-label="Recharge — Écran d'accueil" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-1 min-w-0 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:card-linear" width="22" aria-hidden="true"></iconify-icon>
+                <span class="text-[10px] sm:text-[11px] font-semibold leading-tight text-center">Recharge</span>
+            </button>
+            <button type="button" onclick="navigateTo('cartes')" aria-label="Cartes cadeaux" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-1 min-w-0 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:gift-linear" width="22" aria-hidden="true"></iconify-icon>
+                <span class="text-[10px] sm:text-[11px] font-semibold leading-tight text-center">Cartes</span>
+            </button>
+            <button type="button" onclick="navigateTo('actualites')" aria-label="Actualités et tendances" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-1 min-w-0 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:document-text-linear" width="22" aria-hidden="true"></iconify-icon>
+                <span class="text-[10px] sm:text-[11px] font-semibold leading-tight text-center">Actualités</span>
+            </button>
+            <button type="button" onclick="navigateTo('quests')" aria-label="Quêtes et récompenses" class="nav-bottom-btn flex flex-col items-center gap-0.5 py-2 px-1 min-w-0 text-slate-400 hover:text-white transition-all duration-200 relative">
+                <iconify-icon icon="solar:medal-ribbons-star-linear" width="22" aria-hidden="true"></iconify-icon>
+                <span class="text-[10px] sm:text-[11px] font-semibold leading-tight text-center">Quêtes</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Toast : notification discrète (courte, style sobre) -->
+    <div id="toast" class="toast fixed bottom-24 left-1/2 -translate-x-1/2 translate-y-8 px-4 py-2 rounded-lg font-medium text-xs shadow-xl opacity-0 transition-all duration-300 z-[1000] bg-slate-800/95 text-slate-300 border border-white/10"></div>
+
+    <script>
+    (function () {
+        function bipbipIsBot() {
+            try {
+                var ua = navigator.userAgent || '';
+                return /Googlebot|bingbot|Baiduspider|yandex|DuckDuckBot|Slurp|facebookexternalhit|Twitterbot|LinkedInBot|WhatsApp|TelegramBot|Applebot|Pinterestbot|crawl|spider|bot/i.test(ua);
+            } catch (e) { return false; }
+        }
+        function bipbipAllowMobileOrTablet() {
+            if (bipbipIsBot()) return true;
+            try {
+                if (window.sessionStorage.getItem('bipbip_force_mobile') === '1') return true;
+                var q = new URLSearchParams(window.location.search || '');
+                if (q.get('force_mobile') === '1') {
+                    window.sessionStorage.setItem('bipbip_force_mobile', '1');
+                    return true;
+                }
+            } catch (e) {}
+            try {
+                var tw = window.Telegram && window.Telegram.WebApp;
+                if (tw && (String(tw.initData || '').trim() || (tw.initDataUnsafe && tw.initDataUnsafe.user))) {
+                    return true;
+                }
+            } catch (e2) {}
+            var ua = navigator.userAgent || '';
+            if (/webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+            if (/iPad|Tablet|Kindle|Silk|PlayBook/i.test(ua)) return true;
+            if (/Android/i.test(ua)) return true;
+            try {
+                if (navigator.maxTouchPoints > 1 && /MacIntel|Macintosh/i.test(navigator.platform || '')) return true;
+            } catch (e3) {}
+            var iw = window.innerWidth || 0;
+            var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
+            var w = Math.min(iw, sw);
+            if (w > 0 && w <= 900) return true;
+            return false;
+        }
+
+        function bipbipShowDesktopGate() {
+            var gate = document.getElementById('bipbip-desktop-gate');
+            if (gate) gate.classList.add('bipbip-gate-visible');
+            var base = window.location.origin || '';
+            var siteUrl = (window.location.href || '').split('#')[0];
+            function setQr(imgId, loadingId, data) {
+                var img = document.getElementById(imgId);
+                var ld = document.getElementById(loadingId);
+                if (!img || !data) return;
+                img.onload = function () {
+                    img.classList.remove('hidden');
+                    if (ld) ld.classList.add('hidden');
+                };
+                img.onerror = function () {
+                    if (ld) { ld.textContent = 'QR indisponible'; ld.classList.remove('hidden'); }
+                };
+                img.src = base + '/api/qr?size=200&margin=2&data=' + encodeURIComponent(data);
+            }
+            fetch(base + '/api/config').then(function (r) { return r.json(); }).then(function (cfg) {
+                var bot = (cfg.telegramBotUsername || '').replace(/^@/, '').trim();
+                var tgUrl = bot ? ('https://t.me/' + bot) : 'https://telegram.org';
+                var a = document.getElementById('bipbip-gate-tg-link');
+                if (a) { a.href = tgUrl; }
+                setQr('bipbip-gate-qr-telegram', 'bipbip-gate-qr-telegram-loading', tgUrl);
+            }).catch(function () {
+                setQr('bipbip-gate-qr-telegram', 'bipbip-gate-qr-telegram-loading', 'https://telegram.org');
+            });
+            setQr('bipbip-gate-qr-site', 'bipbip-gate-qr-site-loading', siteUrl);
+            var copyBtn = document.getElementById('bipbip-gate-copy-url');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function () {
+                    var url = siteUrl;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(function () {
+                            copyBtn.textContent = 'Lien copié !';
+                            setTimeout(function () { copyBtn.textContent = 'Copier le lien du site'; }, 2500);
+                        }).catch(function () { window.prompt('Copiez ce lien :', url); });
+                    } else {
+                        window.prompt('Copiez ce lien :', url);
+                    }
+                });
+            }
+        }
+
+        function bipbipLoadAppScripts() {
+            var _v = '?v=20260406b';
+            var tgInt = document.createElement('script');
+            tgInt.src = 'bipbip-telegram.js' + _v;
+            document.body.appendChild(tgInt);
+            var tonLoader = document.createElement('script');
+            tonLoader.src = 'bipbip-ton-loader.js' + _v;
+            document.body.appendChild(tonLoader);
+  var app = document.createElement('script');
+    app.src = 'app.js' + _v;
+    app.onload = function () {
+      // Boss: Fix boutons amount (charger APRÈS app.js pour avoir selectAmount)
+      var fix = document.createElement('script');
+      fix.src = 'bipbip-buy-fix.js' + _v;
+      document.body.appendChild(fix);
+      
+      var sc = document.createElement('script');
+      sc.src = 'bipbip-dynamic-scene.js' + _v;
+                sc.onload = function () {
+                    if (document.getElementById('bipbip-scene') && typeof BipbipDynamicScene !== 'undefined') {
+                        try { new BipbipDynamicScene('#bipbip-scene'); } catch (err) {}
+                    }
+                };
+                document.body.appendChild(sc);
+            };
+            document.body.appendChild(app);
+        }
+
+        function bipbipSplashQueryFlag(name) {
+            try {
+                var q = new URLSearchParams(window.location.search || '');
+                return q.get(name) === '1';
+            } catch (e) { return false; }
+        }
+
+        function bipbipShouldRunSplash() {
+            if (!bipbipAllowMobileOrTablet()) return false;
+            if (bipbipSplashQueryFlag('nosplash')) return false;
+            if (bipbipSplashQueryFlag('splash')) return true;
+            try {
+                if (window.sessionStorage.getItem('bipbip_splash_done') === '1') return false;
+            } catch (e) {}
+            return true;
+        }
+
+        function bipbipSplashLiteOrReduced() {
+            try {
+                if (document.documentElement.classList.contains('bipbip-lite')) return true;
+                if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+            } catch (e) {}
+            return false;
+        }
+
+        function bipbipDismissSplash() {
+            try { document.documentElement.classList.remove('bipbip-splash-pending'); } catch (e0) {}
+            var el = document.getElementById('bipbip-splash');
+            if (!el) return;
+            var v = document.getElementById('bipbip-splash-video');
+            if (v) {
+                try { v.pause(); } catch (e) {}
+            }
+            el.classList.add('bipbip-splash-hidden');
+            el.setAttribute('aria-hidden', 'true');
+            try { window.sessionStorage.setItem('bipbip_splash_done', '1'); } catch (e2) {}
+            setTimeout(function () {
+                el.setAttribute('hidden', '');
+            }, 500);
+        }
+
+        function bipbipRunSplashThen(fn) {
+            var splash = document.getElementById('bipbip-splash');
+            if (!splash || !bipbipShouldRunSplash() || bipbipSplashLiteOrReduced()) {
+                if (splash) {
+                    splash.classList.add('bipbip-splash-hidden');
+                    splash.setAttribute('hidden', '');
+                }
+                fn();
+                return;
+            }
+            splash.removeAttribute('hidden');
+            splash.classList.remove('bipbip-splash-hidden');
+            splash.setAttribute('aria-hidden', 'false');
+            var skipBtn = document.getElementById('bipbip-splash-skip');
+            var v = document.getElementById('bipbip-splash-video');
+            var finished = false;
+            function done() {
+                if (finished) return;
+                finished = true;
+                document.body.style.backgroundColor = '#0f172a';
+                bipbipDismissSplash();
+                fn();
+            }
+            if (skipBtn) {
+                skipBtn.classList.remove('hidden');
+                skipBtn.addEventListener('click', done);
+            }
+            var maxMs = 14000;
+            var t = window.setTimeout(done, maxMs);
+            function clearT() { try { window.clearTimeout(t); } catch (e) {} }
+            if (v) {
+                var useFallback = function () {
+                    clearT();
+                    splash.classList.add('bipbip-splash-fallback-only');
+                    window.setTimeout(done, 900);
+                };
+                v.addEventListener('ended', function () { clearT(); done(); });
+                v.addEventListener('error', function () { clearT(); useFallback(); });
+                var p = v.play();
+                if (p && typeof p.then === 'function') {
+                    p.catch(function () { clearT(); useFallback(); });
+                }
+            } else {
+                clearT();
+                done();
+            }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js').catch(function () {});
+            });
+        }
+
+        if (bipbipAllowMobileOrTablet()) {
+            bipbipRunSplashThen(bipbipLoadAppScripts);
+        } else {
+            var sp = document.getElementById('bipbip-splash');
+            if (sp) {
+                sp.classList.add('bipbip-splash-hidden');
+                sp.setAttribute('hidden', '');
+            }
+            bipbipShowDesktopGate();
+        }
+    })();
+    </script>
+
+    <!-- Top bar : messages rotatifs -->
+    <script>
+    (function () {
+        var textEl = document.getElementById('topbar-text');
+        if (!textEl) return;
+        var msgs = [
+            'Service disponible 24/7',
+            'MTN \u00b7 Orange \u00b7 Moov',
+            'Paiement Djamo, MoMo & Crypto',
+            'Recharge rapide & s\u00e9curis\u00e9e'
+        ];
+        var idx = 0;
+        textEl.style.transition = 'opacity .3s ease';
+        setInterval(function () {
+            idx = (idx + 1) % msgs.length;
+            textEl.style.opacity = '0';
+            setTimeout(function () {
+                textEl.textContent = msgs[idx];
+                textEl.style.opacity = '1';
+            }, 300);
+        }, 5000);
+    })();
+    </script>
+</body>
+</html>

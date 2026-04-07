@@ -249,6 +249,26 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
+// ==================== ROUTING DESKTOP / MOBILE ====================
+function isMobileOrTablet(ua) {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Touch/i.test(ua || '');
+}
+
+// Route racine : landing sur desktop, app sur mobile/tablette
+app.get('/', (req, res) => {
+    const ua = req.headers['user-agent'] || '';
+    if (isMobileOrTablet(ua)) {
+        res.sendFile(path.join(__dirname, 'app.html'));
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
+});
+
+// Accès direct à l'app (mobile/tablette sans Telegram ou ajout écran accueil)
+app.get('/app', (req, res) => {
+    res.sendFile(path.join(__dirname, 'app.html'));
+});
+
 // ==================== SEO PAGES ====================
 app.get('/recharge-mtn-ci', (req, res) => {
     res.sendFile(path.join(__dirname, 'seo', 'recharge-mtn-ci.html'));
