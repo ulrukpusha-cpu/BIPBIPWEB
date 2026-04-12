@@ -1596,40 +1596,8 @@ function goToPaymentMethodScreen() {
 
 /* ========== Gift Cards (Cartes cadeaux) ========== */
 
-var GIFT_CARDS = {
-    app: [
-        { id: 'gplay-5',   name: 'Google Play',  value: '5€',   price: 5000,   img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
-        { id: 'gplay-10',  name: 'Google Play',  value: '10€',  price: 8000,   img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
-        { id: 'gplay-25',  name: 'Google Play',  value: '25€',  price: 18000,  img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
-        { id: 'itunes-10', name: 'iTunes',       value: '10€',  price: 8000,   img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
-        { id: 'itunes-20', name: 'iTunes',       value: '20€',  price: 15000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
-        { id: 'itunes-50', name: 'iTunes',       value: '50€',  price: 35000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
-    ],
-    music: [
-        { id: 'spotify-10',  name: 'Spotify',      value: '10€',  price: 8000,   img: 'https://i.imgur.com/3tCmGWM.png', flag: '🇫🇷' },
-        { id: 'spotify-30',  name: 'Spotify',      value: '30€',  price: 22000,  img: 'https://i.imgur.com/3tCmGWM.png', flag: '🇫🇷' },
-        { id: 'deezer-10',   name: 'Deezer',       value: '10€',  price: 8000,   img: 'https://i.imgur.com/YfJQoMu.png', flag: '🇫🇷' },
-        { id: 'deezer-25',   name: 'Deezer',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/YfJQoMu.png', flag: '🇫🇷' },
-        { id: 'itunes-m15',  name: 'iTunes Music', value: '15€',  price: 11000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
-    ],
-    films: [
-        { id: 'netflix-15',  name: 'Netflix',       value: '15€',  price: 11000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
-        { id: 'netflix-25',  name: 'Netflix',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
-        { id: 'netflix-50',  name: 'Netflix',       value: '50€',  price: 35000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
-        { id: 'disney-25',   name: 'Disney+',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/4DPCLEJ.png', flag: '🇫🇷' },
-        { id: 'prime-30',    name: 'Prime Video',   value: '30€',  price: 22000,  img: 'https://i.imgur.com/QjWEZ1v.png', flag: '🇫🇷' },
-    ],
-    jeux: [
-        { id: 'psn-10',     name: 'PlayStation',   value: '10€',  price: 8000,   img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
-        { id: 'psn-20',     name: 'PlayStation',   value: '20€',  price: 15000,  img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
-        { id: 'psn-50',     name: 'PlayStation',   value: '50€',  price: 35000,  img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
-        { id: 'xbox-10',    name: 'Xbox',          value: '10€',  price: 8000,   img: 'https://i.imgur.com/6bKPfvN.png', flag: '🇫🇷' },
-        { id: 'xbox-25',    name: 'Xbox',          value: '25€',  price: 18000,  img: 'https://i.imgur.com/6bKPfvN.png', flag: '🇫🇷' },
-        { id: 'steam-10',   name: 'Steam',         value: '10€',  price: 8000,   img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
-        { id: 'steam-20',   name: 'Steam',         value: '20€',  price: 15000,  img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
-        { id: 'steam-50',   name: 'Steam',         value: '50€',  price: 35000,  img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
-    ]
-};
+// Cartes par défaut (vide) — les cartes sont gérées depuis l'admin
+var GIFT_CARDS = { app: [], music: [], films: [], jeux: [] };
 
 var gcCurrentCategory = 'app';
 var gcSelectedCard = null;
@@ -1689,6 +1657,11 @@ function renderGiftCards(cat) {
     var cards = GIFT_CARDS[cat] || [];
     carousel.innerHTML = '';
     if (dotsWrap) dotsWrap.innerHTML = '';
+
+    if (!cards.length) {
+        carousel.innerHTML = '<div class="w-full text-center py-8"><p class="text-slate-400 text-sm">Aucune carte disponible dans cette catégorie.</p><p class="text-slate-500 text-xs mt-1">Revenez bientôt !</p></div>';
+        return;
+    }
 
     cards.forEach(function (card, i) {
         var el = document.createElement('div');
