@@ -3182,6 +3182,7 @@ function loadServerConfig() {
             serverConfig.telegramBotUsername = data.telegramBotUsername || null;
             serverConfig.twaReturnUrl = data.twaReturnUrl || null;
             serverConfig.tonConnectManifestUrl = data.tonConnectManifestUrl || null;
+            serverConfig.googleClientId = data.googleClientId || null;
             if (serverConfig.djamoPayUrl) {
                 DJAMO_PAY_URL = serverConfig.djamoPayUrl;
             }
