@@ -1274,23 +1274,37 @@
                     return true;
                 }
             } catch (e) {}
+            // Telegram Mini App : initData OU hash #tgWebAppData (toujours présent)
             try {
                 var tw = window.Telegram && window.Telegram.WebApp;
                 if (tw && (String(tw.initData || '').trim() || (tw.initDataUnsafe && tw.initDataUnsafe.user))) {
                     return true;
                 }
+                // Fallback : hash fragment #tgWebAppData toujours ajouté par Telegram
+                var hash = window.location.hash || '';
+                if (/tgWebApp/i.test(hash)) return true;
             } catch (e2) {}
             var ua = navigator.userAgent || '';
             if (/webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
             if (/iPad|Tablet|Kindle|Silk|PlayBook/i.test(ua)) return true;
             if (/Android/i.test(ua)) return true;
+            // iPadOS 13+ : user-agent = Macintosh mais appareil tactile
             try {
-                if (navigator.maxTouchPoints > 1 && /MacIntel|Macintosh/i.test(navigator.platform || '')) return true;
+                if (navigator.maxTouchPoints > 1 && /MacIntel|Macintosh|Mac OS/i.test(navigator.userAgent || navigator.platform || '')) return true;
             } catch (e3) {}
-            var iw = window.innerWidth || 0;
-            var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
-            var w = Math.min(iw, sw);
-            if (w > 0 && w <= 900) return true;
+            // Écran tactile (iPad, tablettes) — largeur jusqu'à 1200px pour couvrir les tablettes en paysage
+            try {
+                if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                    var iw = window.innerWidth || 0;
+                    var sw = (window.screen && window.screen.width) ? window.screen.width : iw;
+                    var w = Math.min(iw, sw);
+                    if (w > 0 && w <= 1200) return true;
+                }
+            } catch (e4) {}
+            var iw2 = window.innerWidth || 0;
+            var sw2 = (window.screen && window.screen.width) ? window.screen.width : iw2;
+            var w2 = Math.min(iw2, sw2);
+            if (w2 > 0 && w2 <= 900) return true;
             return false;
         }
 

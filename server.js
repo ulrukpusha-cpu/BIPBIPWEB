@@ -276,18 +276,25 @@ app.get('/sitemap.xml', (req, res) => {
 });
 
 // ==================== ROUTING LANDING vs WEBAPP ====================
-function shouldServeApp(ua) {
-    if (!ua) return false;
+function shouldServeApp(req) {
+    const ua = req.headers['user-agent'] || '';
     // Telegram Mini App / WebApp (toutes plateformes, mobile + desktop)
     if (/TelegramBot|Telegram\/|TMA\b|\bTelegram\b/i.test(ua)) return true;
-    // Mobile / Tablette (couvre aussi PWA installée sur mobile)
+    // Telegram WebApp ajoute souvent un hash #tgWebAppData — vérifier le referer aussi
+    const ref = req.headers['referer'] || req.headers['referrer'] || '';
+    if (/tgWebApp|telegram\.org/i.test(ref)) return true;
+    // Sec-Fetch-Site: cross-site depuis Telegram
+    const secDest = req.headers['sec-fetch-dest'] || '';
+    if (secDest === 'iframe') return true;
+    // Mobile / Tablette classique
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua)) return true;
+    // iPadOS 13+ : user-agent = Macintosh mais c'est une tablette tactile
+    if (/Macintosh/i.test(ua) && /Safari/i.test(ua) && !/Chrome/i.test(ua)) return true;
     return false;
 }
 
 app.get('/', (req, res) => {
-    const ua = req.headers['user-agent'] || '';
-    if (shouldServeApp(ua)) {
+    if (shouldServeApp(req)) {
         res.sendFile(path.join(__dirname, 'app.html'));
     } else {
         res.sendFile(path.join(__dirname, 'index.html'));
