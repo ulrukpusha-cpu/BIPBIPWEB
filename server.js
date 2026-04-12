@@ -57,6 +57,9 @@ const ADMIN_CHAT_ID = getAdminChatIds()[0] || ''; // pour compatibilité
 // Google Sign-In
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 
+// PIN admin (4 chiffres)
+const ADMIN_PIN = (process.env.ADMIN_PIN || '0000').trim();
+
 // Achats directs dans le bot (sans webapp)
 const BOT_FRAIS_PERCENT = 10;
 const BOT_OPERATORS = {
@@ -691,6 +694,15 @@ app.get('/api/weather', async (req, res) => {
 });
 
 // Admin : mettre à jour la config (ex. vitesse bandeau, bannières pub)
+// Vérification PIN admin
+app.post('/api/admin/verify-pin', (req, res) => {
+    const { pin } = req.body || {};
+    if (!pin || String(pin).trim() !== ADMIN_PIN) {
+        return res.status(401).json({ ok: false, error: 'Code incorrect' });
+    }
+    return res.json({ ok: true });
+});
+
 app.put('/api/admin/config', (req, res) => {
     if (!isAdminRequest(req)) {
         return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });

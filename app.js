@@ -1633,7 +1633,6 @@ function loadGiftCardsFromServer() {
 var GC_CATEGORY_LABELS = { app: 'App', music: 'Music', films: 'Films', jeux: 'Jeux' };
 
 function setGiftCardCategory(cat) {
-    if (!GIFT_CARDS[cat]) return;
     gcCurrentCategory = cat;
 
     // Update tabs
@@ -3273,16 +3272,154 @@ function saveGiftCardsAdmin() {
 // Charger les cartes admin quand on ouvre l'écran admin
 var _origAdminNav = null; // patché dans navigateTo
 
-// ==================== ADMIN ACCESS ====================
+// ==================== ADMIN ACCESS (PIN 4 chiffres) ====================
+var __adminPinUnlocked = false;
+
+function showAdminPinPrompt() {
+    // Si déjà déverrouillé dans cette session, aller directement
+    if (__adminPinUnlocked) { navigateTo('admin'); return; }
+    // Vérifier session
+    try {
+        if (sessionStorage.getItem('bipbip_admin_ok') === '1') {
+            __adminPinUnlocked = true;
+            navigateTo('admin');
+            return;
+        }
+    } catch (e) {}
+
+    // Créer le modal PIN
+    var existing = document.getElementById('admin-pin-modal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'admin-pin-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    modal.innerHTML =
+        '<div style="background:linear-gradient(180deg,#1e293b,#0f172a);border-radius:20px;padding:28px 24px;max-width:320px;width:100%;text-align:center;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
+            '<div style="width:56px;height:56px;margin:0 auto 16px;border-radius:14px;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);display:flex;align-items:center;justify-content:center;">' +
+                '<iconify-icon icon="solar:lock-keyhole-bold" width="28" style="color:#818cf8;"></iconify-icon>' +
+            '</div>' +
+            '<h3 style="color:#fff;font-size:18px;font-weight:700;margin-bottom:4px;">Accès Admin</h3>' +
+            '<p style="color:#94a3b8;font-size:13px;margin-bottom:20px;">Entrez le code PIN à 4 chiffres</p>' +
+            '<div id="admin-pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:20px;">' +
+                '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
+                '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
+                '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
+                '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
+            '</div>' +
+            '<div id="admin-pin-error" style="color:#f87171;font-size:12px;margin-bottom:12px;min-height:18px;"></div>' +
+            '<div id="admin-pin-pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto;">' +
+                '<button type="button" class="pin-key" data-val="1">1</button>' +
+                '<button type="button" class="pin-key" data-val="2">2</button>' +
+                '<button type="button" class="pin-key" data-val="3">3</button>' +
+                '<button type="button" class="pin-key" data-val="4">4</button>' +
+                '<button type="button" class="pin-key" data-val="5">5</button>' +
+                '<button type="button" class="pin-key" data-val="6">6</button>' +
+                '<button type="button" class="pin-key" data-val="7">7</button>' +
+                '<button type="button" class="pin-key" data-val="8">8</button>' +
+                '<button type="button" class="pin-key" data-val="9">9</button>' +
+                '<button type="button" class="pin-key" data-val="close" style="color:#f87171;">✕</button>' +
+                '<button type="button" class="pin-key" data-val="0">0</button>' +
+                '<button type="button" class="pin-key" data-val="del" style="font-size:18px;">⌫</button>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(modal);
+
+    // Style boutons
+    modal.querySelectorAll('.pin-key').forEach(function (btn) {
+        btn.style.cssText = 'width:100%;aspect-ratio:1;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#e2e8f0;font-size:22px;font-weight:600;cursor:pointer;transition:all .15s;touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,255,255,.1);';
+    });
+
+    var pin = '';
+    var dots = modal.querySelectorAll('.pin-dot');
+    var errorEl = modal.querySelector('#admin-pin-error');
+
+    function updateDots() {
+        dots.forEach(function (d, i) {
+            if (i < pin.length) {
+                d.style.background = '#818cf8';
+                d.style.borderColor = '#818cf8';
+            } else {
+                d.style.background = 'transparent';
+                d.style.borderColor = 'rgba(255,255,255,.25)';
+            }
+        });
+    }
+
+    modal.querySelector('#admin-pin-pad').addEventListener('click', function (e) {
+        var btn = e.target.closest('.pin-key');
+        if (!btn) return;
+        var val = btn.dataset.val;
+
+        if (val === 'close') {
+            modal.remove();
+            return;
+        }
+        if (val === 'del') {
+            pin = pin.slice(0, -1);
+            errorEl.textContent = '';
+            updateDots();
+            return;
+        }
+
+        if (pin.length >= 4) return;
+        pin += val;
+        updateDots();
+
+        if (pin.length === 4) {
+            // Vérifier le PIN côté serveur
+            fetch(API_BASE + '/api/admin/verify-pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin: pin })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.ok) {
+                    __adminPinUnlocked = true;
+                    try { sessionStorage.setItem('bipbip_admin_ok', '1'); } catch (e) {}
+                    modal.remove();
+                    navigateTo('admin');
+                    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('notification', 'success');
+                } else {
+                    pin = '';
+                    updateDots();
+                    errorEl.textContent = 'Code incorrect';
+                    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('notification', 'error');
+                    // Shake animation
+                    var dotsRow = modal.querySelector('#admin-pin-dots');
+                    if (dotsRow) {
+                        dotsRow.style.animation = 'none';
+                        dotsRow.offsetHeight;
+                        dotsRow.style.animation = 'gcShake .4s ease';
+                    }
+                }
+            })
+            .catch(function () {
+                pin = '';
+                updateDots();
+                errorEl.textContent = 'Erreur réseau';
+            });
+        }
+
+        if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
+    });
+
+    // Fermer en cliquant en dehors
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.remove();
+    });
+}
+
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-        navigateTo('admin');
+        showAdminPinPrompt();
     }
 });
 
 (function () {
     if (window.location.search.indexOf('admin') !== -1) {
-        setTimeout(function () { navigateTo('admin'); }, 300);
+        setTimeout(function () { showAdminPinPrompt(); }, 300);
     }
 
     var logoEl = document.getElementById('app-logo-admin-trigger');
@@ -3292,7 +3429,7 @@ document.addEventListener('keydown', (e) => {
     var tapTimer = null;
     logoEl.addEventListener('touchstart', function (e) {
         pressTimer = setTimeout(function () {
-            navigateTo('admin');
+            showAdminPinPrompt();
             tapCount = 0;
         }, 2000);
     }, { passive: true });
@@ -3303,7 +3440,7 @@ document.addEventListener('keydown', (e) => {
         clearTimeout(tapTimer);
         if (tapCount >= 5) {
             tapCount = 0;
-            navigateTo('admin');
+            showAdminPinPrompt();
         }
         tapTimer = setTimeout(function () { tapCount = 0; }, 1500);
     });

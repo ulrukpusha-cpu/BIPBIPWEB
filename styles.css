@@ -516,7 +516,10 @@ html.bipbip-lite .btn-reject {
     text-transform: uppercase;
     user-select: none;
     -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color: rgba(255,255,255,.1);
+    touch-action: manipulation;
+    position: relative;
+    z-index: 1;
 }
 .gc-tab:active { transform: scale(.95); }
 .gc-tab.active {
@@ -676,5 +679,14 @@ html.bipbip-lite .btn-reject {
     border-radius: 14px;
     box-shadow: 0 8px 28px rgba(0,0,0,.5);
     border: 1.5px solid rgba(255,255,255,.1);
+}
+
+/* PIN shake animation */
+@keyframes gcShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(6px); }
 }
 
