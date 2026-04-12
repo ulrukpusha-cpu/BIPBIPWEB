@@ -34,9 +34,18 @@ function authTelegram(req, res, next) {
         req.userId = String(user.id);
     } else {
         req.telegramUser = null;
-        // Accepter le userId du body pour les utilisateurs navigateur (préfixé web_)
+
+        // Google session : header X-Google-Session + userId numérique (ID négatif)
+        const googleSession = req.headers['x-google-session'] || '';
         const bodyUid = req.body?.userId || req.query?.userId || null;
-        req.userId = (typeof bodyUid === 'string' && bodyUid.startsWith('web_')) ? bodyUid : null;
+
+        if (googleSession && typeof bodyUid === 'string' && /^-?\d+$/.test(bodyUid)) {
+            req.userId = bodyUid;
+            req.authType = 'google';
+        } else {
+            // Accepter le userId du body pour les utilisateurs navigateur (préfixé web_)
+            req.userId = (typeof bodyUid === 'string' && bodyUid.startsWith('web_')) ? bodyUid : null;
+        }
     }
     next();
 }

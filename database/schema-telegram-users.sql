@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS telegram_users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Colonne Google Sign-In (utilisateurs navigateur connectés via Google)
+-- ALTER TABLE telegram_users ADD COLUMN IF NOT EXISTS google_id TEXT;
+-- CREATE INDEX IF NOT EXISTS idx_telegram_users_google_id ON telegram_users(google_id);
+
 -- Index pour recherche par username (optionnel)
 CREATE INDEX IF NOT EXISTS idx_telegram_users_username ON telegram_users(username);
 

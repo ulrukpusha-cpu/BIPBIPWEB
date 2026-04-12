@@ -120,6 +120,7 @@
     <link rel="dns-prefetch" href="https://fonts.googleapis.com">
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="dns-prefetch" href="https://telegram.org">
+    <link rel="dns-prefetch" href="https://accounts.google.com">
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.tailwindcss.com">
@@ -196,6 +197,9 @@
 
     <!-- ═══ Telegram WebApp SDK (nécessaire au boot pour le contexte TG) ═══ -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- ═══ Google Identity Services (connexion Google pour utilisateurs navigateur) ═══ -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <!-- ═══ Iconify (defer : ne bloque plus le first paint) ═══ -->
     <script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
@@ -809,6 +813,45 @@
         </div>
 
         <!-- Profil (photo, points totale, convertir en BBR, annonces LED) -->
+        <!-- Écran de connexion (utilisateurs navigateur sans Telegram) -->
+        <div id="screen-login" class="screen">
+            <div class="flex items-center gap-3 mb-6">
+                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
+                </button>
+                <h2 class="text-xl font-semibold text-white">Connexion</h2>
+            </div>
+            <div class="glass-panel rounded-2xl p-6 border border-white/15 text-center mb-4">
+                <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-400/20 to-yellow-500/20 border-2 border-amber-500/30 flex items-center justify-center">
+                    <iconify-icon icon="solar:user-circle-bold" width="48" class="text-amber-400"></iconify-icon>
+                </div>
+                <h3 class="text-lg font-bold text-white mb-1">Connectez-vous</h3>
+                <p class="text-sm text-slate-400 mb-6 leading-relaxed">Connectez-vous avec Google pour profiter de toutes les fonctionnalités : points, quêtes, parrainage et historique.</p>
+
+                <!-- Bouton Google Sign-In personnalisé -->
+                <button type="button" onclick="startGoogleSignIn()" id="btn-google-signin" class="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-3 bg-white text-gray-800 hover:bg-gray-100 active:scale-[0.97] transition-all shadow-lg border border-gray-200">
+                    <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                    <span>Continuer avec Google</span>
+                </button>
+
+                <div class="flex items-center gap-3 my-5">
+                    <div class="flex-1 h-px bg-white/10"></div>
+                    <span class="text-xs text-slate-500">ou</span>
+                    <div class="flex-1 h-px bg-white/10"></div>
+                </div>
+
+                <a href="https://t.me/BipbipRechargeBot" target="_blank" rel="noopener" class="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 transition-colors">
+                    <iconify-icon icon="mdi:telegram" width="22"></iconify-icon>
+                    Ouvrir dans Telegram
+                </a>
+            </div>
+
+            <p class="text-xs text-slate-500 text-center leading-relaxed">Vous pouvez aussi utiliser l'app sans compte, mais vos points et votre historique ne seront pas sauvegardés.</p>
+            <button type="button" onclick="continueAsGuest()" class="mt-3 w-full py-2.5 rounded-xl text-sm font-medium text-slate-400 border border-white/10 hover:bg-white/5 transition-colors">
+                Continuer sans compte
+            </button>
+        </div>
+
         <div id="screen-profil" class="screen">
             <div class="flex items-center gap-3 mb-6">
                 <button type="button" onclick="navigateTo('home')" class="w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
@@ -820,6 +863,10 @@
                 <div id="profil-photo" class="w-24 h-24 mx-auto rounded-full bg-white/10 border-2 border-amber-500/40 flex items-center justify-center text-4xl text-slate-400 overflow-hidden">👤</div>
                 <p id="profil-user-name" class="text-sm font-medium text-white mt-2">—</p>
                 <p id="profil-telegram-hint" class="text-xs text-slate-500 mt-0.5">Connecté avec Telegram</p>
+                <button type="button" id="btn-google-logout" onclick="logoutGoogle()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium text-rose-400 border border-rose-500/30 hover:bg-rose-500/10 transition-colors" style="display:none">
+                    <iconify-icon icon="solar:logout-2-linear" width="14" class="mr-1 align-middle"></iconify-icon>
+                    Se déconnecter
+                </button>
             </div>
             <div class="glass-panel rounded-xl p-4 mb-4 border border-white/15 text-center">
                 <p class="text-slate-400 text-sm">Points totale</p>
@@ -1002,20 +1049,48 @@
             </div>
         </div>
 
-        <!-- Cartes cadeaux (bientôt disponible) -->
+        <!-- Cartes cadeaux -->
         <div id="screen-cartes" class="screen">
-            <div class="flex items-center gap-3 mb-6">
-                <button type="button" onclick="navigateTo('home')" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
+            <div class="flex items-center gap-3 mb-5">
+                <button type="button" onclick="navigateTo(‘home’)" class="back-btn w-10 h-10 rounded-full border border-white/15 bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
                     <iconify-icon icon="solar:arrow-left-linear" width="20"></iconify-icon>
                 </button>
                 <h2 class="text-xl font-semibold text-white">Cartes cadeaux</h2>
             </div>
-            <div class="glass-panel rounded-xl p-8 border border-amber-500/35 bg-amber-500/10 text-center">
-                <span class="text-5xl block mb-4" aria-hidden="true">🎁</span>
-                <p class="font-semibold text-amber-300 text-lg mb-2">Travaux en cours</p>
-                <p class="text-sm text-slate-400 leading-relaxed">La vente de cartes cadeaux arrive bientôt sur Bipbip. Revenez plus tard pour découvrir les offres.</p>
-                <button type="button" onclick="navigateTo('home')" class="mt-6 w-full py-3 rounded-xl font-semibold border border-white/20 text-slate-200 hover:bg-white/10 transition-colors">
-                    Retour à l’accueil
+
+            <!-- Category tabs -->
+            <div class="gc-tabs flex gap-2 mb-5 overflow-x-auto pb-1 hide-scrollbar">
+                <button type="button" onclick="setGiftCardCategory(‘app’)"    id="gc-tab-app"    class="gc-tab active">App</button>
+                <button type="button" onclick="setGiftCardCategory(‘music’)"  id="gc-tab-music"  class="gc-tab">Music</button>
+                <button type="button" onclick="setGiftCardCategory(‘films’)"  id="gc-tab-films"  class="gc-tab">Films</button>
+                <button type="button" onclick="setGiftCardCategory(‘jeux’)"   id="gc-tab-jeux"   class="gc-tab">Jeux</button>
+            </div>
+
+            <!-- Category title -->
+            <h3 id="gc-category-title" class="text-2xl font-extrabold text-white mb-4 tracking-wide">App</h3>
+
+            <!-- Scrollable cards carousel -->
+            <div id="gc-carousel" class="gc-carousel hide-scrollbar">
+                <!-- Cards injected by JS -->
+            </div>
+
+            <!-- Pagination dots -->
+            <div id="gc-dots" class="flex justify-center gap-2 mt-4"></div>
+        </div>
+
+        <!-- Gift card confirmation modal (overlay) -->
+        <div id="gc-confirm-modal" class="gc-modal-overlay hidden" onclick="closeGiftCardModal(event)">
+            <div class="gc-modal" onclick="event.stopPropagation()">
+                <div class="gc-modal-card-preview" id="gc-modal-preview"></div>
+                <h3 class="text-lg font-bold text-white mt-4 mb-1" id="gc-modal-title"></h3>
+                <p class="text-amber-400 font-extrabold text-xl mb-1" id="gc-modal-price"></p>
+                <p class="text-slate-400 text-xs mb-5" id="gc-modal-desc"></p>
+                <button type="button" onclick="confirmGiftCardPurchase()" class="w-full py-3.5 rounded-xl font-bold text-black bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 active:scale-[0.97] transition-all shadow-lg shadow-amber-500/25 mb-2">
+                    <iconify-icon icon="solar:bag-check-bold" width="18" class="mr-1 align-middle"></iconify-icon>
+                    Confirmer l’achat
+                </button>
+                <button type="button" onclick="closeGiftCardModal()" class="w-full py-2.5 rounded-xl font-semibold border border-white/15 text-slate-300 hover:bg-white/10 transition-colors text-sm">
+                    Annuler
                 </button>
             </div>
         </div>

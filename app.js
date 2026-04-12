@@ -305,6 +305,12 @@ function getDisplayUserName() {
 }
 
 function fetchTelegramMe() {
+    // Si connecté via Google, charger le profil Google à la place
+    var gs = getGoogleSession();
+    if (gs && !isInsideTelegram()) {
+        initGoogleAuth();
+        return;
+    }
     if (!tg || !tg.initData) return;
     fetch(API_BASE + '/api/telegram/me', { method: 'GET', headers: getApiHeaders() })
         .then(function (res) { return res.json(); })
@@ -343,8 +349,26 @@ function setPlaceholderPhoto(container, isProfil) {
 }
 
 function loadAvatarInto(container, isProfil) {
-    if (!container || !tg || !tg.initData) {
-        if (container) setPlaceholderPhoto(container, isProfil);
+    if (!container) return;
+
+    // Google user : utiliser photo_url directement
+    var user = window.__bipbipRegisteredUser;
+    if (user && user.auth_type === 'google' && user.photo_url) {
+        var img = document.createElement('img');
+        img.alt = isProfil ? 'Photo profil' : '';
+        img.className = isProfil ? 'w-full h-full rounded-full object-cover' : 'w-full h-full object-cover';
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = function () { setPlaceholderPhoto(container, isProfil); };
+        img.src = user.photo_url;
+        container.innerHTML = '';
+        container.classList.remove('flex', 'items-center', 'justify-center', 'text-4xl', 'text-slate-400');
+        container.classList.add('overflow-hidden');
+        container.appendChild(img);
+        return;
+    }
+
+    if (!tg || !tg.initData) {
+        setPlaceholderPhoto(container, isProfil);
         return;
     }
     setPlaceholderPhoto(container, isProfil);
@@ -355,19 +379,19 @@ function loadAvatarInto(container, isProfil) {
         })
         .then(function (blob) {
             var url = URL.createObjectURL(blob);
-            var img = document.createElement('img');
-            img.alt = isProfil ? 'Photo profil' : '';
-            img.className = isProfil ? 'w-full h-full rounded-full object-cover' : 'w-full h-full object-cover';
-            img.onload = function () { URL.revokeObjectURL(url); };
-            img.onerror = function () {
+            var img2 = document.createElement('img');
+            img2.alt = isProfil ? 'Photo profil' : '';
+            img2.className = isProfil ? 'w-full h-full rounded-full object-cover' : 'w-full h-full object-cover';
+            img2.onload = function () { URL.revokeObjectURL(url); };
+            img2.onerror = function () {
                 URL.revokeObjectURL(url);
                 setPlaceholderPhoto(container, isProfil);
             };
-            img.src = url;
+            img2.src = url;
             container.innerHTML = '';
             container.classList.remove('flex', 'items-center', 'justify-center', 'text-4xl', 'text-slate-400');
             container.classList.add('overflow-hidden');
-            container.appendChild(img);
+            container.appendChild(img2);
         })
         .catch(function () { setPlaceholderPhoto(container, isProfil); });
 }
@@ -376,11 +400,22 @@ function updateProfilPhoto() {
     var container = document.getElementById('profil-photo');
     var nameEl = document.getElementById('profil-user-name');
     var hintEl = document.getElementById('profil-telegram-hint');
+    var logoutBtn = document.getElementById('btn-google-logout');
     var userName = getDisplayUserName();
     if (nameEl) nameEl.textContent = userName;
-    if (hintEl) hintEl.style.display = (window.__bipbipRegisteredUser || (tg && tg.initDataUnsafe && tg.initDataUnsafe.user)) ? '' : 'none';
+
+    var user = window.__bipbipRegisteredUser;
+    var isTg = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.user);
+    var isGoogle = !!(user && user.auth_type === 'google');
+
+    if (hintEl) {
+        hintEl.style.display = (user || isTg) ? '' : 'none';
+        hintEl.textContent = isGoogle ? 'Connecté avec Google' : 'Connecté avec Telegram';
+    }
+    if (logoutBtn) logoutBtn.style.display = isGoogle ? '' : 'none';
+
     if (!container) return;
-    if (window.__bipbipRegisteredUser && tg && tg.initData) {
+    if (user && (isGoogle || (tg && tg.initData))) {
         loadAvatarInto(container, true);
     } else {
         setPlaceholderPhoto(container, true);
@@ -392,7 +427,9 @@ function updateHeaderUserInfo() {
     var photoEl = document.getElementById('header-photo');
     if (nameEl) nameEl.textContent = getDisplayUserName();
     if (!photoEl) return;
-    if (window.__bipbipRegisteredUser && tg && tg.initData) {
+    var user = window.__bipbipRegisteredUser;
+    var isGoogle = !!(user && user.auth_type === 'google');
+    if (user && (isGoogle || (tg && tg.initData))) {
         loadAvatarInto(photoEl, false);
     } else {
         setPlaceholderPhoto(photoEl, false);
@@ -1104,10 +1141,15 @@ function navigateTo(screen) {
         }
     }
 
+    // Rediriger vers l'écran de connexion si l'utilisateur navigateur n'est pas authentifié
+    if (target === 'profil' && !isInsideTelegram() && !getGoogleSession()) {
+        target = 'login';
+    }
+
     document.querySelectorAll('.screen').forEach(s => {
         s.classList.remove('active');
     });
-    
+
     var targetScreen = document.getElementById('screen-' + target);
     if (targetScreen) {
         targetScreen.classList.add('active');
@@ -1116,6 +1158,7 @@ function navigateTo(screen) {
         if (typeof window.__bipbipTgClosingGuard === 'function') window.__bipbipTgClosingGuard(target);
         if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
         if (target === 'status') renderOrdersList();
+        if (target === 'cartes') renderGiftCards(gcCurrentCategory);
         if (target === 'home') {
             updateHeaderUserInfo();
             loadHomeWeather();
@@ -1549,6 +1592,452 @@ function goToPaymentMethodScreen() {
     bipbipPayTab = 'djamo';
     navigateTo('payment-method');
 }
+
+/* ========== Gift Cards (Cartes cadeaux) ========== */
+
+var GIFT_CARDS = {
+    app: [
+        { id: 'gplay-5',   name: 'Google Play',  value: '5€',   price: 5000,   img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
+        { id: 'gplay-10',  name: 'Google Play',  value: '10€',  price: 8000,   img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
+        { id: 'gplay-25',  name: 'Google Play',  value: '25€',  price: 18000,  img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Google_Play_Store_badge_EN.svg/512px-Google_Play_Store_badge_EN.svg.png', flag: '🇫🇷' },
+        { id: 'itunes-10', name: 'iTunes',       value: '10€',  price: 8000,   img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
+        { id: 'itunes-20', name: 'iTunes',       value: '20€',  price: 15000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
+        { id: 'itunes-50', name: 'iTunes',       value: '50€',  price: 35000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
+    ],
+    music: [
+        { id: 'spotify-10',  name: 'Spotify',      value: '10€',  price: 8000,   img: 'https://i.imgur.com/3tCmGWM.png', flag: '🇫🇷' },
+        { id: 'spotify-30',  name: 'Spotify',      value: '30€',  price: 22000,  img: 'https://i.imgur.com/3tCmGWM.png', flag: '🇫🇷' },
+        { id: 'deezer-10',   name: 'Deezer',       value: '10€',  price: 8000,   img: 'https://i.imgur.com/YfJQoMu.png', flag: '🇫🇷' },
+        { id: 'deezer-25',   name: 'Deezer',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/YfJQoMu.png', flag: '🇫🇷' },
+        { id: 'itunes-m15',  name: 'iTunes Music', value: '15€',  price: 11000,  img: 'https://i.imgur.com/8QhGKGP.png', flag: '🇫🇷' },
+    ],
+    films: [
+        { id: 'netflix-15',  name: 'Netflix',       value: '15€',  price: 11000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
+        { id: 'netflix-25',  name: 'Netflix',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
+        { id: 'netflix-50',  name: 'Netflix',       value: '50€',  price: 35000,  img: 'https://i.imgur.com/0xZGqYr.png', flag: '🇫🇷' },
+        { id: 'disney-25',   name: 'Disney+',       value: '25€',  price: 18000,  img: 'https://i.imgur.com/4DPCLEJ.png', flag: '🇫🇷' },
+        { id: 'prime-30',    name: 'Prime Video',   value: '30€',  price: 22000,  img: 'https://i.imgur.com/QjWEZ1v.png', flag: '🇫🇷' },
+    ],
+    jeux: [
+        { id: 'psn-10',     name: 'PlayStation',   value: '10€',  price: 8000,   img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
+        { id: 'psn-20',     name: 'PlayStation',   value: '20€',  price: 15000,  img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
+        { id: 'psn-50',     name: 'PlayStation',   value: '50€',  price: 35000,  img: 'https://i.imgur.com/1v3THxX.png', flag: '🇫🇷' },
+        { id: 'xbox-10',    name: 'Xbox',          value: '10€',  price: 8000,   img: 'https://i.imgur.com/6bKPfvN.png', flag: '🇫🇷' },
+        { id: 'xbox-25',    name: 'Xbox',          value: '25€',  price: 18000,  img: 'https://i.imgur.com/6bKPfvN.png', flag: '🇫🇷' },
+        { id: 'steam-10',   name: 'Steam',         value: '10€',  price: 8000,   img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
+        { id: 'steam-20',   name: 'Steam',         value: '20€',  price: 15000,  img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
+        { id: 'steam-50',   name: 'Steam',         value: '50€',  price: 35000,  img: 'https://i.imgur.com/YkHohJv.png', flag: '🇫🇷' },
+    ]
+};
+
+var gcCurrentCategory = 'app';
+var gcSelectedCard = null;
+
+var GC_CATEGORY_LABELS = { app: 'App', music: 'Music', films: 'Films', jeux: 'Jeux' };
+
+function setGiftCardCategory(cat) {
+    if (!GIFT_CARDS[cat]) return;
+    gcCurrentCategory = cat;
+
+    // Update tabs
+    document.querySelectorAll('.gc-tab').forEach(function (t) {
+        t.classList.toggle('active', t.id === 'gc-tab-' + cat);
+    });
+
+    // Update title
+    var title = document.getElementById('gc-category-title');
+    if (title) title.textContent = GC_CATEGORY_LABELS[cat] || cat;
+
+    renderGiftCards(cat);
+    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
+}
+
+function renderGiftCards(cat) {
+    var carousel = document.getElementById('gc-carousel');
+    var dotsWrap = document.getElementById('gc-dots');
+    if (!carousel) return;
+
+    var cards = GIFT_CARDS[cat] || [];
+    carousel.innerHTML = '';
+    if (dotsWrap) dotsWrap.innerHTML = '';
+
+    cards.forEach(function (card, i) {
+        var el = document.createElement('div');
+        el.className = 'gc-card';
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.onclick = function () { openGiftCardModal(card); };
+        el.onkeydown = function (e) { if (e.key === 'Enter') openGiftCardModal(card); };
+
+        el.innerHTML =
+            '<div class="gc-card-inner">' +
+                '<div style="position:relative">' +
+                    '<img class="gc-card-img" src="' + card.img + '" alt="' + card.name + '" loading="lazy" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22220%22 height=%22140%22><rect fill=%22%231e293b%22 width=%22220%22 height=%22140%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2394a3b8%22 font-size=%2228%22>' + card.name.charAt(0) + '</text></svg>\'">' +
+                    '<span class="gc-card-value">' + card.value + '</span>' +
+                    '<span class="gc-card-flag" style="position:absolute;top:10px;right:10px;font-size:20px;">' + card.flag + '</span>' +
+                '</div>' +
+                '<div class="gc-card-body">' +
+                    '<p class="gc-card-name">' + card.name + '</p>' +
+                    '<p class="gc-card-price">' + formatNumber(card.price) + 'XOF</p>' +
+                '</div>' +
+            '</div>';
+
+        carousel.appendChild(el);
+
+        // Dot
+        if (dotsWrap) {
+            var dot = document.createElement('span');
+            dot.className = 'gc-dot' + (i === 0 ? ' active' : '');
+            dot.dataset.index = i;
+            dotsWrap.appendChild(dot);
+        }
+    });
+
+    // Update dots on scroll
+    carousel.onscroll = function () { updateGcDots(carousel); };
+    // Reset scroll
+    carousel.scrollLeft = 0;
+}
+
+function updateGcDots(carousel) {
+    var dots = document.querySelectorAll('#gc-dots .gc-dot');
+    if (!dots.length) return;
+    var cardW = 220 + 16; // card width + gap
+    var idx = Math.round(carousel.scrollLeft / cardW);
+    dots.forEach(function (d, i) {
+        d.classList.toggle('active', i === idx);
+    });
+}
+
+function openGiftCardModal(card) {
+    gcSelectedCard = card;
+    var modal = document.getElementById('gc-confirm-modal');
+    var preview = document.getElementById('gc-modal-preview');
+    var title = document.getElementById('gc-modal-title');
+    var price = document.getElementById('gc-modal-price');
+    var desc = document.getElementById('gc-modal-desc');
+    if (!modal) return;
+
+    if (preview) preview.innerHTML = '<img src="' + card.img + '" alt="' + card.name + '">';
+    if (title) title.textContent = card.name + ' — ' + card.value;
+    if (price) price.textContent = formatNumber(card.price) + ' XOF';
+    if (desc) desc.textContent = 'Carte cadeau ' + card.name + ' d\'une valeur de ' + card.value + '. Après paiement, le code sera envoyé par Telegram.';
+
+    modal.classList.remove('hidden');
+    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
+}
+
+function closeGiftCardModal(e) {
+    if (e && e.target && !e.target.classList.contains('gc-modal-overlay')) return;
+    var modal = document.getElementById('gc-confirm-modal');
+    if (modal) modal.classList.add('hidden');
+    gcSelectedCard = null;
+}
+
+function confirmGiftCardPurchase() {
+    if (!gcSelectedCard) return;
+    var card = gcSelectedCard;
+
+    // Build order for gift card
+    var frais = Math.round(card.price * 0.1);
+    var total = card.price + frais;
+
+    currentOrder = {
+        id: null,
+        operator: 'CARTE_CADEAU',
+        amount: card.price,
+        amountTotal: total,
+        phone: '',
+        proof: null,
+        status: 'pending',
+        createdAt: null,
+        paymentMethod: null
+    };
+    // Store gift card details for reference
+    currentOrder._giftCard = {
+        cardId: card.id,
+        name: card.name,
+        value: card.value,
+        category: gcCurrentCategory
+    };
+
+    // Close modal
+    var modal = document.getElementById('gc-confirm-modal');
+    if (modal) modal.classList.add('hidden');
+
+    // Create order via API then navigate to payment
+    var tgUserId = (typeof tg !== 'undefined' && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.id.toString() : null;
+    var payload = {
+        operator: 'CARTE_CADEAU',
+        amount: card.price,
+        amountTotal: total,
+        phone: 'carte-' + card.id,
+        userId: tgUserId || getBrowserUserId(),
+        username: (typeof tg !== 'undefined' && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.username : null,
+        giftCard: card.name + ' ' + card.value
+    };
+
+    fetch(API_BASE + '/api/orders', {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: JSON.stringify(payload)
+    })
+    .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+    })
+    .then(function (result) {
+        if (result.ok && result.data.order) {
+            currentOrder.id = result.data.order.id;
+            currentOrder.createdAt = result.data.order.createdAt || new Date().toISOString();
+            orders.push({...currentOrder});
+            saveOrders();
+            showToast('Commande créée ! Choisissez votre mode de paiement.', 'success');
+            goToPaymentMethodScreen();
+        } else {
+            var msg = (result.data && result.data.error) ? result.data.error : ('Erreur serveur (' + result.status + ')');
+            showToast(msg, 'error');
+        }
+    })
+    .catch(function (err) {
+        console.error('Erreur API /api/orders (gift card):', err);
+        showToast('Erreur réseau. Vérifiez votre connexion.', 'error');
+    });
+}
+
+// Initialize gift cards when navigating to cartes screen
+(function () {
+    var _origNav = typeof navigateTo === 'function' ? null : null; // patched below
+})();
+
+/* ========== / Gift Cards ========== */
+
+/* ========== Google Sign-In (utilisateurs navigateur) ========== */
+
+var __bipbipGoogleSession = null; // { token, userId }
+
+/**
+ * Vérifie si l'utilisateur est connecté via Google (session stockée en localStorage)
+ */
+function getGoogleSession() {
+    if (__bipbipGoogleSession) return __bipbipGoogleSession;
+    try {
+        var raw = localStorage.getItem('bipbip_google_session');
+        if (raw) {
+            var s = JSON.parse(raw);
+            if (s && s.token && s.userId) {
+                __bipbipGoogleSession = s;
+                return s;
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+
+function saveGoogleSession(token, userId) {
+    __bipbipGoogleSession = { token: token, userId: userId };
+    try { localStorage.setItem('bipbip_google_session', JSON.stringify(__bipbipGoogleSession)); } catch (e) {}
+}
+
+function clearGoogleSession() {
+    __bipbipGoogleSession = null;
+    try { localStorage.removeItem('bipbip_google_session'); } catch (e) {}
+}
+
+/**
+ * Retourne true si l'utilisateur est dans Telegram
+ */
+function isInsideTelegram() {
+    return !!(tg && tg.initData && tg.initData.length > 0);
+}
+
+/**
+ * Retourne true si l'utilisateur est connecté (Telegram ou Google)
+ */
+function isUserAuthenticated() {
+    return isInsideTelegram() || !!getGoogleSession();
+}
+
+/**
+ * Enrichit les headers API avec le token Google si connecté
+ */
+var _origGetApiHeaders = getApiHeaders;
+getApiHeaders = function (extra) {
+    var h = _origGetApiHeaders(extra);
+    var gs = getGoogleSession();
+    if (gs && !isInsideTelegram()) {
+        h['X-Google-Session'] = gs.token;
+    }
+    return h;
+};
+
+/**
+ * Retourne le userId à envoyer aux API
+ */
+var _origGetBrowserUserId = getBrowserUserId;
+getBrowserUserId = function () {
+    var gs = getGoogleSession();
+    if (gs) return gs.userId;
+    return _origGetBrowserUserId();
+};
+
+/**
+ * Lance le flux Google Sign-In
+ */
+function startGoogleSignIn() {
+    var clientId = serverConfig.googleClientId;
+    if (!clientId) {
+        showToast('Google Sign-In non configuré. Contactez le support.', 'error');
+        return;
+    }
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        showToast('Chargement de Google en cours... Réessayez.', 'info');
+        return;
+    }
+
+    google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+    });
+
+    // Utiliser le popup Google natif
+    google.accounts.id.prompt(function (notification) {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // Fallback : afficher le bouton rendu par Google
+            var container = document.getElementById('btn-google-signin');
+            if (container) {
+                container.style.display = 'none';
+                var gDiv = document.createElement('div');
+                gDiv.id = 'g_id_signin_rendered';
+                gDiv.style.display = 'flex';
+                gDiv.style.justifyContent = 'center';
+                container.parentNode.insertBefore(gDiv, container);
+                google.accounts.id.renderButton(gDiv, {
+                    theme: 'filled_blue',
+                    size: 'large',
+                    shape: 'pill',
+                    width: 300,
+                    text: 'continue_with',
+                    locale: 'fr',
+                });
+            }
+        }
+    });
+}
+
+/**
+ * Callback après connexion Google réussie
+ */
+function handleGoogleCredentialResponse(response) {
+    if (!response || !response.credential) {
+        showToast('Connexion Google annulée.', 'info');
+        return;
+    }
+
+    showToast('Connexion en cours...', 'info');
+
+    fetch(API_BASE + '/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential })
+    })
+    .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+    })
+    .then(function (result) {
+        if (result.ok && result.data.ok && result.data.user) {
+            var user = result.data.user;
+            saveGoogleSession(result.data.sessionToken, String(user.telegram_id));
+
+            // Stocker les infos utilisateur comme pour Telegram
+            window.__bipbipRegisteredUser = user;
+            if (typeof user.points === 'number') {
+                userPoints = user.points;
+                try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+            }
+
+            updateProfilPhoto();
+            updateHeaderUserInfo();
+            updateHeaderPoints();
+            updateProfilPoints();
+
+            showToast('Bienvenue ' + (user.first_name || '') + ' !', 'success');
+            navigateTo('home');
+        } else {
+            showToast(result.data.error || 'Erreur de connexion Google', 'error');
+        }
+    })
+    .catch(function (err) {
+        console.error('[Google Auth]', err);
+        showToast('Erreur réseau. Réessayez.', 'error');
+    });
+}
+
+/**
+ * Continuer sans compte (mode invité)
+ */
+function continueAsGuest() {
+    showToast('Mode invité — fonctionnalités limitées.', 'info');
+    navigateTo('home');
+}
+
+/**
+ * Déconnexion Google
+ */
+function logoutGoogle() {
+    clearGoogleSession();
+    window.__bipbipRegisteredUser = null;
+    userPoints = 0;
+    try { localStorage.setItem('bipbip_points', '0'); } catch (e) {}
+
+    // Réinitialiser le header
+    var nameEl = document.getElementById('header-user-name');
+    var photoEl = document.getElementById('header-photo');
+    var pointsEl = document.getElementById('header-points');
+    if (nameEl) nameEl.textContent = '—';
+    if (photoEl) photoEl.innerHTML = '<span class="text-xl text-slate-400">👤</span>';
+    if (pointsEl) pointsEl.textContent = '0';
+
+    showToast('Déconnecté.', 'info');
+    navigateTo('home');
+}
+
+/**
+ * Charger le profil Google au démarrage si session existante
+ */
+function initGoogleAuth() {
+    var gs = getGoogleSession();
+    if (!gs || isInsideTelegram()) return;
+
+    fetch(API_BASE + '/api/auth/google/me?uid=' + encodeURIComponent(gs.userId), {
+        headers: { 'X-Google-Session': gs.token, 'Content-Type': 'application/json' }
+    })
+    .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+    })
+    .then(function (result) {
+        if (result.ok && result.data.ok && result.data.user) {
+            window.__bipbipRegisteredUser = result.data.user;
+            if (typeof result.data.user.points === 'number') {
+                userPoints = result.data.user.points;
+                try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+            }
+            updateProfilPhoto();
+            updateHeaderUserInfo();
+            updateHeaderPoints();
+            updateProfilPoints();
+        } else {
+            // Session expirée
+            clearGoogleSession();
+        }
+    })
+    .catch(function () {
+        // Silencieux en cas d'erreur réseau
+    });
+}
+
+/* ========== / Google Sign-In ========== */
 
 function toggleWavePayBlock() {
     var block = document.getElementById('wave-pay-block');
@@ -2713,6 +3202,8 @@ function loadServerConfig() {
 
 function initApp() {
     initTelegram();
+    // Initialiser la session Google si elle existe (utilisateurs navigateur)
+    if (!isInsideTelegram()) initGoogleAuth();
     applyLedAnimation();
     loadServerConfig();
     updateHeaderPoints();

@@ -54,6 +54,9 @@ function getAdminChatIds() {
 }
 const ADMIN_CHAT_ID = getAdminChatIds()[0] || ''; // pour compatibilité
 
+// Google Sign-In
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+
 // Achats directs dans le bot (sans webapp)
 const BOT_FRAIS_PERCENT = 10;
 const BOT_OPERATORS = {
@@ -63,6 +66,8 @@ const BOT_OPERATORS = {
 };
 const BOT_AMOUNTS = [500, 1000, 2000, 5000, 10000];
 const buyState = new Map(); // chatId -> { step, operator?, amount?, amountTotal?, phone? }
+// Mémorise les message_ids envoyés aux admins par commande (bot admin) : orderId -> [{chatId, messageId}]
+const orderAdminMessages = new Map();
 
 // ==================== UPLOADS ====================
 const UPLOADS_DIR = './uploads';
@@ -147,13 +152,13 @@ function writeAppConfig(obj) {
 
 function normalizePaymentMethod(raw) {
     const s = String(raw == null || raw === '' ? 'djamo' : raw).toLowerCase().trim();
-    const allowed = new Set(['djamo', 'usdt', 'usdc', 'ton', 'momo', 'wave']);
+    const allowed = new Set(['djamo', 'usdt', 'usdc', 'ton', 'momo']);
     return allowed.has(s) ? s : 'djamo';
 }
 
 function paymentMethodAdminLabel(method) {
     const m = normalizePaymentMethod(method);
-    const map = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo', wave: 'Wave' };
+    const map = { djamo: 'Djamo', usdt: 'USDT', usdc: 'USDC', ton: 'TON', momo: 'MTN MoMo' };
     return map[m] || m;
 }
 
@@ -249,26 +254,6 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
-// ==================== ROUTING DESKTOP / MOBILE ====================
-function isMobileOrTablet(ua) {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Touch/i.test(ua || '');
-}
-
-// Route racine : landing sur desktop, app sur mobile/tablette
-app.get('/', (req, res) => {
-    const ua = req.headers['user-agent'] || '';
-    if (isMobileOrTablet(ua)) {
-        res.sendFile(path.join(__dirname, 'app.html'));
-    } else {
-        res.sendFile(path.join(__dirname, 'index.html'));
-    }
-});
-
-// Accès direct à l'app (mobile/tablette sans Telegram ou ajout écran accueil)
-app.get('/app', (req, res) => {
-    res.sendFile(path.join(__dirname, 'app.html'));
-});
-
 // ==================== SEO PAGES ====================
 app.get('/recharge-mtn-ci', (req, res) => {
     res.sendFile(path.join(__dirname, 'seo', 'recharge-mtn-ci.html'));
@@ -286,6 +271,29 @@ app.get('/robots.txt', (req, res) => {
 app.get('/sitemap.xml', (req, res) => {
     res.type('application/xml');
     res.sendFile(path.join(__dirname, 'sitemap.xml'));
+});
+
+// ==================== ROUTING LANDING vs WEBAPP ====================
+function shouldServeApp(ua) {
+    if (!ua) return false;
+    // Telegram Mini App / WebApp (toutes plateformes, mobile + desktop)
+    if (/TelegramBot|Telegram\/|TMA\b|\bTelegram\b/i.test(ua)) return true;
+    // Mobile / Tablette (couvre aussi PWA installée sur mobile)
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua)) return true;
+    return false;
+}
+
+app.get('/', (req, res) => {
+    const ua = req.headers['user-agent'] || '';
+    if (shouldServeApp(ua)) {
+        res.sendFile(path.join(__dirname, 'app.html'));
+    } else {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    }
+});
+
+app.get('/app', (req, res) => {
+    res.sendFile(path.join(__dirname, 'app.html'));
 });
 
 app.use(express.static('.', {
@@ -438,9 +446,14 @@ async function executeUssdTransfer(order) {
 
 async function sendTelegramPhotoToAllAdmins(photoUrl, caption, options = {}, token = TELEGRAM_BOT_TOKEN) {
     const ids = getAdminChatIds();
+    const results = [];
     for (const chatId of ids) {
-        await sendTelegramPhoto(chatId, photoUrl, caption, options, token);
+        const r = await sendTelegramPhoto(chatId, photoUrl, caption, options, token);
+        if (r && r.ok && r.result && r.result.message_id) {
+            results.push({ chatId: String(chatId), messageId: r.result.message_id });
+        }
     }
+    return results;
 }
 
 async function answerTelegramCallback(callbackQueryId, text, token = TELEGRAM_BOT_TOKEN) {
@@ -455,6 +468,29 @@ async function answerTelegramCallback(callbackQueryId, text, token = TELEGRAM_BO
     } catch (e) {
         console.error('[Telegram] answerCallbackQuery:', e);
     }
+}
+
+// Supprime les boutons Valider/Rejeter chez tous les admins après une action sur une commande
+async function removeOrderButtonsFromAllAdmins(orderId, token) {
+    const msgs = orderAdminMessages.get(String(orderId));
+    if (!msgs || !token) return;
+    try {
+        const fetch = (await import('node-fetch')).default;
+        for (const { chatId, messageId } of msgs) {
+            try {
+                await fetch(`https://api.telegram.org/bot${token}/editMessageReplyMarkup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, message_id: messageId, reply_markup: { inline_keyboard: [] } })
+                });
+            } catch (e) {
+                console.error('[Telegram] removeOrderButtons chatId=' + chatId, e.message);
+            }
+        }
+    } catch (e) {
+        console.error('[Telegram] removeOrderButtonsFromAllAdmins:', e);
+    }
+    orderAdminMessages.delete(String(orderId));
 }
 
 async function downloadTelegramFile(fileId) {
@@ -587,7 +623,8 @@ app.get('/api/config', (req, res) => {
         cryptoFcfaPerUsdt: Number.isFinite(fcfaRaw) && fcfaRaw > 0 ? fcfaRaw : null,
         telegramBotUsername: tgUser || null,
         twaReturnUrl: tgUser ? `https://t.me/${tgUser}` : null,
-        tonConnectManifestUrl: `${base}/tonconnect-manifest.json`
+        tonConnectManifestUrl: `${base}/tonconnect-manifest.json`,
+        googleClientId: GOOGLE_CLIENT_ID || null
     });
 });
 
@@ -684,7 +721,7 @@ app.post('/api/admin/pub-banner-image', upload.single('image'), (req, res) => {
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)
 app.post('/api/orders', paymentLimiter, async (req, res) => {
     try {
-        const { operator, amount, amountTotal, phone, userId: bodyUserId, username: bodyUsername } = req.body;
+        const { operator, amount, amountTotal, phone, userId: bodyUserId, username: bodyUsername, giftCard } = req.body;
         
         if (!operator || !amount || !phone) {
             return res.status(400).json({ error: 'Données manquantes' });
@@ -713,25 +750,30 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             phone: phoneStr,
             proof: null,
             status: 'pending',
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            ...(giftCard ? { giftCard: String(giftCard).slice(0, 100) } : {})
         };
-        
+
         await orderStorage.createOrder(order);
         
-        // Notifier tous les admins
+        // Notifier tous les admins via bot admin uniquement
         const adminIds = getAdminChatIds();
         if (adminIds.length === 0) {
             console.warn('[Telegram] Aucun ADMIN_CHAT_ID/ADMIN_CHAT_IDS dans .env - pas de notif admin');
         } else {
             console.log('[Telegram] Envoi notif nouvelle commande #' + orderId + ' à ' + adminIds.length + ' admin(s)');
             const userLabel = username ? '@' + username : (userId && userId.startsWith('web_')) ? '🌐 Navigateur' : userId || 'WebApp';
+            const notifToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
             await sendTelegramToAllAdmins(
                 `🔔 <b>NOUVELLE COMMANDE #${orderId}</b>\n\n` +
                 `👤 User: ${userLabel}\n` +
                 `📲 Opérateur: ${operator}\n` +
+                (giftCard ? `🎁 Carte: ${giftCard}\n` : '') +
                 `💰 Montant: ${amountTotal} FCFA\n` +
-                `📞 Numéro: ${phone}\n` +
-                `📅 Date: ${new Date().toLocaleString('fr-FR')}`
+                (operator === 'CARTE_CADEAU' ? '' : `📞 Numéro: ${phone}\n`) +
+                `📅 Date: ${new Date().toLocaleString('fr-FR')}`,
+                {},
+                notifToken
             );
         }
         
@@ -788,11 +830,11 @@ app.post('/api/orders/:id/proof', upload.single('proof'), async (req, res) => {
                 ]]
             }
         };
-        // Envoyer la preuve aux admins via le bot principal
-        await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard);
-        // Et aussi via le bot Admin Supabase (si configuré)
-        if (TELEGRAM_BOT_TOKEN_ADMIN) {
-            await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard, TELEGRAM_BOT_TOKEN_ADMIN);
+        // Envoyer la preuve aux admins via le bot admin uniquement
+        {
+            const proofToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+            const msgs = await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard, proofToken);
+            if (msgs.length > 0) orderAdminMessages.set(String(orderId), msgs);
         }
         
         res.json({ success: true, proof: proofPath });
@@ -839,9 +881,11 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
                 ]]
             }
         };
-        await sendTelegramPhotoToAllAdmins(proofUrl, captionB64, keyboard2);
-        if (TELEGRAM_BOT_TOKEN_ADMIN) {
-            await sendTelegramPhotoToAllAdmins(proofUrl, captionB64, keyboard2, TELEGRAM_BOT_TOKEN_ADMIN);
+        // Envoyer la preuve aux admins via le bot admin uniquement
+        {
+            const proofToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+            const msgs = await sendTelegramPhotoToAllAdmins(proofUrl, captionB64, keyboard2, proofToken);
+            if (msgs.length > 0) orderAdminMessages.set(String(orderId), msgs);
         }
         res.json({ success: true, proof: proofPath });
     } catch (error) {
@@ -894,6 +938,7 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                     '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.');
             }
         }
+        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
         res.json({ success: true, message: 'Commande validée' });
     } catch (error) {
         console.error('Erreur validation:', error);
@@ -935,6 +980,7 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
                     '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.');
             }
         }
+        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
         res.json({ success: true, message: 'Commande validée' });
     } catch (err) {
         console.error('Erreur validation (by-telegram):', err);
@@ -962,6 +1008,7 @@ app.post('/api/admin/orders/:id/reject-by-telegram', async (req, res) => {
             await sendTelegramMessage(order.userId,
                 `❌ <b>Commande rejetée</b>\n\nCommande #${orderId}\nRaison: ${reason || 'Preuve invalide'}`);
         }
+        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
         res.json({ success: true, message: 'Commande rejetée' });
     } catch (err) {
         console.error('Erreur rejet (by-telegram):', err);
@@ -976,11 +1023,11 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
         const orderId = req.params.id;
         const { reason } = req.body;
         const order = await orderStorage.setOrderRejected(orderId, reason);
-        
+
         if (!order) {
             return res.status(404).json({ error: 'Commande introuvable' });
         }
-        
+
         // Notifier l'utilisateur
         if (order.userId) {
             await sendTelegramMessage(order.userId,
@@ -990,9 +1037,10 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
                 `Veuillez réessayer ou contacter le support.`
             );
         }
-        
+
+        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
         res.json({ success: true, message: 'Commande rejetée' });
-        
+
     } catch (error) {
         console.error('Erreur rejet:', error);
         res.status(500).json({ error: 'Erreur serveur' });
@@ -1104,6 +1152,140 @@ app.post('/api/telegram/register', async (req, res) => {
     }
 });
 
+// ==================== GOOGLE AUTH ====================
+// Inscription / connexion via Google Sign-In (utilisateurs navigateur)
+app.post('/api/auth/google', async (req, res) => {
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ error: 'Token Google manquant' });
+    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ error: 'Google Sign-In non configuré sur le serveur' });
+
+    try {
+        // Vérifier le token Google via l'endpoint tokeninfo
+        const fetch = (await import('node-fetch')).default;
+        const verifyRes = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+        if (!verifyRes.ok) return res.status(401).json({ error: 'Token Google invalide' });
+        const payload = await verifyRes.json();
+
+        // Vérifier que le token est pour notre app
+        if (payload.aud !== GOOGLE_CLIENT_ID) {
+            return res.status(401).json({ error: 'Token Google non destiné à cette application' });
+        }
+
+        const googleId = payload.sub;
+        const email = payload.email || '';
+        const firstName = payload.given_name || payload.name || '';
+        const lastName = payload.family_name || '';
+        const photoUrl = payload.picture || null;
+
+        // Créer ou mettre à jour l'utilisateur dans la table telegram_users
+        // On utilise un ID négatif basé sur le hash du googleId pour éviter les collisions
+        const hashNum = Math.abs(parseInt(crypto.createHash('md5').update(googleId).digest('hex').slice(0, 12), 16));
+        const syntheticId = -(hashNum % 9000000000 + 1000000000); // ID négatif unique
+
+        const supabase = require('./database/supabase-client').getSupabase();
+        if (!supabase) return res.status(500).json({ error: 'Base de données indisponible' });
+
+        const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+        const now = new Date().toISOString();
+
+        // Chercher un utilisateur existant par google_id ou par l'ID synthétique
+        const { data: existing } = await supabase
+            .from(tableName)
+            .select('*')
+            .eq('telegram_id', syntheticId)
+            .single();
+
+        let user;
+        if (existing) {
+            const { data: updated, error } = await supabase
+                .from(tableName)
+                .update({
+                    first_name: firstName,
+                    last_name: lastName,
+                    username: email,
+                    photo_url: photoUrl,
+                    google_id: googleId,
+                    updated_at: now,
+                })
+                .eq('telegram_id', syntheticId)
+                .select()
+                .single();
+            if (error) return res.status(500).json({ error: error.message });
+            user = updated;
+        } else {
+            const { data: inserted, error } = await supabase
+                .from(tableName)
+                .insert({
+                    telegram_id: syntheticId,
+                    first_name: firstName,
+                    last_name: lastName,
+                    username: email,
+                    photo_url: photoUrl,
+                    google_id: googleId,
+                    referral_code: 'G' + String(Math.abs(syntheticId)),
+                    points: 0,
+                    created_at: now,
+                    updated_at: now,
+                })
+                .select()
+                .single();
+            if (error) {
+                console.error('[Google Auth] insert error:', error.message);
+                return res.status(500).json({ error: error.message });
+            }
+            user = inserted;
+        }
+
+        // Générer un token de session simple (hash signé)
+        const sessionToken = crypto.createHmac('sha256', TELEGRAM_BOT_TOKEN || 'bipbip-secret')
+            .update('google:' + googleId + ':' + syntheticId)
+            .digest('hex');
+
+        console.log('[Google Auth] Utilisateur connecté:', email, 'id=', syntheticId);
+        return res.json({
+            ok: true,
+            user: {
+                ...user,
+                auth_type: 'google',
+            },
+            sessionToken,
+        });
+    } catch (e) {
+        console.error('[Google Auth] Erreur:', e);
+        return res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
+// Récupérer le profil d'un utilisateur Google authentifié
+app.get('/api/auth/google/me', async (req, res) => {
+    const token = req.headers['x-google-session'] || '';
+    const uid = req.query.uid || '';
+    if (!token || !uid) return res.status(401).json({ error: 'Non authentifié' });
+
+    try {
+        const supabase = require('./database/supabase-client').getSupabase();
+        if (!supabase) return res.status(500).json({ error: 'Base indisponible' });
+        const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+        const { data: user } = await supabase
+            .from(tableName)
+            .select('*')
+            .eq('telegram_id', Number(uid))
+            .single();
+        if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+
+        // Vérifier le token de session
+        const expectedToken = crypto.createHmac('sha256', TELEGRAM_BOT_TOKEN || 'bipbip-secret')
+            .update('google:' + (user.google_id || '') + ':' + uid)
+            .digest('hex');
+        if (token !== expectedToken) return res.status(401).json({ error: 'Session invalide' });
+
+        return res.json({ ok: true, user: { ...user, auth_type: 'google' } });
+    } catch (e) {
+        console.error('[Google Auth /me]', e);
+        return res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 // Daily check-in : état et réclamation
 app.get('/api/telegram/daily-checkin', async (req, res) => {
     if (!req.telegramUser || !req.userId) {
@@ -1195,7 +1377,9 @@ app.post('/api/telegram/promo-likes', async (req, res) => {
                 '🔔 <b>PROMO LIKES/VUES — ' + amount + ' F</b> (' + formulaLabel + ')\n\n' +
                 '👤 ' + username + '\n' +
                 '🔗 ' + socialLink + '\n' +
-                '📅 ' + new Date().toLocaleString('fr-FR')
+                '📅 ' + new Date().toLocaleString('fr-FR'),
+                {},
+                TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
             );
         }
         return res.json({ success: true, order: { id: order.id, operator: order.operator, amount: order.amount, createdAt: order.createdAt } });
@@ -1411,6 +1595,88 @@ async function handleTelegramUpdateAdmin(body) {
                 return;
             }
             if (cmd.startsWith('/')) {
+
+    // === AGENT CONTROL COMMANDS ===
+    if (cmd === '/agent' || cmd === '/agent status') {
+      try {
+        const status = require('child_process').execSync('pm2 jlist | grep -o "bipbip-validation-agent.*status.*online" | head -1').toString();
+        await sendTelegramMessage(chatId, '🤖 <b>Agent de Validation</b>\n' + (status.includes('online') ? '✅ En ligne' : '⏹️ Arrêté'), {}, botToken);
+      } catch (e) {
+        await sendTelegramMessage(chatId, '🤖 Agent: en cours de vérification...', {}, botToken);
+      }
+      return;
+    }
+    if (cmd === '/agent on') {
+      require('child_process').exec('pm2 start bipbip-validation-agent');
+      await sendTelegramMessage(chatId, '✅ Agent de validation activé!', {}, botToken);
+      return;
+    }
+    if (cmd === '/agent off') {
+      require('child_process').exec('pm2 stop bipbip-validation-agent');
+      await sendTelegramMessage(chatId, '⏹️ Agent de validation désactivé.', {}, botToken);
+      return;
+    }
+    if (cmd === '/agent logs') {
+
+    // === NEW AGENTS COMMANDS ===
+    if (cmd === "/agents") {
+        const list = require("child_process").execSync("pm2 list | grep bipbip | head -10").toString();
+        await sendTelegramMessage(chatId, "🤖 <b>Agents BipBip:</b>\\n" + list, {}, botToken);
+        return;
+    }
+    if (cmd === "/validateur" || cmd === "/validateur status") {
+        const status = require("child_process").execSync("pm2 show bipbip-validateur-annonces 2>/dev/null | grep status").toString();
+        await sendTelegramMessage(chatId, "📋 <b>Validateur:</b>\\n" + status, {}, botToken);
+        return;
+    }
+    if (cmd === "/validateur on") {
+        require("child_process").exec("pm2 start bipbip-validateur-annonces");
+        await sendTelegramMessage(chatId, "✅ Validateur activé!", {}, botToken);
+        return;
+    }
+    if (cmd === "/validateur off") {
+        require("child_process").exec("pm2 stop bipbip-validateur-annonces");
+        await sendTelegramMessage(chatId, "⏹️ Validateur désactivé.", {}, botToken);
+        return;
+    }
+    if (cmd === "/fraude" || cmd === "/fraude status") {
+        const status = require("child_process").execSync("pm2 show bipbip-fraude-detector 2>/dev/null | grep status").toString();
+        await sendTelegramMessage(chatId, "🔍 <b>Fraude:</b>\\n" + status, {}, botToken);
+        return;
+    }
+    if (cmd === "/fraude on") {
+        require("child_process").exec("pm2 start bipbip-fraude-detector");
+        await sendTelegramMessage(chatId, "✅ Détecteur Fraude activé!", {}, botToken);
+        return;
+    }
+    if (cmd === "/fraude off") {
+        require("child_process").exec("pm2 stop bipbip-fraude-detector");
+        await sendTelegramMessage(chatId, "⏹️ Détecteur Fraude désactivé.", {}, botToken);
+        return;
+    }
+    if (cmd === "/rotator" || cmd === "/rotator status") {
+        const status = require("child_process").execSync("pm2 show bipbip-rotator 2>/dev/null | grep status").toString();
+        await sendTelegramMessage(chatId, "🔄 <b>Rotator:</b>\\n" + status, {}, botToken);
+        return;
+    }
+    if (cmd === "/rotator on") {
+        require("child_process").exec("pm2 start bipbip-rotator");
+        await sendTelegramMessage(chatId, "✅ Rotator activé!", {}, botToken);
+        return;
+    }
+    if (cmd === "/rotator off") {
+        require("child_process").exec("pm2 stop bipbip-rotator");
+        await sendTelegramMessage(chatId, "⏹️ Rotator désactivé.", {}, botToken);
+        return;
+    }
+    // === END NEW AGENTS COMMANDS ===
+
+      const logs = require('child_process').execSync('pm2 logs bipbip-validation-agent --lines 10 --nostream 2>&1 | tail -15').toString();
+      await sendTelegramMessage(chatId, '📋 <b>Logs Agent:</b>\n' + logs.slice(0, 2000), {}, botToken);
+      return;
+    }
+    // === END AGENT COMMANDS ===
+
                 await sendTelegramMessage(chatId, '❓ /actualites, /annonces, /commandes, /liens', {}, botToken);
             }
         } catch (err) {
@@ -1523,6 +1789,7 @@ async function handleTelegramUpdateAdmin(body) {
                                 '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.', {}, botToken);
                         }
                     }
+                    await removeOrderButtonsFromAllAdmins(orderId, botToken);
                 } else {
                     await answerTelegramCallback(callbackId, 'Commande introuvable', botToken);
                 }
@@ -1536,6 +1803,7 @@ async function handleTelegramUpdateAdmin(body) {
                     if (orderBefore && orderBefore.operator === 'ANNONCE_LED' && orderBefore.notes) await annoncesService.refuseAnnonce(orderBefore.notes);
                     await answerTelegramCallback(callbackId, 'Commande rejetée', botToken);
                     if (chatId) await sendTelegramMessage(chatId, `❌ Commande #${orderId} rejetée`, {}, botToken);
+                    await removeOrderButtonsFromAllAdmins(orderId, botToken);
                 } else {
                     await answerTelegramCallback(callbackId, 'Commande introuvable', botToken);
                 }
@@ -1729,7 +1997,9 @@ async function handleTelegramUpdate(body) {
                     const admIds = getAdminChatIds();
                     if (admIds.length > 0) {
                         await sendTelegramToAllAdmins(
-                            `🔔 <b>NOUVELLE COMMANDE #${orderId}</b> (Bot)\n\n👤 ${order.username ? '@' + order.username : chatId}\n📲 ${order.operator}\n💰 ${order.amountTotal} FCFA\n📞 ${order.phone}\n📅 ${new Date().toLocaleString('fr-FR')}`
+                            `🔔 <b>NOUVELLE COMMANDE #${orderId}</b> (Bot)\n\n👤 ${order.username ? '@' + order.username : chatId}\n📲 ${order.operator}\n💰 ${order.amountTotal} FCFA\n📞 ${order.phone}\n📅 ${new Date().toLocaleString('fr-FR')}`,
+                            {},
+                            TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
                         );
                     }
                     const DJAMO_PAY_URL = 'https://pay.djamo.com/pkbyg';
@@ -1777,9 +2047,11 @@ async function handleTelegramUpdate(body) {
                                 ]]
                             }
                         };
-                        await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard3);
-                        if (TELEGRAM_BOT_TOKEN_ADMIN) {
-                            await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard3, TELEGRAM_BOT_TOKEN_ADMIN);
+                        // Envoyer preuve aux admins via bot admin uniquement
+                        {
+                            const proofToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+                            const msgs = await sendTelegramPhotoToAllAdmins(proofUrl, caption, keyboard3, proofToken);
+                            if (msgs.length > 0) orderAdminMessages.set(String(order.id), msgs);
                         }
                         await sendTelegramMessage(chatId, '✅ Preuve reçue. En attente de validation par l\'admin.');
                     } else {
@@ -1917,6 +2189,7 @@ async function handleTelegramUpdate(body) {
                                 '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.');
                         }
                     }
+                    await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
                 } else {
                     await answerTelegramCallback(callbackId, 'Commande introuvable');
                 }
@@ -1930,6 +2203,7 @@ async function handleTelegramUpdate(body) {
                     }
                     await answerTelegramCallback(callbackId, 'Commande rejetée');
                     if (chatId) await sendTelegramMessage(chatId, `❌ Commande #${orderId} rejetée`);
+                    await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
                 } else {
                     await answerTelegramCallback(callbackId, 'Commande introuvable');
                 }
