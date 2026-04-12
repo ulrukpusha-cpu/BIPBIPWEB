@@ -123,7 +123,8 @@ function sanitizePubBanners(arr) {
 function readAppConfig() {
     const defaults = {
         ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60,
-        pubBanners: DEFAULT_PUB_BANNERS
+        pubBanners: DEFAULT_PUB_BANNERS,
+        giftCards: []
     };
     try {
         if (fs.existsSync(APP_CONFIG_PATH)) {
@@ -133,7 +134,8 @@ function readAppConfig() {
             if (Array.isArray(raw.pubBanners)) {
                 pubBanners = sanitizePubBanners(raw.pubBanners);
             }
-            return { ledScrollSeconds: led, pubBanners };
+            const giftCards = Array.isArray(raw.giftCards) ? raw.giftCards : [];
+            return { ledScrollSeconds: led, pubBanners, giftCards };
         }
     } catch (e) { /* ignore */ }
     return { ...defaults };
@@ -716,6 +718,43 @@ app.post('/api/admin/pub-banner-image', upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Fichier image manquant (champ "image")' });
     const url = '/uploads/' + req.file.filename;
     res.json({ success: true, url });
+});
+
+// ==================== GIFT CARDS ADMIN ====================
+// Récupérer les cartes cadeaux (public)
+app.get('/api/gift-cards', (req, res) => {
+    const config = readAppConfig();
+    res.json({ ok: true, giftCards: config.giftCards || [] });
+});
+
+// Admin : upload image carte cadeau
+app.post('/api/admin/gift-card-image', upload.single('image'), (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    if (!req.file) return res.status(400).json({ error: 'Fichier image manquant' });
+    res.json({ success: true, url: '/uploads/' + req.file.filename });
+});
+
+// Admin : sauvegarder toutes les cartes cadeaux
+app.put('/api/admin/gift-cards', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const { giftCards } = req.body || {};
+    if (!Array.isArray(giftCards)) return res.status(400).json({ error: 'giftCards doit être un tableau' });
+
+    // Valider et nettoyer chaque carte
+    const cleaned = giftCards.map(c => ({
+        id: String(c.id || '').slice(0, 50) || ('gc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+        name: String(c.name || '').slice(0, 100),
+        value: String(c.value || '').slice(0, 20),
+        price: Math.max(0, parseInt(c.price, 10) || 0),
+        category: ['app', 'music', 'films', 'jeux'].includes(c.category) ? c.category : 'app',
+        img: String(c.img || '').slice(0, 500),
+        flag: String(c.flag || '').slice(0, 10) || '',
+    })).filter(c => c.name && c.price > 0);
+
+    const config = readAppConfig();
+    config.giftCards = cleaned;
+    if (!writeAppConfig(config)) return res.status(500).json({ error: 'Erreur écriture config' });
+    res.json({ success: true, giftCards: cleaned });
 });
 
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)

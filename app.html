@@ -1167,6 +1167,62 @@
                     <button type="button" onclick="savePubBanners()" class="px-4 py-2 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-sm font-medium hover:bg-rose-500/30">Enregistrer les bannières</button>
                 </div>
             </div>
+            <!-- Gestion cartes cadeaux -->
+            <div class="glass-panel rounded-xl p-4 mb-6 border border-amber-500/20 bg-amber-500/5">
+                <h3 class="font-semibold text-white mb-2 flex items-center gap-2">
+                    <iconify-icon icon="solar:gift-bold" width="20" class="text-amber-400"></iconify-icon>
+                    Cartes cadeaux
+                </h3>
+                <p class="text-sm text-slate-400 mb-3">Ajoutez, modifiez ou supprimez des cartes cadeaux. Les cartes apparaissent dans l'onglet <strong class="text-slate-300">Cartes</strong> de l'app.</p>
+
+                <!-- Formulaire ajout -->
+                <div class="p-3 rounded-xl bg-slate-800/60 border border-white/10 mb-3">
+                    <p class="text-xs font-semibold text-amber-400 mb-2">Ajouter une carte</p>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input type="text" id="gc-admin-name" placeholder="Nom (ex: Netflix)" class="px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm placeholder-slate-500 outline-none">
+                        <input type="text" id="gc-admin-value" placeholder="Valeur (ex: 25€)" class="px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm placeholder-slate-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input type="number" id="gc-admin-price" placeholder="Prix XOF" class="px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm placeholder-slate-500 outline-none">
+                        <select id="gc-admin-category" class="px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm outline-none">
+                            <option value="app">App</option>
+                            <option value="music">Music</option>
+                            <option value="films">Films</option>
+                            <option value="jeux">Jeux</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="gc-admin-img" placeholder="URL image ou /uploads/..." class="flex-1 px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm placeholder-slate-500 outline-none">
+                        <label class="px-3 py-2 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-medium cursor-pointer hover:bg-indigo-500/30 flex items-center gap-1 whitespace-nowrap">
+                            <iconify-icon icon="solar:upload-linear" width="14"></iconify-icon>
+                            Upload
+                            <input type="file" accept="image/*" onchange="uploadGiftCardImage(this)" class="hidden">
+                        </label>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" id="gc-admin-flag" placeholder="Drapeau (ex: FR)" maxlength="10" class="w-24 px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-white text-sm placeholder-slate-500 outline-none">
+                        <button type="button" onclick="addGiftCardFromAdmin()" class="flex-1 px-4 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-sm font-medium hover:bg-emerald-500/30 flex items-center justify-center gap-1">
+                            <iconify-icon icon="solar:add-circle-linear" width="16"></iconify-icon>
+                            Ajouter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview image -->
+                <div id="gc-admin-img-preview" class="hidden mb-3 text-center">
+                    <img id="gc-admin-img-preview-el" class="h-20 rounded-lg mx-auto border border-white/10" alt="Aperçu">
+                </div>
+
+                <!-- Liste des cartes existantes -->
+                <div id="gc-admin-list" class="space-y-2 mb-3"></div>
+
+                <!-- Bouton sauvegarder -->
+                <button type="button" onclick="saveGiftCardsAdmin()" class="w-full px-4 py-2.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 text-sm font-semibold hover:bg-amber-500/30 flex items-center justify-center gap-2">
+                    <iconify-icon icon="solar:diskette-linear" width="16"></iconify-icon>
+                    Sauvegarder les cartes
+                </button>
+            </div>
+
             <div class="admin-tabs flex gap-2 mb-6">
                 <button type="button" class="tab-btn active flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-indigo-500/20 text-indigo-400 border-indigo-500/30" onclick="switchAdminTab('pending')">En attente</button>
                 <button type="button" class="tab-btn flex-1 py-3 rounded-xl font-semibold text-sm border border-white/15 bg-white/5 text-slate-400 hover:bg-white/15" onclick="switchAdminTab('validated')">Validées</button>

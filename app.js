@@ -1158,7 +1158,8 @@ function navigateTo(screen) {
         if (typeof window.__bipbipTgClosingGuard === 'function') window.__bipbipTgClosingGuard(target);
         if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
         if (target === 'status') renderOrdersList();
-        if (target === 'cartes') renderGiftCards(gcCurrentCategory);
+        if (target === 'cartes') { loadGiftCardsFromServer(); }
+        if (target === 'admin') { loadAdminGiftCards(); }
         if (target === 'home') {
             updateHeaderUserInfo();
             loadHomeWeather();
@@ -1632,6 +1633,34 @@ var GIFT_CARDS = {
 
 var gcCurrentCategory = 'app';
 var gcSelectedCard = null;
+var gcServerLoaded = false;
+
+/**
+ * Charge les cartes cadeaux depuis le serveur.
+ * Si le serveur retourne des cartes, elles remplacent les cartes en dur.
+ * Sinon on garde les cartes par défaut.
+ */
+function loadGiftCardsFromServer() {
+    fetch(API_BASE + '/api/gift-cards', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.ok && Array.isArray(data.giftCards) && data.giftCards.length > 0) {
+                // Organiser par catégorie
+                var byCategory = { app: [], music: [], films: [], jeux: [] };
+                data.giftCards.forEach(function (c) {
+                    var cat = c.category || 'app';
+                    if (!byCategory[cat]) byCategory[cat] = [];
+                    byCategory[cat].push(c);
+                });
+                GIFT_CARDS = byCategory;
+                gcServerLoaded = true;
+            }
+            renderGiftCards(gcCurrentCategory);
+        })
+        .catch(function () {
+            renderGiftCards(gcCurrentCategory);
+        });
+}
 
 var GC_CATEGORY_LABELS = { app: 'App', music: 'Music', films: 'Films', jeux: 'Jeux' };
 
@@ -3128,6 +3157,148 @@ function saveLedSpeed() {
         showToast('Erreur réseau', 'error');
     });
 }
+
+// ==================== ADMIN GIFT CARDS ====================
+var adminGiftCards = []; // liste locale en édition
+
+function loadAdminGiftCards() {
+    fetch(API_BASE + '/api/gift-cards', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            adminGiftCards = Array.isArray(data.giftCards) ? data.giftCards : [];
+            renderAdminGiftCardsList();
+        })
+        .catch(function () {});
+}
+
+function renderAdminGiftCardsList() {
+    var container = document.getElementById('gc-admin-list');
+    if (!container) return;
+    if (!adminGiftCards.length) {
+        container.innerHTML = '<p class="text-xs text-slate-500 text-center py-2">Aucune carte ajoutée.</p>';
+        return;
+    }
+    var catLabels = { app: 'App', music: 'Music', films: 'Films', jeux: 'Jeux' };
+    container.innerHTML = adminGiftCards.map(function (c, i) {
+        return '<div class="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-white/8">' +
+            '<img src="' + (c.img || '') + '" class="w-10 h-10 rounded-lg object-cover border border-white/10 flex-shrink-0" onerror="this.style.display=\'none\'" alt="">' +
+            '<div class="flex-1 min-w-0">' +
+                '<p class="text-xs font-semibold text-white truncate">' + escapeHtml(c.name) + ' — ' + escapeHtml(c.value) + '</p>' +
+                '<p class="text-[10px] text-slate-400">' + formatNumber(c.price) + ' XOF · ' + (catLabels[c.category] || c.category) + (c.flag ? ' ' + c.flag : '') + '</p>' +
+            '</div>' +
+            '<button type="button" onclick="removeGiftCardAdmin(' + i + ')" class="w-7 h-7 rounded-lg bg-rose-500/15 text-rose-400 flex items-center justify-center flex-shrink-0 hover:bg-rose-500/25" title="Supprimer">' +
+                '<iconify-icon icon="solar:trash-bin-minimalistic-linear" width="14"></iconify-icon>' +
+            '</button>' +
+        '</div>';
+    }).join('');
+}
+
+function uploadGiftCardImage(input) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) { showToast('Image trop grande (max 5 Mo)', 'error'); return; }
+
+    var fd = new FormData();
+    fd.append('image', file);
+
+    fetch(API_BASE + '/api/admin/gift-card-image', {
+        method: 'POST',
+        headers: getAdminAuthHeaders(false),
+        body: fd
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data.success && data.url) {
+            var imgInput = document.getElementById('gc-admin-img');
+            if (imgInput) imgInput.value = data.url;
+            // Aperçu
+            var preview = document.getElementById('gc-admin-img-preview');
+            var previewEl = document.getElementById('gc-admin-img-preview-el');
+            if (preview && previewEl) {
+                previewEl.src = data.url;
+                preview.classList.remove('hidden');
+            }
+            showToast('Image uploadée', 'success');
+        } else {
+            showToast(data.error || 'Erreur upload', 'error');
+        }
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+
+    input.value = '';
+}
+
+function addGiftCardFromAdmin() {
+    var name = (document.getElementById('gc-admin-name') || {}).value || '';
+    var value = (document.getElementById('gc-admin-value') || {}).value || '';
+    var price = parseInt((document.getElementById('gc-admin-price') || {}).value, 10) || 0;
+    var category = (document.getElementById('gc-admin-category') || {}).value || 'app';
+    var img = (document.getElementById('gc-admin-img') || {}).value || '';
+    var flag = (document.getElementById('gc-admin-flag') || {}).value || '';
+
+    if (!name.trim()) { showToast('Nom requis', 'error'); return; }
+    if (!price || price <= 0) { showToast('Prix requis', 'error'); return; }
+    if (!value.trim()) { showToast('Valeur requise (ex: 25€)', 'error'); return; }
+
+    var FLAGS_MAP = { FR: '\uD83C\uDDEB\uD83C\uDDF7', US: '\uD83C\uDDFA\uD83C\uDDF8', CI: '\uD83C\uDDE8\uD83C\uDDEE', GB: '\uD83C\uDDEC\uD83C\uDDE7', EU: '\uD83C\uDDEA\uD83C\uDDFA' };
+    var flagEmoji = flag.trim();
+    if (flagEmoji.length <= 3 && FLAGS_MAP[flagEmoji.toUpperCase()]) {
+        flagEmoji = FLAGS_MAP[flagEmoji.toUpperCase()];
+    }
+
+    adminGiftCards.push({
+        id: 'gc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        name: name.trim(),
+        value: value.trim(),
+        price: price,
+        category: category,
+        img: img.trim(),
+        flag: flagEmoji
+    });
+
+    renderAdminGiftCardsList();
+    showToast(name + ' ajouté. Cliquez "Sauvegarder" pour enregistrer.', 'info');
+
+    // Reset form
+    ['gc-admin-name', 'gc-admin-value', 'gc-admin-price', 'gc-admin-img', 'gc-admin-flag'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    var preview = document.getElementById('gc-admin-img-preview');
+    if (preview) preview.classList.add('hidden');
+}
+
+function removeGiftCardAdmin(index) {
+    if (index < 0 || index >= adminGiftCards.length) return;
+    var card = adminGiftCards[index];
+    adminGiftCards.splice(index, 1);
+    renderAdminGiftCardsList();
+    showToast(card.name + ' supprimé. Cliquez "Sauvegarder" pour confirmer.', 'info');
+}
+
+function saveGiftCardsAdmin() {
+    fetch(API_BASE + '/api/admin/gift-cards', {
+        method: 'PUT',
+        headers: getAdminAuthHeaders(true),
+        body: JSON.stringify({ giftCards: adminGiftCards })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data.success) {
+            adminGiftCards = data.giftCards || [];
+            renderAdminGiftCardsList();
+            showToast('Cartes cadeaux sauvegardées !', 'success');
+            // Recharger les cartes côté client
+            loadGiftCardsFromServer();
+        } else {
+            showToast(data.error || 'Erreur', 'error');
+        }
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+// Charger les cartes admin quand on ouvre l'écran admin
+var _origAdminNav = null; // patché dans navigateTo
 
 // ==================== ADMIN ACCESS ====================
 document.addEventListener('keydown', (e) => {
