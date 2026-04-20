@@ -5,10 +5,10 @@
 
 ## 1. Présentation du Projet
 
-**BBR (BIPBIP Recharge)** est le token officiel de l'écosystème BIPBIP, un service de recharge mobile en Côte d'Ivoire.
+**BBR (BIPBIP Recharge)** est le token utilitaire de l'écosystème BIPBIP, conçu pour faciliter les paiements et récompenser les utilisateurs.
 
 ### Mission
-Faciliter l'accès aux services de recharge mobile tout en récompensant la communauté à travers un token utilitaire.
+Permettre aux utilisateurs d'effectuer des achats sur toutes les plateformes BIPBIP avec des avantages exclusifs.
 
 ---
 
@@ -26,19 +26,21 @@ Faciliter l'accès aux services de recharge mobile tout en récompensant la comm
 
 ## 3. Utilité du Token
 
-1. **Récompenses** - Gagne des BBR en utilisant BIPBIP
-2. **Réductions** - Obtient des réductions sur les recharges
-3. **Parrainage** - Bonus pour les parrainages
-4. **Fidélité** - Points convertibles en BBR
+Le token BBR servira à :
+
+1. **Effectuer des achats** sur toutes les plateformes BIPBIP
+2. **Payer les services publics** (électricité, eau, internet)
+3. **Obtenir des réductions exclusives** pour les holders
+4. **Accéder aux nouveaux services** en avant-première
 
 ---
 
 ## 4. L'Écosystème BIPBIP
 
-- **BIPBIP Recharge** - Service de recharge mobile (Orange, MTN, Moov, Wave)
-- **Bot Telegram** - @BIPBIPRechargeProCi_Bot
-- **Canal Telegram** - @bipbiprecharge
-- **Site Web** - https://bipbiprecharge.ci
+BIPBIP travaille actuellement sur :
+- **Services de recharge mobile** (Orange, MTN, Moov, Wave)
+- **Paiement de services publics**
+- **Autres projets à venir** (en développement)
 
 ---
 
@@ -58,6 +60,6 @@ Pour toute question ou partenariat :
 
 ---
 
-**BBR = BIPBIP Recharge**
+**BBR = BIPBIP Recharge**  
 **Version :** 1.0  
 **Date :** Avril 2024

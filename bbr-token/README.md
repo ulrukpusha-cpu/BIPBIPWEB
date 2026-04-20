@@ -1,6 +1,6 @@
 # BBR Token - BIPBIP Recharge
 
-Token officiel de l'écosystème BIPBIP Recharge.
+Token utilitaire de l'écosystème BIPBIP.
 
 ## BBR = BIPBIP Recharge
 
@@ -12,10 +12,18 @@ Token officiel de l'écosystème BIPBIP Recharge.
 
 ## Utilité
 
-- Récompenses sur les recharges
-- Réductions pour les holders
-- Bonus de parrainage
-- Points de fidélité
+Le token BBR sert à :
+- Effectuer des achats sur les plateformes BIPBIP
+- Payer les services publics
+- Obtenir des réductions exclusives
+- Accéder aux nouveaux services en avant-première
+
+## Projets en préparation
+
+BIPBIP travaille sur :
+- Services de recharge mobile
+- Paiement de services publics
+- Autres projets à venir
 
 ## Réseaux
 
