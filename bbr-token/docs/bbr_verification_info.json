@@ -1,0 +1,17 @@
+{
+  "token": {
+    "name": "Bail Bloc Richesse",
+    "symbol": "BBR",
+    "address": "EQCvttnAMdleY7r07Al6uuz8nMiOQ_p-ctEXEs1T28Pmk-dF",
+    "supply": "13,000,000,000",
+    "blockchain": "TON"
+  },
+  "socials": {
+    "telegram": "https://t.me/bipbiprecharge",
+    "website": "https://bipbiprecharge.ci",
+    "tiktok": "@bipbiprecharge",
+    "facebook": "BIPBIP Recharge CI"
+  },
+  "description": "BBR est un token meme sur TON blockchain, créé pour bâtir une communauté autour de la culture africaine et des services financiers innovants.",
+  "logo": "https://raw.githubusercontent.com/ulrukpusha-cpu/BIPBIPWEB/master/bbr-token/logo.png"
+}
