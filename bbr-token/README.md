@@ -1,26 +1,28 @@
-# BBR Token - Bail Bloc Richesse
+# BBR Token - BIPBIP Recharge
 
-Token meme sur la blockchain TON.
+Token officiel de l'écosystème BIPBIP Recharge.
 
-## Informations
+## BBR = BIPBIP Recharge
 
-- **Nom :** Bail Bloc Richesse
+- **Nom :** BIPBIP Recharge
 - **Symbole :** BBR
 - **Contrat :** EQCvttnAMdleY7r07Al6uuz8nMiOQ_p-ctEXEs1T28Pmk-dF
 - **Supply :** 13,000,000,000 BBR
 - **Blockchain :** TON
 
-## Fichiers
+## Utilité
 
-- `logo.png` - Logo officiel (512x512)
-- `docs/BBR_Whitepaper.pdf` - Whitepaper
-- `docs/BBR_Whitepaper.md` - Whitepaper (Markdown)
-- `docs/bbr_verification_info.json` - Infos de vérification
+- Récompenses sur les recharges
+- Réductions pour les holders
+- Bonus de parrainage
+- Points de fidélité
 
 ## Réseaux
 
 - Telegram: @bipbiprecharge
 - Site: https://bipbiprecharge.ci
+- TikTok: @bipbiprecharge
+- Facebook: BIPBIP Recharge CI
 
 ---
 Créé avec OpenClaw

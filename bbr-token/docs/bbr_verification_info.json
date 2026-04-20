@@ -1,6 +1,6 @@
 {
   "token": {
-    "name": "Bail Bloc Richesse",
+    "name": "BIPBIP Recharge",
     "symbol": "BBR",
     "address": "EQCvttnAMdleY7r07Al6uuz8nMiOQ_p-ctEXEs1T28Pmk-dF",
     "supply": "13,000,000,000",
@@ -12,6 +12,6 @@
     "tiktok": "@bipbiprecharge",
     "facebook": "BIPBIP Recharge CI"
   },
-  "description": "BBR est un token meme sur TON blockchain, créé pour bâtir une communauté autour de la culture africaine et des services financiers innovants.",
+  "description": "BBR est le token officiel de BIPBIP Recharge, service de recharge mobile en Côte d'Ivoire. Utilisez BBR pour obtenir des réductions et des récompenses sur vos recharges.",
   "logo": "https://raw.githubusercontent.com/ulrukpusha-cpu/BIPBIPWEB/master/bbr-token/logo.png"
 }
