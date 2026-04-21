@@ -24,6 +24,7 @@ function rowToOrder(row) {
         phone: row.phone,
         proof: row.proof,
         status: row.status,
+        notes: row.notes || null,
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         validatedAt: row.validated_at ? new Date(row.validated_at).toISOString() : null,
         rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
@@ -64,8 +65,8 @@ async function getAllOrders() {
 
 async function createOrder(order) {
     await pool.execute(
-        `INSERT INTO orders (id, user_id, username, operator, amount, amount_total, phone, proof, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        `INSERT INTO orders (id, user_id, username, operator, amount, amount_total, phone, proof, status, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
             order.id,
             order.userId || null,
@@ -75,7 +76,8 @@ async function createOrder(order) {
             order.amountTotal || order.amount,
             order.phone,
             order.proof || null,
-            order.status || 'pending'
+            order.status || 'pending',
+            order.notes != null ? String(order.notes) : null
         ]
     );
     return order;

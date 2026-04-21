@@ -23,6 +23,9 @@ router.get('/', (req, res) => {
     const offset = parseInt(req.query.offset, 10) || 0;
     const sort = ['date', 'popularite'].includes(req.query.sort) ? req.query.sort : 'date';
     const category = ['region', 'finance', 'tech', 'mode'].includes(req.query.category) ? req.query.category : null;
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     actualitesService.listApproved(limit, offset, sort, category)
         .then(list => res.json({ actualites: list }))
         .catch(err => {

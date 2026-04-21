@@ -57,8 +57,20 @@ function requireAuth(req, res, next) {
     next();
 }
 
+/**
+ * Retourne true si la requête vient d'un utilisateur Telegram ou Google enregistré.
+ * Rejette les utilisateurs anonymes (userId préfixé web_).
+ */
+function isRegisteredUser(req) {
+    if (req.telegramUser && req.userId) return true;          // Telegram valide
+    if (req.authType === 'google' && req.userId &&
+        /^-?\d+$/.test(req.userId)) return true;             // Google valide
+    return false;
+}
+
 module.exports = {
     authTelegram,
     requireAuth,
     validateTelegramWebAppInitData,
+    isRegisteredUser,
 };

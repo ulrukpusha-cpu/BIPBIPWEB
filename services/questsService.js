@@ -49,8 +49,72 @@ async function completeQuest(userId, questId) {
     return setProgress(userId, questId, 999, true);
 }
 
+
+/**
+ * Reclamer la recompense d'une quete par code (idempotent).
+ * Retourne { success, points_earned, total_points, already_claimed, error }
+ */
+async function claimQuestByCode(userId, code) {
+    const supabase = db.getSupabase();
+    if (!supabase) return { error: 'Base indisponible' };
+    const uid = String(userId);
+
+    // 1) Trouver la quete
+    const { data: quest, error: qErr } = await supabase
+        .from('quests')
+        .select('id, code, points_reward, is_active')
+        .eq('code', code)
+        .maybeSingle();
+    if (qErr) return { error: qErr.message };
+    if (!quest || !quest.is_active) return { error: 'Quete introuvable' };
+
+    // 2) Verifier user_quests
+    let { data: uq } = await supabase
+        .from('user_quests')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('quest_id', quest.id)
+        .maybeSingle();
+
+    if (uq && uq.completed) {
+        return { already_claimed: true };
+    }
+
+    // 3) Marquer completee
+    if (!uq) {
+        const ins = await supabase.from('user_quests').insert({
+            user_id: uid, quest_id: quest.id, progress: 1,
+            completed: true, completed_at: new Date().toISOString(),
+        }).select().single();
+        if (ins.error) return { error: ins.error.message };
+    } else {
+        const upd = await supabase.from('user_quests').update({
+            progress: Math.max(uq.progress || 0, 1),
+            completed: true,
+            completed_at: new Date().toISOString(),
+        }).eq('user_id', uid).eq('quest_id', quest.id);
+        if (upd.error) return { error: upd.error.message };
+    }
+
+    // 4) Crediter les points (seulement pour users enregistres Telegram/Google: numerique)
+    const telegramUsersService = require('./telegramUsersService');
+    const isRegistered = /^-?\d+$/.test(uid);
+    let total = null;
+    if (isRegistered) {
+        total = await telegramUsersService.addPoints(uid, quest.points_reward || 0, 'quest', 'Quete: ' + (quest.code || ''));
+    }
+
+    return {
+        success: true,
+        points_earned: isRegistered ? (quest.points_reward || 0) : 0,
+        total_points: total,
+        code: quest.code,
+    };
+}
+
 module.exports = {
     listActiveQuests,
+    claimQuestByCode,
     getUserProgress,
     getOrCreateUserQuest,
     setProgress,

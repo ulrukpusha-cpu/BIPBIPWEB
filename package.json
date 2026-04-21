@@ -29,7 +29,8 @@
     "node-fetch": "^3.3.2",
     "pg": "^8.18.0",
     "qrcode": "^1.5.4",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "undici": "^8.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

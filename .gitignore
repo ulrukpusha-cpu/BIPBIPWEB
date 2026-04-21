@@ -13,3 +13,20 @@ data/
 __next.*.txt
 index.txt
 _not-found/**/*.txt
+
+# Backups snapshot ponctuels (horodatés)
+*.bak.*
+*.bak
+*.ledfix.*
+*.pcads.*
+*.pcv2.*
+*.frais5.*
+*.tarifs5.*
+*.tgfix.*
+*.qfix.*
+*.aide.*
+*.aide2.*
+*.fix2.*
+*.landing.*
+*.video.*
+*.bak2.*

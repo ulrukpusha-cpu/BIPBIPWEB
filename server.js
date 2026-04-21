@@ -12,7 +12,7 @@ const QRCode = require('qrcode');
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const orderStorage = require('./storage');
-const { authTelegram, requireAuth } = require('./middleware/auth');
+const { authTelegram, requireAuth, isRegisteredUser } = require('./middleware/auth');
 const { apiLimiter, paymentLimiter } = require('./middleware/rateLimit');
 const momoRoutes = require('./routes/momo');
 const actualitesRoutes = require('./routes/actualites');
@@ -61,7 +61,7 @@ const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const ADMIN_PIN = (process.env.ADMIN_PIN || '0000').trim();
 
 // Achats directs dans le bot (sans webapp)
-const BOT_FRAIS_PERCENT = 10;
+const BOT_FRAIS_PERCENT = 5;
 const BOT_OPERATORS = {
     MTN: { prefix: '05' },
     Orange: { prefix: '07' },
@@ -420,6 +420,24 @@ async function sendTelegramToAllAdmins(text, options = {}, token = TELEGRAM_BOT_
 // ===============================================
 // USSD Gateway — Transfert automatique de crédit
 // ===============================================
+function getOrderBundleMeta(order) {
+    if (!order) return null;
+    if (order.bundleType && order.bundleId) {
+        const t = String(order.bundleType).toLowerCase();
+        if (t === 'data' || t === 'mix') return { bundleType: t, bundleId: String(order.bundleId) };
+    }
+    if (order.notes && typeof order.notes === 'string') {
+        try {
+            const j = JSON.parse(order.notes);
+            if (j && j.bundleType && j.bundleId) {
+                const t = String(j.bundleType).toLowerCase();
+                if (t === 'data' || t === 'mix') return { bundleType: t, bundleId: String(j.bundleId) };
+            }
+        } catch (_) { /* ignore */ }
+    }
+    return null;
+}
+
 async function executeUssdTransfer(order) {
     const GATEWAY = process.env.USSD_GATEWAY_URL || 'http://localhost:3002';
 
@@ -433,6 +451,30 @@ async function executeUssdTransfer(order) {
     else {
         console.error(`[USSD] Préfixe inconnu: ${prefix} pour ${phone}`);
         return { success: false, error: `Préfixe inconnu: ${prefix}` };
+    }
+
+    const bundleMeta = getOrderBundleMeta(order);
+    if (bundleMeta && (operator === 'orange' || operator === 'mtn' || operator === 'moov')) {
+        try {
+            const fetch = (await import('node-fetch')).default;
+            const res = await fetch(`${GATEWAY}/api/bundle/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    operator,
+                    recipient: phone,
+                    type: bundleMeta.bundleType,
+                    bundleId: bundleMeta.bundleId
+                })
+            });
+            const result = await res.json();
+            console.log(`[USSD Forfait] ${operator.toUpperCase()} | ${phone} | ${bundleMeta.bundleType} ${bundleMeta.bundleId} |`,
+                result.success ? 'OK' : `ERREUR ${result.error}`);
+            return result;
+        } catch (e) {
+            console.error('[USSD] Gateway forfait injoignable:', e.message);
+            return { success: false, error: 'Gateway injoignable' };
+        }
     }
 
     try {
@@ -746,6 +788,34 @@ app.get('/api/gift-cards', (req, res) => {
     res.json({ ok: true, giftCards: config.giftCards || [] });
 });
 
+/** Catalogue Data & Forfaits (proxy vers le USSD gateway — évite CORS côté Mini App) */
+app.get('/api/bundles', async (req, res) => {
+    const GATEWAY = (process.env.USSD_GATEWAY_URL || 'http://localhost:3002').replace(/\/$/, '');
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const r = await fetch(`${GATEWAY}/api/bundles`);
+        const j = await r.json();
+        res.status(r.status).json(j);
+    } catch (e) {
+        console.error('[Bundles] proxy erreur:', e.message);
+        res.status(502).json({ error: 'Catalogue forfaits indisponible', detail: e.message });
+    }
+});
+
+app.get('/api/bundles/:operator', async (req, res) => {
+    const GATEWAY = (process.env.USSD_GATEWAY_URL || 'http://localhost:3002').replace(/\/$/, '');
+    const op = encodeURIComponent(String(req.params.operator || '').toLowerCase());
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const r = await fetch(`${GATEWAY}/api/bundles/${op}`);
+        const j = await r.json();
+        res.status(r.status).json(j);
+    } catch (e) {
+        console.error('[Bundles] proxy erreur:', e.message);
+        res.status(502).json({ error: 'Catalogue forfaits indisponible', detail: e.message });
+    }
+});
+
 // Admin : upload image carte cadeau
 app.post('/api/admin/gift-card-image', upload.single('image'), (req, res) => {
     if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
@@ -779,7 +849,7 @@ app.put('/api/admin/gift-cards', (req, res) => {
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)
 app.post('/api/orders', paymentLimiter, async (req, res) => {
     try {
-        const { operator, amount, amountTotal, phone, userId: bodyUserId, username: bodyUsername, giftCard } = req.body;
+        const { operator, amount, amountTotal, phone, userId: bodyUserId, username: bodyUsername, giftCard, bundleType, bundleId, bundleLabel } = req.body;
         
         if (!operator || !amount || !phone) {
             return res.status(400).json({ error: 'Données manquantes' });
@@ -793,7 +863,20 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Montant total invalide' });
         }
         const phoneStr = String(phone).trim().slice(0, 20);
-        
+
+        let bundleNotes = null;
+        const opNorm = String(operator).trim();
+        if (bundleType && bundleId && (opNorm === 'MTN' || opNorm === 'Orange' || opNorm === 'Moov')) {
+            const bt = String(bundleType).toLowerCase();
+            if (bt === 'data' || bt === 'mix') {
+                bundleNotes = JSON.stringify({
+                    bundleType: bt,
+                    bundleId: String(bundleId).slice(0, 80),
+                    bundleLabel: bundleLabel ? String(bundleLabel).slice(0, 200) : null
+                });
+            }
+        }
+
         const orderId = crypto.randomBytes(5).toString('hex').toUpperCase();
         const userId = req.userId || bodyUserId || null;
         const username = (req.telegramUser && req.telegramUser.username) || bodyUsername || null;
@@ -809,7 +892,8 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             proof: null,
             status: 'pending',
             createdAt: new Date().toISOString(),
-            ...(giftCard ? { giftCard: String(giftCard).slice(0, 100) } : {})
+            ...(giftCard ? { giftCard: String(giftCard).slice(0, 100) } : {}),
+            ...(bundleNotes ? { notes: bundleNotes } : {})
         };
 
         await orderStorage.createOrder(order);
@@ -822,11 +906,20 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             console.log('[Telegram] Envoi notif nouvelle commande #' + orderId + ' à ' + adminIds.length + ' admin(s)');
             const userLabel = username ? '@' + username : (userId && userId.startsWith('web_')) ? '🌐 Navigateur' : userId || 'WebApp';
             const notifToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+            let forfaitLine = '';
+            if (bundleNotes) {
+                try {
+                    const meta = JSON.parse(bundleNotes);
+                    if (meta.bundleLabel) forfaitLine = `📦 Forfait: ${meta.bundleLabel}\n`;
+                    else if (meta.bundleId) forfaitLine = `📦 Forfait: ${meta.bundleType} / ${meta.bundleId}\n`;
+                } catch (_) { forfaitLine = '📦 Forfait (data/mix)\n'; }
+            }
             await sendTelegramToAllAdmins(
                 `🔔 <b>NOUVELLE COMMANDE #${orderId}</b>\n\n` +
                 `👤 User: ${userLabel}\n` +
                 `📲 Opérateur: ${operator}\n` +
                 (giftCard ? `🎁 Carte: ${giftCard}\n` : '') +
+                forfaitLine +
                 `💰 Montant: ${amountTotal} FCFA\n` +
                 (operator === 'CARTE_CADEAU' ? '' : `📞 Numéro: ${phone}\n`) +
                 `📅 Date: ${new Date().toLocaleString('fr-FR')}`,
@@ -1346,7 +1439,8 @@ app.get('/api/auth/google/me', async (req, res) => {
 
 // Daily check-in : état et réclamation
 app.get('/api/telegram/daily-checkin', async (req, res) => {
-    if (!req.telegramUser || !req.userId) {
+    // Accepter Telegram ET Google (pas les anonymes web_xxx)
+    if (!isRegisteredUser(req)) {
         return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
     }
     try {
@@ -1360,7 +1454,8 @@ app.get('/api/telegram/daily-checkin', async (req, res) => {
 });
 
 app.post('/api/telegram/daily-checkin/claim', async (req, res) => {
-    if (!req.telegramUser || !req.userId) {
+    // Accepter Telegram ET Google (pas les anonymes web_xxx)
+    if (!isRegisteredUser(req)) {
         return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
     }
     try {
@@ -1369,6 +1464,68 @@ app.post('/api/telegram/daily-checkin/claim', async (req, res) => {
         return res.json({ success: true, ...result });
     } catch (e) {
         console.error('[daily-checkin claim]', e);
+        return res.status(500).json({ error: 'Erreur' });
+    }
+});
+
+// Liste des amis invites (parraines par l'utilisateur courant)
+app.get('/api/telegram/my-friends', async (req, res) => {
+    if (!isRegisteredUser(req)) {
+        return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
+    }
+    try {
+        const supabase = require('./database/supabase-client').getSupabase();
+        if (!supabase) return res.json({ friends: [] });
+        const myId = Number(req.userId);
+        if (!Number.isFinite(myId)) return res.json({ friends: [] });
+        const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+        const { data, error } = await supabase
+            .from(tableName)
+            .select('telegram_id, first_name, last_name, username, photo_url, created_at')
+            .eq('referred_by', myId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+        if (error) {
+            console.error('[my-friends]', error.message);
+            return res.json({ friends: [] });
+        }
+        return res.json({ friends: data || [] });
+    } catch (e) {
+        console.error('[my-friends]', e);
+        return res.status(500).json({ error: 'Erreur' });
+    }
+});
+
+// Historique des points (log de toutes les transactions)
+app.get('/api/telegram/points-history', async (req, res) => {
+    if (!isRegisteredUser(req)) {
+        return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
+    }
+    try {
+        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+        const history = await telegramUsersService.listPointsHistory(req.userId, limit);
+        return res.json({ history });
+    } catch (e) {
+        console.error('[points-history]', e);
+        return res.status(500).json({ error: 'Erreur' });
+    }
+});
+
+// Sauvegarde la langue choisie (fr|en) dans telegram_users.language
+app.patch('/api/telegram/language', async (req, res) => {
+    if (!isRegisteredUser(req)) {
+        return res.status(401).json({ error: 'Authentification requise', code: 'AUTH_REQUIRED' });
+    }
+    try {
+        const lang = (req.body && req.body.language) ? String(req.body.language).toLowerCase() : '';
+        if (lang !== 'fr' && lang !== 'en') {
+            return res.status(400).json({ error: 'Langue invalide (fr|en)' });
+        }
+        const r = await telegramUsersService.updateLanguage(req.userId, lang);
+        if (r && r.error) return res.status(400).json({ error: r.error });
+        return res.json({ success: true, language: lang });
+    } catch (e) {
+        console.error('[lang]', e);
         return res.status(500).json({ error: 'Erreur' });
     }
 });

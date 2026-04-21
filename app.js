@@ -10,7 +10,7 @@ function prefersReducedMotion() {
 }
 
 const CONFIG = {
-    FRAIS_PERCENT: 10,
+    FRAIS_PERCENT: 5,
     ADMIN_ID: '6735995998',
     /** Préfixes numéros CI (aligné server.js USSD) */
     OPERATORS: {
@@ -96,7 +96,13 @@ var pubBannerInterval = null;
 var PUB_PLACEMENT_LABELS = {
     home1: 'Accueil — bannière 1 (sous le bandeau LED)',
     home2: 'Accueil — bannière 2 (sous la bannière 1)',
-    actualites: 'Actualités — bandeau publicitaire'
+    actualites: 'Actualités — bandeau publicitaire',
+    pc_left:    'PC — panneau gauche (slot 1) — visible uniquement sur grand écran',
+    pc_right:   'PC — panneau droit  (slot 1) — visible uniquement sur grand écran',
+    pc_left_2:  'PC — panneau gauche (slot 2)',
+    pc_right_2: 'PC — panneau droit  (slot 2)',
+    pc_left_video:  'PC — panneau gauche — vidéo / GIF (grande carte)',
+    pc_right_video: 'PC — panneau droit  — vidéo / GIF (grande carte)'
 };
 
 function getPubBannerList() {
@@ -304,6 +310,126 @@ function getDisplayUserName() {
     return '—';
 }
 
+
+/**
+ * Charge la liste des amis invites (parraines) dans le bloc profil.
+ */
+function loadInvitedFriends() {
+    var list = document.getElementById('invited-friends-list');
+    var count = document.getElementById('invited-friends-count');
+    if (!list) return;
+    try {
+        fetch(API_BASE + '/api/telegram/my-friends', { method: 'GET', headers: getApiHeaders() })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var friends = (d && d.friends) || [];
+                if (count) count.textContent = friends.length;
+                if (!friends.length) {
+                    list.innerHTML = '<p class="text-sm text-slate-400" data-i18n="friends.empty">Aucun ami invit\u00e9 pour le moment. Partage ton lien de parrainage\u202f!</p>';
+                    return;
+                }
+                list.innerHTML = friends.map(function (f) {
+                    var name = [f.first_name, f.last_name].filter(Boolean).join(' ') || f.username || 'Utilisateur';
+                    var photo = f.photo_url || '';
+                    var initial = (name.charAt(0) || '?').toUpperCase();
+                    var avatar = photo
+                        ? '<img src="' + escapeHtml(photo) + '" alt="" class="w-10 h-10 rounded-full object-cover">'
+                        : '<div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 font-semibold">' + escapeHtml(initial) + '</div>';
+                    var dateStr = '';
+                    try {
+                        if (f.created_at) dateStr = new Date(f.created_at).toLocaleDateString(window.__bipbipLang === 'en' ? 'en-US' : 'fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+                    } catch (e) {}
+                    return '<div class="flex items-center gap-3 p-2 rounded-lg bg-slate-800/40 border border-white/5">'
+                        + avatar
+                        + '<div class="flex-1 min-w-0">'
+                        +   '<p class="text-sm font-medium text-white truncate">' + escapeHtml(name) + '</p>'
+                        +   '<p class="text-xs text-slate-500">' + (window.__bipbipLang === 'en' ? 'Joined ' : 'Inscrit le ') + escapeHtml(dateStr) + '</p>'
+                        + '</div></div>';
+                }).join('');
+            })
+            .catch(function () {
+                list.innerHTML = '<p class="text-sm text-slate-400">Impossible de charger la liste.</p>';
+            });
+    } catch (e) { /* noop */ }
+}
+
+
+/**
+ * Libellé lisible pour une action du log points_history.
+ */
+function pointsActionLabel(action, description, lang) {
+    var FR = {
+        referral: '👥 Parrainage',
+        daily_checkin: '📅 Connexion quotidienne',
+        link_click: '🔗 Clic lien',
+        quest: '🏆 Quête',
+        purchase: '🛒 Achat',
+        bonus: '✨ Bonus'
+    };
+    var EN = {
+        referral: '👥 Referral',
+        daily_checkin: '📅 Daily check-in',
+        link_click: '🔗 Link click',
+        quest: '🏆 Quest',
+        purchase: '🛒 Purchase',
+        bonus: '✨ Bonus'
+    };
+    var map = (lang === 'en') ? EN : FR;
+    return map[action] || (description || action || '—');
+}
+
+/**
+ * Charge l'historique des points dans le bloc profil.
+ */
+function loadPointsHistory() {
+    var list = document.getElementById('points-history-list');
+    var total = document.getElementById('points-history-total');
+    if (!list) return;
+    try {
+        fetch(API_BASE + '/api/telegram/points-history?limit=50', { method: 'GET', headers: getApiHeaders() })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                var rows = (d && d.history) || [];
+                var lang = window.__bipbipLang || 'fr';
+                var sum = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+                if (total) total.textContent = (lang === 'en' ? 'Total: ' : 'Total\u00a0: ') + '+' + sum + ' pts';
+                if (!rows.length) {
+                    list.innerHTML = '<p class="text-sm text-slate-400" data-i18n="history.empty">'
+                        + (lang === 'en' ? 'No points history yet. Complete quests to earn points!' : 'Aucun historique. Fais des qu\u00eates pour gagner des points\u202f!')
+                        + '</p>';
+                    return;
+                }
+                list.innerHTML = rows.map(function (r) {
+                    var label = pointsActionLabel(r.action, r.description, lang);
+                    var desc = r.description ? escapeHtml(r.description) : '';
+                    var amt = Number(r.amount) || 0;
+                    var amtCls = amt >= 0 ? 'text-emerald-400' : 'text-red-400';
+                    var sign = amt >= 0 ? '+' : '';
+                    var when = '';
+                    try {
+                        if (r.created_at) {
+                            var d0 = new Date(r.created_at);
+                            var locale = lang === 'en' ? 'en-US' : 'fr-FR';
+                            when = d0.toLocaleDateString(locale, { day:'2-digit', month:'short', year:'numeric' })
+                                + ' · ' + d0.toLocaleTimeString(locale, { hour:'2-digit', minute:'2-digit' });
+                        }
+                    } catch (e) {}
+                    return '<div class="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-800/40 border border-white/5">'
+                        + '<div class="min-w-0 flex-1">'
+                        +   '<p class="text-sm text-white truncate">' + escapeHtml(label) + '</p>'
+                        +   (desc && desc !== label ? '<p class="text-xs text-slate-500 truncate">' + desc + '</p>' : '')
+                        +   '<p class="text-xs text-slate-500">' + escapeHtml(when) + '</p>'
+                        + '</div>'
+                        + '<span class="text-sm font-semibold ' + amtCls + ' flex-shrink-0">' + sign + amt + ' pts</span>'
+                        + '</div>';
+                }).join('');
+            })
+            .catch(function () {
+                list.innerHTML = '<p class="text-sm text-slate-400">Impossible de charger l\u2019historique.</p>';
+            });
+    } catch (e) { /* noop */ }
+}
+
 function fetchTelegramMe() {
     // Si connecté via Google, charger le profil Google à la place
     var gs = getGoogleSession();
@@ -322,6 +448,13 @@ function fetchTelegramMe() {
                     incoming.photo_url = existing.photo_url;
                 }
                 window.__bipbipRegisteredUser = incoming;
+                // Appliquer la langue du compte si aucune preference locale
+                try {
+                    var storedLang = localStorage.getItem('bipbip_lang');
+                    if (!storedLang && incoming.language && (incoming.language === 'fr' || incoming.language === 'en')) {
+                        if (typeof setLanguage === 'function') setLanguage(incoming.language);
+                    }
+                } catch (e) {}
                 if (typeof incoming.points === 'number' || (incoming.points !== undefined && incoming.points !== null)) {
                     userPoints = Number(incoming.points);
                     try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
@@ -672,6 +805,91 @@ function renderPubBannerIntoContainer(container, banner) {
     }
 }
 
+
+// ── PC Side Ad Panels ────────────────────────────────────────────────────────
+function renderPcSideAdCard(container, banner) {
+    if (!container) return;
+    if (!banner || !banner.image) {
+        container.innerHTML =
+            '<span class="pc-ad-label">PUB</span>' +
+            '<div class="pc-ad-placeholder">' +
+            '  <div style="font-size:26px;margin-bottom:8px;opacity:.5;">\uD83D\uDCE2</div>' +
+            '  <div style="font-size:11px;font-weight:600;color:#475569;margin-bottom:4px;">Espace publicitaire</div>' +
+            '  <div style="font-size:10px;color:#334155;line-height:1.4;">Contactez-nous pour afficher votre annonce ici</div>' +
+            '</div>';
+        container.style.cursor = 'default';
+        container.onclick = null;
+        return;
+    }
+    var imgEsc = escapeHtml(banner.image);
+    var url = (banner.url || '').trim();
+    var text = (banner.text || '').trim();
+    container.innerHTML =
+        '<span class="pc-ad-label">PUB</span>' +
+        '<img src="' + imgEsc + '" alt="Publicité" style="width:100%;height:auto;max-height:220px;object-fit:cover;display:block;" loading="lazy" decoding="async">' +
+        (text ? '<div style="padding:8px 10px;font-size:11px;color:#94a3b8;line-height:1.4;">' + escapeHtml(text) + '</div>' : '');
+    if (url) {
+        container.style.cursor = 'pointer';
+        container.onclick = function () {
+            try {
+                if (window.tg && window.tg.openTelegramLink && /t\.me\//i.test(url)) window.tg.openTelegramLink(url);
+                else window.open(url, '_blank', 'noopener');
+            } catch (_) {}
+        };
+    } else {
+        container.style.cursor = 'default';
+        container.onclick = null;
+    }
+}
+
+function renderPcVideoAdCard(container, banner) {
+    if (!container) return;
+    if (!banner || !banner.image) {
+        container.innerHTML =
+            '<span class="pc-ad-label">PUB</span>'
+            + '<div class="pc-ad-video-placeholder">'
+            + '<div style="font-size:32px;opacity:.35;">\uD83C\uDFA5</div>'
+            + '<div style="font-size:12px;font-weight:600;color:#334155;">Espace vid\u00e9o / GIF publicitaire</div>'
+            + '<div style="font-size:10px;color:#1e293b;line-height:1.4;">MP4, WebM, GIF, JPEG&nbsp;&mdash;&nbsp;contenu PC uniquement</div>'
+            + '</div>';
+        container.style.cursor = 'default';
+        container.onclick = null;
+        return;
+    }
+    var src = banner.image;
+    var url = (banner.url || '').trim();
+    var srcEsc = escapeHtml(src);
+    var isVideo = /\.(mp4|webm|ogg)(\?|$)/i.test(src);
+    container.innerHTML =
+        '<span class="pc-ad-label">PUB</span>'
+        + (isVideo
+            ? '<video src="' + srcEsc + '" autoplay muted loop playsinline preload="metadata" style="width:100%;height:auto;display:block;max-height:340px;object-fit:cover;"></video>'
+            : '<img src="' + srcEsc + '" alt="Publicit\u00e9" style="width:100%;height:auto;display:block;max-height:340px;object-fit:cover;" loading="lazy" decoding="async">');
+    if (url) {
+        container.style.cursor = 'pointer';
+        container.onclick = function () {
+            try {
+                if (window.tg && window.tg.openTelegramLink && /t\.me\//i.test(url)) window.tg.openTelegramLink(url);
+                else window.open(url, '_blank', 'noopener');
+            } catch (_) {}
+        };
+    } else {
+        container.style.cursor = 'default';
+        container.onclick = null;
+    }
+}
+
+function initPcSideAds() {
+    var iw = window.innerWidth || 0;
+    if (iw < 960) return;
+    renderPcSideAdCard(document.getElementById('pc-ad-left-1'),  findBannerByPlacement('pc_left'));
+    renderPcSideAdCard(document.getElementById('pc-ad-right-1'), findBannerByPlacement('pc_right'));
+    renderPcSideAdCard(document.getElementById('pc-ad-left-2'),  findBannerByPlacement('pc_left_2'));
+    renderPcSideAdCard(document.getElementById('pc-ad-right-2'), findBannerByPlacement('pc_right_2'));
+    renderPcVideoAdCard(document.getElementById('pc-ad-left-video'),  findBannerByPlacement('pc_left_video'));
+    renderPcVideoAdCard(document.getElementById('pc-ad-right-video'), findBannerByPlacement('pc_right_video'));
+}
+
 function initHomePubBanners() {
     var b1 = findBannerByPlacement('home1');
     var b2 = findBannerByPlacement('home2');
@@ -915,7 +1133,9 @@ function getQuestMeta(type) {
         referral:  { icon: '👥', action: 'quest_referral',  cta: 'Partager mon lien' },
         recharge:  { icon: '📲', action: 'quest_recharge',  cta: 'Faire une recharge' },
         annonce:   { icon: '📢', action: 'quest_annonce',   cta: 'Publier une annonce' },
-        reading:   { icon: '📰', action: 'quest_reading',   cta: 'Lire les articles' }
+        reading:   { icon: '📰', action: 'quest_reading',   cta: 'Lire les articles' },
+        telegram_subscribe: { icon: '✈️', action: 'quest_telegram_subscribe', cta: "S'abonner au canal" },
+        telegram_boost:     { icon: '⚡', action: 'quest_telegram_boost',     cta: 'Booster le canal' }
     };
     return meta[type] || { icon: '🏆', action: '', cta: '' };
 }
@@ -947,6 +1167,36 @@ function handleQuestAction(type) {
             var section = document.getElementById('profil-annonce-section');
             if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300);
+    } else if (type === 'quest_telegram_subscribe' || type === 'quest_telegram_boost') {
+        var channelUrl = (type === 'quest_telegram_boost')
+            ? 'https://t.me/boost/bipbiprecharge'
+            : 'https://t.me/bipbiprecharge';
+        var questCode = (type === 'quest_telegram_boost') ? 'telegram_boost' : 'telegram_subscribe';
+        // Ouvrir le canal
+        if (tg && tg.openTelegramLink) {
+            tg.openTelegramLink(channelUrl);
+        } else {
+            window.open(channelUrl, '_blank');
+        }
+        // Reclamer la recompense (une seule fois)
+        authFetch(API_BASE + '/api/quests/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: questCode })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d && d.success) {
+                showToast('+' + (d.points_earned || 25) + ' points \u00e9' + 'gain\u00e9s\u202f!', 'success');
+                if (d.total_points != null && window.__bipbipRegisteredUser) {
+                    window.__bipbipRegisteredUser.points = d.total_points;
+                }
+                if (typeof loadQuests === 'function') setTimeout(loadQuests, 800);
+                if (typeof loadProfile === 'function') setTimeout(loadProfile, 800);
+            } else if (d && d.already_claimed) {
+                showToast('Quete d\u00e9j\u00e0 r\u00e9clam\u00e9e', 'info');
+            } else if (d && d.error) {
+                showToast(d.error, 'error');
+            }
+        }).catch(function () { /* silencieux */ });
     } else if (type === 'quest_reading') {
         navigateTo('actualites');
     }
@@ -1164,6 +1414,7 @@ function navigateTo(screen) {
             updateHeaderUserInfo();
             loadHomeWeather();
             initHomePubBanners();
+            initPcSideAds();
         }
         if (target === 'profil') {
             fetchTelegramMe();
@@ -1171,6 +1422,8 @@ function navigateTo(screen) {
             updateProfilPhoto();
             updateHeaderPoints();
             initAnnonceCharCount();
+            loadInvitedFriends();
+            loadPointsHistory();
             var sl = document.getElementById('profil-social-link');
             if (sl) sl.value = (window.__bipbipRegisteredUser && window.__bipbipRegisteredUser.social_link) || '';
             var refInput = document.getElementById('profil-referral-link');
@@ -1183,6 +1436,10 @@ function navigateTo(screen) {
         }
         if (target === 'actualites') loadActualites(actualitesSort);
         if (target === 'quests') loadQuests();
+        if (target === 'amount') {
+            renderAmountScreenOperatorBanner(currentOrder.operator);
+            updateDataBundlesBlock();
+        }
         if (target === 'payment-method' && currentOrder.id) {
             var pmEl = document.getElementById('payment-method-order-id');
             if (pmEl) pmEl.textContent = 'Commande #' + currentOrder.id + ' — ' + formatNumber((currentOrder.amountTotal != null ? currentOrder.amountTotal : currentOrder.amount) || 0) + ' FCFA';
@@ -1232,11 +1489,14 @@ function navigateTo(screen) {
             syncProofScreenInstructions();
         }
         if (target === 'admin') {
-            var speedVal = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
-            var speedInput = document.getElementById('admin-led-speed');
-            var speedSpan = document.getElementById('admin-led-speed-value');
-            if (speedInput) speedInput.value = speedVal;
-            if (speedSpan) speedSpan.textContent = speedVal;
+        var speedSecs = (serverConfig && serverConfig.ledScrollSeconds) ? serverConfig.ledScrollSeconds : 60;
+        var sliderVal = Math.round(Math.max(1, Math.min(10, (215 - speedSecs) / 22 + 1)));
+        var speedInput = document.getElementById('admin-led-speed');
+        var speedLabel = document.getElementById('admin-led-speed-label');
+        var speedSpan  = document.getElementById('admin-led-speed-value');
+        if (speedInput) speedInput.value = sliderVal;
+        if (speedLabel) speedLabel.textContent = sliderVal;
+        if (speedSpan)  speedSpan.textContent = sliderVal + '/10 (' + speedSecs + 's)';
             renderAdminPubBanners();
         }
         if (target === 'amount' && currentOrder.operator) {
@@ -1306,7 +1566,10 @@ function persistOrderDraft() {
         sessionStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify({
             operator: currentOrder.operator,
             amount: currentOrder.amount,
-            amountTotal: currentOrder.amountTotal
+            amountTotal: currentOrder.amountTotal,
+            bundleType: currentOrder.bundleType,
+            bundleId: currentOrder.bundleId,
+            bundleLabel: currentOrder.bundleLabel
         }));
     } catch (e) { /* quota / privé */ }
 }
@@ -1323,6 +1586,15 @@ function loadOrderDraft() {
             currentOrder.amount = d.amount;
             currentOrder.amountTotal = d.amountTotal != null ? d.amountTotal : d.amount + Math.floor(d.amount * CONFIG.FRAIS_PERCENT / 100);
         }
+        if (d.bundleType && d.bundleId) {
+            currentOrder.bundleType = d.bundleType;
+            currentOrder.bundleId = d.bundleId;
+            currentOrder.bundleLabel = d.bundleLabel || null;
+        } else {
+            delete currentOrder.bundleType;
+            delete currentOrder.bundleId;
+            delete currentOrder.bundleLabel;
+        }
     } catch (e) { /* JSON / quota */ }
 }
 
@@ -1332,8 +1604,13 @@ function refreshPhoneOrderSummary() {
     var amount = currentOrder.amount;
     var frais = currentOrder.amountTotal != null ? (currentOrder.amountTotal - amount) : Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
     var total = currentOrder.amountTotal != null ? currentOrder.amountTotal : amount + frais;
+    var forfaitRow = '';
+    if (currentOrder.bundleLabel) {
+        forfaitRow = '<p><span>Forfait</span><span>' + escapeHtml(currentOrder.bundleLabel) + '</span></p>';
+    }
     summary.innerHTML =
         '<p><span>Opérateur</span><span>' + currentOrder.operator + '</span></p>' +
+        forfaitRow +
         '<p><span>Montant</span><span>' + formatNumber(amount) + ' FCFA</span></p>' +
         '<p><span>Frais (' + CONFIG.FRAIS_PERCENT + '%)</span><span>' + formatNumber(frais) + ' FCFA</span></p>' +
         '<p><span>Total à payer</span><span>' + formatNumber(total) + ' FCFA</span></p>';
@@ -1424,8 +1701,282 @@ function selectOperator(operator) {
     persistOrderDraft();
 
     renderAmountScreenOperatorBanner(operator);
+    updateDataBundlesBlock();
 
     navigateTo('amount');
+}
+
+function clearOrderBundle() {
+    delete currentOrder.bundleType;
+    delete currentOrder.bundleId;
+    delete currentOrder.bundleLabel;
+}
+
+var __bundlesCatalogCache = null;
+var __bundlesCatalogFetchedAt = 0;
+
+function fetchBundlesCatalog(done) {
+    var now = Date.now();
+    if (__bundlesCatalogCache && now - __bundlesCatalogFetchedAt < 10 * 60 * 1000) {
+        return done(null, __bundlesCatalogCache);
+    }
+    fetch(API_BASE + '/api/bundles', { cache: 'no-store' })
+        .then(function (res) {
+            return res.json().then(function (j) { return { ok: res.ok, j: j }; });
+        })
+        .then(function (x) {
+            if (!x.ok || !x.j || !x.j.bundles) {
+                return done(new Error((x.j && x.j.error) || 'Réponse bundles invalide'), null);
+            }
+            __bundlesCatalogCache = x.j;
+            __bundlesCatalogFetchedAt = Date.now();
+            done(null, x.j);
+        })
+        .catch(function (err) { done(err, null); });
+}
+
+function formatBundleLabelForOrder(bundle) {
+    var parts = [];
+    if (bundle.name) parts.push(bundle.name);
+    if (bundle.data) parts.push(bundle.data);
+    if (bundle.minutes) parts.push(bundle.minutes + ' min');
+    if (bundle.duration) parts.push(bundle.duration);
+    return parts.length ? parts.join(' — ') : String(bundle.id || 'Forfait');
+}
+
+function updateDataBundlesBlock() {
+    var wrap = document.getElementById('bundles-blocks-wrap');
+    var card = document.getElementById('bundles-block-card');
+    var heading = document.getElementById('bundles-block-heading');
+    if (!wrap) return;
+    var op = currentOrder.operator;
+    if (op === 'MTN' || op === 'Orange' || op === 'Moov') {
+        wrap.classList.remove('hidden');
+        var headMap = { MTN: 'MTN — Data & Forfaits', Orange: 'Orange — Data & Forfaits', Moov: 'Moov — Data & Forfaits' };
+        if (heading) heading.textContent = headMap[op] || (op + ' — Data & Forfaits');
+        if (card) {
+            card.classList.remove('border-amber-500/35', 'bg-amber-500/5', 'border-orange-500/35', 'bg-orange-500/5', 'border-sky-500/35', 'bg-sky-500/5');
+            if (op === 'MTN') {
+                card.classList.add('border-amber-500/35', 'bg-amber-500/5');
+            } else if (op === 'Orange') {
+                card.classList.add('border-orange-500/35', 'bg-orange-500/5');
+            } else if (op === 'Moov') {
+                card.classList.add('border-sky-500/35', 'bg-sky-500/5');
+            }
+        }
+    } else {
+        wrap.classList.add('hidden');
+    }
+}
+
+function closeBundlePlansModal(e) {
+    if (e && e.target && !e.target.classList.contains('gc-modal-overlay')) return;
+    var modal = document.getElementById('bundle-plans-modal');
+    if (modal) modal.classList.add('hidden');
+    // Reset translation au cas ou la modal a ete swipe partiellement
+    var sheet = document.getElementById('bundle-plans-modal-sheet');
+    if (sheet) {
+        sheet.style.transform = '';
+        sheet.style.opacity = '';
+    }
+}
+
+// Swipe-down-to-dismiss sur la modal forfaits (geste mobile pour fermer en glissant)
+(function () {
+    var attached = false;
+    function attachSwipeHandlers() {
+        if (attached) return;
+        var sheet = document.getElementById('bundle-plans-modal-sheet');
+        var handle = document.getElementById('bundle-plans-drag-handle');
+        var listEl = document.getElementById('bundle-plans-modal-list');
+        if (!sheet || !handle) return;
+        attached = true;
+
+        var startY = 0;
+        var startX = 0;
+        var currentY = 0;
+        var dragging = false;
+        var listScrollTopAtStart = 0;
+        var DISMISS_THRESHOLD = 120; // pixels avant fermeture
+        var DISMISS_VELOCITY = 0.6;  // px/ms
+
+        function onStart(clientX, clientY) {
+            startX = clientX;
+            startY = clientY;
+            currentY = clientY;
+            dragging = true;
+            listScrollTopAtStart = listEl ? listEl.scrollTop : 0;
+            sheet.style.transition = 'none';
+            sheet.dataset.touchStartTs = String(Date.now());
+        }
+
+        function onMove(clientY) {
+            if (!dragging) return;
+            currentY = clientY;
+            var dy = currentY - startY;
+            // On ne tire que vers le bas
+            if (dy <= 0) {
+                sheet.style.transform = '';
+                sheet.style.opacity = '';
+                return;
+            }
+            // Resistance progressive
+            var translated = dy < 50 ? dy : 50 + (dy - 50) * 0.7;
+            sheet.style.transform = 'translateY(' + translated + 'px)';
+            // Fade au fur et a mesure
+            var op = Math.max(0.4, 1 - dy / 400);
+            sheet.style.opacity = String(op);
+        }
+
+        function onEnd() {
+            if (!dragging) return;
+            dragging = false;
+            sheet.style.transition = 'transform 0.25s ease-out, opacity 0.25s ease-out';
+            var dy = currentY - startY;
+            var dt = Math.max(1, Date.now() - Number(sheet.dataset.touchStartTs || Date.now()));
+            var velocity = dy / dt; // px/ms
+            if (dy > DISMISS_THRESHOLD || velocity > DISMISS_VELOCITY) {
+                // Animation de fermeture vers le bas
+                sheet.style.transform = 'translateY(100%)';
+                sheet.style.opacity = '0';
+                setTimeout(function () {
+                    var modal = document.getElementById('bundle-plans-modal');
+                    if (modal) modal.classList.add('hidden');
+                    sheet.style.transform = '';
+                    sheet.style.opacity = '';
+                    if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
+                }, 200);
+            } else {
+                // Snap back
+                sheet.style.transform = '';
+                sheet.style.opacity = '';
+            }
+        }
+
+        // ----- Touch events (mobile) -----
+        sheet.addEventListener('touchstart', function (e) {
+            // Si on commence le drag dans la liste scrollable et qu'elle n'est pas tout en haut,
+            // on laisse le scroll natif faire son travail (pas de swipe-down)
+            var t = e.touches[0];
+            if (e.target && listEl && listEl.contains(e.target) && listScrollTopAtStart > 0) {
+                return;
+            }
+            onStart(t.clientX, t.clientY);
+        }, { passive: true });
+
+        sheet.addEventListener('touchmove', function (e) {
+            if (!dragging) return;
+            var t = e.touches[0];
+            var dy = t.clientY - startY;
+            // Si on tire vers le bas, on intercepte pour eviter que le body scroll
+            if (dy > 5 && e.cancelable) e.preventDefault();
+            onMove(t.clientY);
+        }, { passive: false });
+
+        sheet.addEventListener('touchend', onEnd, { passive: true });
+        sheet.addEventListener('touchcancel', onEnd, { passive: true });
+
+        // ----- Mouse events (desktop pour test) -----
+        handle.addEventListener('mousedown', function (e) {
+            onStart(e.clientX, e.clientY);
+            function move(ev) { onMove(ev.clientY); }
+            function up() {
+                onEnd();
+                window.removeEventListener('mousemove', move);
+                window.removeEventListener('mouseup', up);
+            }
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', up);
+        });
+    }
+
+    // Attacher quand le DOM est pret
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachSwipeHandlers);
+    } else {
+        attachSwipeHandlers();
+    }
+})();
+
+function openBundlePlansModal(bundleKind) {
+    var op = currentOrder.operator;
+    if (op !== 'MTN' && op !== 'Orange' && op !== 'Moov') return;
+    var apiOpMap = { Orange: 'orange', MTN: 'mtn', Moov: 'moov' };
+    var apiOp = apiOpMap[op] || 'mtn';
+    var titleMap = { data: 'Forfaits Internet', mix: 'Mix / Voix + data' };
+    fetchBundlesCatalog(function (err, catalog) {
+        if (err || !catalog || !catalog.bundles || !catalog.bundles[apiOp]) {
+            console.warn('[Bundles]', err);
+            showToast('Catalogue forfaits indisponible. Réessayez plus tard.', 'error');
+            return;
+        }
+        var list = catalog.bundles[apiOp][bundleKind];
+        if (!Array.isArray(list) || list.length === 0) {
+            showToast('Aucun forfait dans cette catégorie.', 'info');
+            return;
+        }
+        var modal = document.getElementById('bundle-plans-modal');
+        var titleEl = document.getElementById('bundle-plans-modal-title');
+        var subEl = document.getElementById('bundle-plans-modal-sub');
+        var listEl = document.getElementById('bundle-plans-modal-list');
+        if (titleEl) titleEl.textContent = titleMap[bundleKind] || 'Forfaits';
+        if (subEl) subEl.textContent = op + ' — prix du forfait ; les frais de 5 % sont ajoutés à l’étape suivante.';
+        if (listEl) {
+            listEl.innerHTML = '';
+            list.forEach(function (b) {
+                var row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'w-full text-left glass-panel rounded-xl p-3 border border-white/15 hover:bg-white/10 transition-colors';
+                var priceStr = formatNumber(b.price) + ' FCFA';
+                var meta = [];
+                if (b.data) meta.push(b.data);
+                if (b.minutes) meta.push(b.minutes + ' min');
+                if (b.duration) meta.push(b.duration);
+                var metaStr = meta.join(' — ');
+                row.innerHTML =
+                    '<div class="font-semibold text-white text-sm">' + escapeHtml(b.name || 'Forfait') + '</div>' +
+                    (metaStr ? '<div class="text-xs text-slate-400 mt-0.5">' + escapeHtml(metaStr) + '</div>' : '') +
+                    '<div class="text-amber-400 font-bold text-sm mt-1">' + escapeHtml(priceStr) + '</div>';
+                row.onclick = function () {
+                    pickBundleAndContinue(b, bundleKind);
+                };
+                listEl.appendChild(row);
+            });
+        }
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
+        }
+    });
+}
+
+function pickBundleAndContinue(bundle, bundleKind) {
+    clearOrderBundle();
+    currentOrder.bundleType = bundleKind;
+    currentOrder.bundleId = bundle.id;
+    currentOrder.bundleLabel = formatBundleLabelForOrder(bundle);
+    var amount = bundle.price;
+    var frais = Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
+    var total = amount + frais;
+    currentOrder.amount = amount;
+    currentOrder.amountTotal = total;
+    persistOrderDraft();
+    closeBundlePlansModal();
+    var phoneInput = document.getElementById('phone-input');
+    var lastPhone = window.__bipbipLastPhone || '';
+    if (phoneInput) {
+        phoneInput.value = lastPhone;
+        formatPhoneInput(phoneInput);
+    }
+    var btn = document.getElementById('btn-continue-phone');
+    if (btn) btn.disabled = !lastPhone || lastPhone.length < 10;
+    var hint = document.getElementById('phone-hint');
+    if (hint) {
+        hint.textContent = currentOrder.operator ? 'Entrez un numéro ' + currentOrder.operator : 'Entrez un numéro valide';
+        hint.className = 'input-hint';
+    }
+    refreshPhoneOrderSummary();
+    navigateTo('phone');
 }
 
 function selectAmount(amount) {
@@ -1438,6 +1989,8 @@ function selectAmount(amount) {
         navigateTo('buy');
         return;
     }
+
+    clearOrderBundle();
 
     if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
     const frais = Math.floor(amount * CONFIG.FRAIS_PERCENT / 100);
@@ -1517,7 +2070,13 @@ function validatePhone() {
     // Afficher les détails de confirmation
     const details = document.getElementById('confirmation-details');
     const frais = currentOrder.amountTotal - currentOrder.amount;
-    
+    var forfaitBlock = '';
+    if (currentOrder.bundleLabel) {
+        forfaitBlock = '<div class="detail-row">' +
+            '<span class="detail-label">Forfait</span>' +
+            '<span class="detail-value">' + escapeHtml(currentOrder.bundleLabel) + '</span></div>';
+    }
+
     details.innerHTML = `
         <div class="detail-row">
             <span class="detail-label">Opérateur</span>
@@ -1527,6 +2086,7 @@ function validatePhone() {
             <span class="detail-label">Numéro</span>
             <span class="detail-value">+225 ${currentOrder.phone}</span>
         </div>
+        ${forfaitBlock}
         <div class="detail-row">
             <span class="detail-label">Montant recharge</span>
             <span class="detail-value">${formatNumber(currentOrder.amount)} FCFA</span>
@@ -1554,6 +2114,11 @@ function confirmOrder() {
         userId: tgUserId || getBrowserUserId(),
         username: tg?.initDataUnsafe?.user?.username || null
     };
+    if (currentOrder.bundleType && currentOrder.bundleId) {
+        payload.bundleType = currentOrder.bundleType;
+        payload.bundleId = currentOrder.bundleId;
+        if (currentOrder.bundleLabel) payload.bundleLabel = currentOrder.bundleLabel;
+    }
 
     fetch(API_BASE + '/api/orders', {
         method: 'POST',
@@ -1722,7 +2287,7 @@ function openGiftCardModal(card) {
     if (preview) preview.innerHTML = '<img src="' + card.img + '" alt="' + card.name + '">';
     if (title) title.textContent = card.name + ' — ' + card.value;
     if (price) price.textContent = formatNumber(card.price) + ' XOF';
-    if (desc) desc.textContent = 'Carte cadeau ' + card.name + ' d\'une valeur de ' + card.value + '. Après paiement, le code sera envoyé par Telegram.';
+    if (desc) desc.textContent = 'Carte cadeau ' + card.name + ' d\'une valeur de ' + card.value + '. Après paiement, le code sera envoyé par Telegram ou par e-mail (selon les coordonnées associées à ta commande).';
 
     modal.classList.remove('hidden');
     if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'medium');
@@ -1740,7 +2305,7 @@ function confirmGiftCardPurchase() {
     var card = gcSelectedCard;
 
     // Build order for gift card
-    var frais = Math.round(card.price * 0.1);
+    var frais = Math.round(card.price * 0.05);
     var total = card.price + frais;
 
     currentOrder = {
@@ -2981,7 +3546,7 @@ function renderAdminPubBanners() {
         var pl = b.placement || 'actualites';
         map[pl] = b;
     });
-    ['home1', 'home2', 'actualites'].forEach(function (place) {
+    ['home1', 'home2', 'actualites', 'pc_left', 'pc_right', 'pc_left_2', 'pc_right_2', 'pc_left_video', 'pc_right_video'].forEach(function (place) {
         addAdminPubBannerRowFixed(place, map[place] || { text: '', image: '', url: '', scrollSpeed: 5 });
     });
 }
@@ -3091,6 +3656,7 @@ function savePubBanners() {
             }
             initPubBanner();
             initHomePubBanners();
+            initPcSideAds();
             renderAdminPubBanners();
             showToast(arr.length ? arr.length + ' bannière(s) enregistrée(s)' : 'Bannières désactivées (liste vide)', 'success');
         })
@@ -3099,9 +3665,11 @@ function savePubBanners() {
 
 function saveLedSpeed() {
     var input = document.getElementById('admin-led-speed');
-    var seconds = parseInt(input && input.value ? input.value : 60, 10);
+    var sliderVal = Math.max(1, Math.min(10, parseInt(input && input.value ? input.value : 5, 10)));
+    // Conversion vitesse: 1=lent(215s) -> 10=rapide(17s)
+    var seconds = Math.round(215 - (sliderVal - 1) * 22);
     if (seconds < 15 || seconds > 300) {
-        showToast('Entre 15 et 300 secondes', 'error');
+        showToast('Valeur invalide', 'error');
         return;
     }
     if (!hasAdminAuth()) {
@@ -3123,7 +3691,7 @@ function saveLedSpeed() {
         applyLedAnimation();
         var valEl = document.getElementById('admin-led-speed-value');
         if (valEl) valEl.textContent = seconds;
-        showToast('Vitesse bandeau enregistrée : ' + seconds + ' s', 'success');
+        showToast('Vitesse bandeau enregistrée : ' + sliderVal + '/10', 'success');
     })
     .catch(function () {
         showToast('Erreur réseau', 'error');
@@ -3475,6 +4043,7 @@ function loadServerConfig() {
             applyLedAnimation();
             initPubBanner();
             initHomePubBanners();
+            initPcSideAds();
             loadLedMessages();
         })
         .catch(function () {
@@ -3513,6 +4082,11 @@ function initApp() {
     }
 
     // Boutons montant : event delegation
+    var btnBd = document.getElementById('btn-bundles-data');
+    if (btnBd) btnBd.addEventListener('click', function (e) { e.preventDefault(); openBundlePlansModal('data'); });
+    var btnBm = document.getElementById('btn-bundles-mix');
+    if (btnBm) btnBm.addEventListener('click', function (e) { e.preventDefault(); openBundlePlansModal('mix'); });
+
     var amountScreen = document.getElementById('screen-amount');
     if (amountScreen) {
         amountScreen.addEventListener('click', function (e) {

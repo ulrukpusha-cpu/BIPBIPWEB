@@ -4,6 +4,19 @@
 const db = require('../database/supabase-client');
 const { scoreActualite } = require('./scoring');
 
+
+// ── Cache mémoire 5 min (protection contre les timeouts Supabase) ─────────────
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const _cache = {};
+function cacheGet(key) {
+    const e = _cache[key];
+    if (!e) return null;
+    if (Date.now() - e.ts > CACHE_TTL_MS) { delete _cache[key]; return null; }
+    return e.data;
+}
+function cacheSet(key, data) { _cache[key] = { data, ts: Date.now() }; }
+// ─────────────────────────────────────────────────────────────────────────────
+
 const CATEGORY_KEYWORDS = {
     region: ['afrique', 'côte d\'ivoire', 'abidjan', 'cameroun', 'sénégal', 'mali', 'burkina', 'guinée', 'togo', 'bénin', 'niger', 'congo', 'gabon', 'tchad', 'maroc', 'algérie', 'tunisie', 'kenya', 'nigeria', 'soudan', 'uemoa', 'cedeao', 'gouvernement', 'président', 'politique', 'élection', 'ministre', 'diplomatie'],
     finance: ['crypto', 'bitcoin', 'ethereum', 'solana', 'blockchain', 'nft', 'token', 'bourse', 'trading', 'finance', 'banque', 'inflation', 'fmi', 'dette', 'fintech', 'minage', 'airdrop', 'staking', 'binance', 'wallet', 'investiss'],
@@ -20,6 +33,9 @@ function buildCategoryFilter(category) {
 async function listApproved(limit = 20, offset = 0, sort = 'date', category = null) {
     const supabase = db.getSupabase();
     if (!supabase) return [];
+    const cacheKey = `list:${limit}:${offset}:${sort}:${category || 'all'}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
 
     const cols = 'id, title, slug, summary_short, published_at, ai_score';
 
@@ -54,7 +70,9 @@ async function listApproved(limit = 20, offset = 0, sort = 'date', category = nu
     if (sort === 'date') q = q.order('published_at', { ascending: false });
     else if (sort === 'popularite') q = q.order('ai_score', { ascending: false });
     const { data } = await q.range(offset, offset + limit - 1);
-    return data || [];
+    const result = data || [];
+    if (result.length) cacheSet(cacheKey, result);
+    return result;
 }
 
 async function getBySlug(slug) {

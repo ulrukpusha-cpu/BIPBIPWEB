@@ -139,7 +139,7 @@ async function getOrCreateUser(telegramUser, botToken, fetchPhoto = true) {
     }
     const REFERRAL_BONUS = 20;
     if (referredBy) {
-        await addPoints(referredBy, REFERRAL_BONUS);
+        await addPoints(referredBy, REFERRAL_BONUS, 'referral', 'Ami invite inscrit');
     }
     return { user: inserted };
 }
@@ -159,10 +159,50 @@ async function getByTelegramId(telegramId) {
     return data;
 }
 
+
+/**
+ * Log une ligne dans points_history. Non-bloquant (try/catch silencieux).
+ * Ne loggue PAS si action/description contient 'test' ou si telegramId est web_xxx.
+ */
+async function logPointsHistory(telegramId, amount, action, description) {
+    try {
+        const supabase = db.getSupabase();
+        if (!supabase) return;
+        const id = Number(telegramId);
+        if (!Number.isFinite(id)) return; // web_xxx / google string → pas de log (ou a adapter)
+        if (!Number.isFinite(amount) || amount === 0) return;
+        await supabase.from('points_history').insert({
+            telegram_id: id,
+            amount: amount,
+            action: String(action || 'unknown').slice(0, 50),
+            description: description ? String(description).slice(0, 200) : null,
+        });
+    } catch (e) {
+        // silencieux: un echec de log ne doit pas casser le credit de points
+    }
+}
+
+/**
+ * Recupere l'historique des points d'un utilisateur (les plus recents en premier).
+ */
+async function listPointsHistory(telegramId, limit = 50) {
+    const supabase = db.getSupabase();
+    if (!supabase) return [];
+    const id = Number(telegramId);
+    if (!Number.isFinite(id)) return [];
+    const { data } = await supabase
+        .from('points_history')
+        .select('id, amount, action, description, created_at')
+        .eq('telegram_id', id)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(200, Math.max(1, limit)));
+    return data || [];
+}
+
 /**
  * Ajoute des points à un utilisateur (quêtes, etc.). Retourne le nouveau total ou null.
  */
-async function addPoints(telegramId, amount) {
+async function addPoints(telegramId, amount, action, description) {
     const supabase = db.getSupabase();
     if (!supabase || !Number.isFinite(amount) || amount < 0) return null;
     const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
@@ -171,6 +211,8 @@ async function addPoints(telegramId, amount) {
     const newPoints = (user.points || 0) + amount;
     const { error } = await supabase.from(tableName).update({ points: newPoints, updated_at: new Date().toISOString() }).eq('telegram_id', Number(telegramId));
     if (error) return null;
+    // Log historique (non-bloquant)
+    logPointsHistory(telegramId, amount, action || 'bonus', description).catch(() => {});
     return newPoints;
 }
 
@@ -296,7 +338,7 @@ async function recordLinkClickAndAddPoints(userId, linkOwnerTelegramId) {
         link_owner_telegram_id: Number(linkOwnerTelegramId),
     });
     if (insertErr) return { error: insertErr.message };
-    const newTotal = await addPoints(userId, POINTS_PER_LINK_CLICK);
+    const newTotal = await addPoints(userId, POINTS_PER_LINK_CLICK, 'link_click', 'Clic lien approuve');
     return { pointsAdded: POINTS_PER_LINK_CLICK, totalPoints: newTotal };
 }
 
@@ -392,7 +434,7 @@ async function claimDailyCheckin(telegramId) {
         updated_at: new Date().toISOString(),
     }).eq('telegram_id', Number(telegramId));
     if (error) return { error: error.message };
-    const newTotal = await addPoints(telegramId, points);
+    const newTotal = await addPoints(telegramId, points, 'daily_checkin', 'Connexion quotidienne jour ' + newStreak);
     return { points_earned: points, streak: newStreak, total_points: newTotal };
 }
 
@@ -414,8 +456,28 @@ async function getReferralInfo(telegramId, botUsername) {
     return { referral_code: code, referral_link: link };
 }
 
+
+/**
+ * Met a jour la langue preferee de l'utilisateur (fr|en).
+ */
+async function updateLanguage(telegramId, lang) {
+    const supabase = db.getSupabase();
+    if (!supabase) return { error: 'Base indisponible' };
+    if (lang !== 'fr' && lang !== 'en') return { error: 'Langue invalide' };
+    const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+    const id = Number(telegramId);
+    if (!Number.isFinite(id)) return { error: 'User non supporte' };
+    const { data, error } = await supabase.from(tableName)
+        .update({ language: lang, updated_at: new Date().toISOString() })
+        .eq('telegram_id', id).select().single();
+    if (error) return { error: error.message };
+    return { user: data };
+}
+
 module.exports = {
     getOrCreateUser,
+    updateLanguage,
+    listPointsHistory,
     getByTelegramId,
     addPoints,
     updateSocialLink,
