@@ -3,6 +3,40 @@
  */
 const db = require('../database/supabase-client');
 
+// --- Vérification Telegram (abonnement + boost) via Bot API ---
+const TG_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TG_CHANNEL = process.env.TELEGRAM_CHANNEL || '@bipbiprecharge';
+
+async function tgApiCall(method, params) {
+    if (!TG_BOT_TOKEN) return { ok: false, description: 'TELEGRAM_BOT_TOKEN manquant' };
+    try {
+        const r = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/${method}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params),
+        });
+        return await r.json();
+    } catch (e) {
+        return { ok: false, description: e.message || 'network error' };
+    }
+}
+
+async function verifyTelegramSubscribe(telegramUserId) {
+    const r = await tgApiCall('getChatMember', { chat_id: TG_CHANNEL, user_id: Number(telegramUserId) });
+    if (!r.ok) return { verified: false, error: r.description };
+    const status = r.result && r.result.status;
+    return { verified: ['creator', 'administrator', 'member', 'restricted'].includes(status), status };
+}
+
+async function verifyTelegramBoost(telegramUserId) {
+    const r = await tgApiCall('getUserChatBoosts', { chat_id: TG_CHANNEL, user_id: Number(telegramUserId) });
+    if (!r.ok) return { verified: false, error: r.description };
+    const boosts = (r.result && r.result.boosts) || [];
+    const now = Math.floor(Date.now() / 1000);
+    const active = boosts.filter(b => !b.expiration_date || b.expiration_date > now);
+    return { verified: active.length > 0, boosts: active.length };
+}
+
 async function listActiveQuests() {
     const supabase = db.getSupabase();
     if (!supabase) return [];
@@ -78,6 +112,24 @@ async function claimQuestByCode(userId, code) {
 
     if (uq && uq.completed) {
         return { already_claimed: true };
+    }
+
+    // 2.5) Vérification stricte pour les quêtes Telegram (abonnement / boost)
+    //      On NE marque PAS completed si la vérification échoue, pour permettre le retry.
+    if (code === 'telegram_subscribe' || code === 'telegram_boost') {
+        // Ces quêtes exigent un vrai compte Telegram (userId numérique)
+        if (!/^-?\d+$/.test(uid)) {
+            return { error: 'Connecte ton compte Telegram pour cette quête.', needs_telegram: true };
+        }
+        const verify = code === 'telegram_subscribe'
+            ? await verifyTelegramSubscribe(uid)
+            : await verifyTelegramBoost(uid);
+        if (!verify.verified) {
+            const msg = code === 'telegram_subscribe'
+                ? 'Tu n\'es pas encore abonné au canal @bipbiprecharge. Abonne-toi puis réessaie.'
+                : 'Aucun boost actif détecté sur @bipbiprecharge. Booste le canal puis réessaie.';
+            return { error: msg, not_verified: true, tg_error: verify.error || null };
+        }
     }
 
     // 3) Marquer completee

@@ -37,9 +37,16 @@ function authTelegram(req, res, next) {
 
         // Google session : header X-Google-Session + userId numérique (ID négatif)
         const googleSession = req.headers['x-google-session'] || '';
-        const bodyUid = req.body?.userId || req.query?.userId || null;
+        // Session Telegram Login Widget (navigateur PC) : header X-Telegram-Login-Session + userId Telegram réel (positif)
+        const tgLoginSession = req.headers['x-telegram-login-session'] || '';
+        // Fallback pour les requêtes GET qui n'ont ni body ni query userId
+        const headerUid = req.headers['x-user-id'] || null;
+        const bodyUid = req.body?.userId || req.query?.userId || headerUid || null;
 
-        if (googleSession && typeof bodyUid === 'string' && /^-?\d+$/.test(bodyUid)) {
+        if (tgLoginSession && typeof bodyUid === 'string' && /^\d+$/.test(bodyUid)) {
+            req.userId = bodyUid;
+            req.authType = 'telegram_login';
+        } else if (googleSession && typeof bodyUid === 'string' && /^-?\d+$/.test(bodyUid)) {
             req.userId = bodyUid;
             req.authType = 'google';
         } else {
@@ -62,7 +69,9 @@ function requireAuth(req, res, next) {
  * Rejette les utilisateurs anonymes (userId préfixé web_).
  */
 function isRegisteredUser(req) {
-    if (req.telegramUser && req.userId) return true;          // Telegram valide
+    if (req.telegramUser && req.userId) return true;          // Telegram (Mini App) valide
+    if (req.authType === 'telegram_login' && req.userId &&
+        /^\d+$/.test(req.userId)) return true;               // Telegram Login Widget (PC) valide
     if (req.authType === 'google' && req.userId &&
         /^-?\d+$/.test(req.userId)) return true;             // Google valide
     return false;

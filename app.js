@@ -437,6 +437,14 @@ function fetchTelegramMe() {
         initGoogleAuth();
         return;
     }
+    // Si connecté via Telegram Login Widget (PC), recharger le profil TG Login
+    try {
+        var tgls = (typeof getTgLoginSession === 'function') ? getTgLoginSession() : null;
+        if (tgls && !isInsideTelegram()) {
+            if (typeof initTgLoginAuth === 'function') initTgLoginAuth();
+            return;
+        }
+    } catch (e) {}
     if (!tg || !tg.initData) return;
     fetch(API_BASE + '/api/telegram/me', { method: 'GET', headers: getApiHeaders() })
         .then(function (res) { return res.json(); })
@@ -540,15 +548,17 @@ function updateProfilPhoto() {
     var user = window.__bipbipRegisteredUser;
     var isTg = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.user);
     var isGoogle = !!(user && user.auth_type === 'google');
+    var hasTgLogin = !!(typeof getTgLoginSession === 'function' && getTgLoginSession());
 
     if (hintEl) {
-        hintEl.style.display = (user || isTg) ? '' : 'none';
+        hintEl.style.display = (user || isTg || hasTgLogin) ? '' : 'none';
         hintEl.textContent = isGoogle ? 'Connecté avec Google' : 'Connecté avec Telegram';
     }
-    if (logoutBtn) logoutBtn.style.display = isGoogle ? '' : 'none';
+    // Afficher le bouton déconnexion pour Google ET pour Telegram Login Widget (PC)
+    if (logoutBtn) logoutBtn.style.display = (isGoogle || hasTgLogin) ? '' : 'none';
 
     if (!container) return;
-    if (user && (isGoogle || (tg && tg.initData))) {
+    if (user && (isGoogle || hasTgLogin || (tg && tg.initData))) {
         loadAvatarInto(container, true);
     } else {
         setPlaceholderPhoto(container, true);
@@ -1168,38 +1178,65 @@ function handleQuestAction(type) {
             if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300);
     } else if (type === 'quest_telegram_subscribe' || type === 'quest_telegram_boost') {
-        var channelUrl = (type === 'quest_telegram_boost')
-            ? 'https://t.me/boost/bipbiprecharge'
-            : 'https://t.me/bipbiprecharge';
-        var questCode = (type === 'quest_telegram_boost') ? 'telegram_boost' : 'telegram_subscribe';
-        // Ouvrir le canal
-        if (tg && tg.openTelegramLink) {
-            tg.openTelegramLink(channelUrl);
-        } else {
-            window.open(channelUrl, '_blank');
-        }
-        // Reclamer la recompense (une seule fois)
-        authFetch(API_BASE + '/api/quests/claim', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: questCode })
-        }).then(function (r) { return r.json(); }).then(function (d) {
-            if (d && d.success) {
-                showToast('+' + (d.points_earned || 25) + ' points \u00e9' + 'gain\u00e9s\u202f!', 'success');
-                if (d.total_points != null && window.__bipbipRegisteredUser) {
-                    window.__bipbipRegisteredUser.points = d.total_points;
-                }
-                if (typeof loadQuests === 'function') setTimeout(loadQuests, 800);
-                if (typeof loadProfile === 'function') setTimeout(loadProfile, 800);
-            } else if (d && d.already_claimed) {
-                showToast('Quete d\u00e9j\u00e0 r\u00e9clam\u00e9e', 'info');
-            } else if (d && d.error) {
-                showToast(d.error, 'error');
+        var isBoost = (type === 'quest_telegram_boost');
+        var channelUrl = isBoost ? 'https://t.me/boost/bipbiprecharge' : 'https://t.me/bipbiprecharge';
+        var questCode = isBoost ? 'telegram_boost' : 'telegram_subscribe';
+
+        // Flux verify-first : on tente la vérification directement.
+        // - Si validé : points crédités, bouton passe en "✓ Validée"
+        // - Si pas encore abonné/boosté : on ouvre Telegram et on retente après 6s
+        verifyTelegramQuest(questCode, /*silent*/ true, function (res) {
+            var d = (res && res.data) || {};
+            if (d.success || d.already_claimed) return;
+            // Pas encore abonné / boosté → ouvrir Telegram
+            if (tg && tg.openTelegramLink) {
+                tg.openTelegramLink(channelUrl);
+            } else {
+                window.open(channelUrl, '_blank');
             }
-        }).catch(function () { /* silencieux */ });
+            showToast(isBoost
+                ? 'Booste le canal puis reviens. Ta quête sera validée automatiquement.'
+                : 'Abonne-toi au canal puis reviens. Ta quête sera validée automatiquement.',
+                'info');
+            // Retenter la vérification automatiquement (le temps de s'abonner et revenir)
+            setTimeout(function () { verifyTelegramQuest(questCode, /*silent*/ true); }, 6000);
+            setTimeout(function () { verifyTelegramQuest(questCode, /*silent*/ true); }, 15000);
+            setTimeout(function () { verifyTelegramQuest(questCode, /*silent*/ false); }, 25000);
+        });
     } else if (type === 'quest_reading') {
         navigateTo('actualites');
     }
+}
+
+// Vérifier et réclamer une quête Telegram (abonnement / boost)
+// silent=true => n'affiche pas les erreurs (pour les tentatives automatiques après un délai)
+function verifyTelegramQuest(questCode, silent, cb) {
+    var uid = (typeof getBrowserUserId === 'function' ? getBrowserUserId() : '') || '';
+    fetch(API_BASE + '/api/quests/claim', {
+        method: 'POST',
+        headers: getApiHeaders(),
+        body: JSON.stringify({ code: questCode, userId: uid })
+    }).then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        var d = res.data || {};
+        if (d.success) {
+            showToast('+' + (d.points_earned || 25) + ' points gagnés\u202f!', 'success');
+            if (d.total_points != null && window.__bipbipRegisteredUser) {
+                window.__bipbipRegisteredUser.points = d.total_points;
+            }
+            if (typeof loadQuests === 'function') setTimeout(loadQuests, 500);
+            if (typeof loadProfile === 'function') setTimeout(loadProfile, 500);
+        } else if (d.already_claimed) {
+            if (!silent) showToast('Quête déjà réclamée', 'info');
+            if (typeof loadQuests === 'function') setTimeout(loadQuests, 500);
+        } else if (d.not_verified || d.needs_telegram || d.error) {
+            if (!silent) showToast(d.error || 'Vérification impossible', 'error');
+        }
+        if (typeof cb === 'function') cb(res);
+    }).catch(function (e) {
+        if (!silent) showToast('Erreur réseau', 'error');
+        if (typeof cb === 'function') cb({ status: 0, data: { error: 'network' } });
+    });
 }
 
 function loadQuests() {
@@ -1207,35 +1244,73 @@ function loadQuests() {
     loadApprovedLinks();
     var container = document.getElementById('quests-list-container');
     if (!container) return;
-    fetch(API_BASE + '/api/quests')
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            var items = (data && data.quests) ? data.quests : [];
-            if (items.length === 0) {
-                container.innerHTML = '<p class="text-slate-400 text-sm">Aucune quête disponible.</p>';
-                return;
-            }
-            container.innerHTML = items.map(function (q) {
-                var pts = q.points_reward || 0;
-                var m = getQuestMeta(q.type);
-                return '<div class="glass-panel rounded-xl p-4 border border-white/15 hover:bg-white/10 transition-colors cursor-pointer" onclick="handleQuestAction(\'' + escapeHtml(m.action) + '\')">' +
-                    '<div class="flex items-center justify-between">' +
-                    '<div class="flex items-center gap-3 min-w-0">' +
-                    '<span class="text-2xl flex-shrink-0">' + m.icon + '</span>' +
-                    '<div>' +
-                    '<span class="font-medium text-white block">' + escapeHtml(q.titre || q.code || '') + '</span>' +
-                    '<span class="text-slate-400 text-sm block">' + escapeHtml((q.description || '').slice(0, 50)) + (q.description && q.description.length > 50 ? '…' : '') + '</span>' +
-                    '<span class="text-amber-400 text-sm block">+' + pts + ' pts</span>' +
-                    '</div></div>' +
-                    '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon>' +
-                    '</div>' +
-                    (m.cta ? '<button class="mt-3 w-full py-2 rounded-lg text-sm font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">' + escapeHtml(m.cta) + '</button>' : '') +
-                    '</div>';
-            }).join('');
-        })
-        .catch(function () {
-            container.innerHTML = '<p class="text-slate-400 text-sm">Impossible de charger les quêtes.</p>';
+    // Récupérer aussi la progression utilisateur pour marquer les quêtes complétées
+    var userId = (window.__bipbipRegisteredUser && window.__bipbipRegisteredUser.id) ||
+                 (window.__bipbipUser && window.__bipbipUser.id) || '';
+    var userProgressPromise = userId
+        ? fetch(API_BASE + '/api/quests/user/' + encodeURIComponent(userId))
+            .then(function (r) { return r.json(); })
+            .then(function (d) { return (d && d.user_quests) || []; })
+            .catch(function () { return []; })
+        : Promise.resolve([]);
+
+    Promise.all([
+        fetch(API_BASE + '/api/quests').then(function (r) { return r.json(); }),
+        userProgressPromise,
+    ]).then(function (results) {
+        var data = results[0];
+        var userQuests = results[1] || [];
+        var completedSet = {};
+        userQuests.forEach(function (uq) {
+            if (uq && uq.completed && uq.quest_id) completedSet[uq.quest_id] = true;
         });
+
+        var items = (data && data.quests) ? data.quests : [];
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-slate-400 text-sm">Aucune quête disponible.</p>';
+            return;
+        }
+        // Tri : quêtes non terminées d'abord, les complétées à la fin
+        items = items.slice().sort(function (a, b) {
+            var da = !!completedSet[a.id];
+            var db = !!completedSet[b.id];
+            if (da === db) return 0;
+            return da ? 1 : -1;
+        });
+        container.innerHTML = items.map(function (q) {
+            var pts = q.points_reward || 0;
+            var m = getQuestMeta(q.type);
+            var done = !!completedSet[q.id];
+            var panelCls = done
+                ? 'glass-panel rounded-xl p-4 border border-emerald-500/30 bg-emerald-500/5 cursor-default opacity-70'
+                : 'glass-panel rounded-xl p-4 border border-white/15 hover:bg-white/10 transition-colors cursor-pointer';
+            var onclickAttr = done
+                ? 'onclick="showToast(\'Quête déjà validée\', \'info\')"'
+                : 'onclick="handleQuestAction(\'' + escapeHtml(m.action) + '\')"';
+            // Pour une quête complétée : juste "✓ Fait" à droite, aucun bouton en-dessous
+            var statusIcon = done
+                ? '<span class="text-emerald-400 text-sm font-semibold flex items-center gap-1 flex-shrink-0"><iconify-icon icon="solar:check-circle-bold" width="18"></iconify-icon>Fait</span>'
+                : '<iconify-icon icon="solar:arrow-right-linear" width="20" class="text-slate-400 flex-shrink-0"></iconify-icon>';
+            var ctaHtml = (m.cta && !done)
+                ? '<button class="mt-3 w-full py-2 rounded-lg text-sm font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">' + escapeHtml(m.cta) + '</button>'
+                : '';
+            return '<div class="' + panelCls + '" ' + onclickAttr + '>' +
+                '<div class="flex items-center justify-between">' +
+                '<div class="flex items-center gap-3 min-w-0">' +
+                '<span class="text-2xl flex-shrink-0">' + m.icon + '</span>' +
+                '<div>' +
+                '<span class="font-medium text-white block">' + escapeHtml(q.titre || q.code || '') + '</span>' +
+                '<span class="text-slate-400 text-sm block">' + escapeHtml((q.description || '').slice(0, 50)) + (q.description && q.description.length > 50 ? '…' : '') + '</span>' +
+                '<span class="' + (done ? 'text-emerald-400' : 'text-amber-400') + ' text-sm block">+' + pts + ' pts</span>' +
+                '</div></div>' +
+                statusIcon +
+                '</div>' +
+                ctaHtml +
+                '</div>';
+        }).join('');
+    }).catch(function () {
+        container.innerHTML = '<p class="text-slate-400 text-sm">Impossible de charger les quêtes.</p>';
+    });
 }
 
 // ==================== LED BANDEAU ====================
@@ -1392,7 +1467,11 @@ function navigateTo(screen) {
     }
 
     // Rediriger vers l'écran de connexion si l'utilisateur navigateur n'est pas authentifié
-    if (target === 'profil' && !isInsideTelegram() && !getGoogleSession()) {
+    // (Google OU Telegram Login Widget OU Telegram Mini App)
+    if (target === 'profil'
+        && !isInsideTelegram()
+        && !getGoogleSession()
+        && !(typeof getTgLoginSession === 'function' && getTgLoginSession())) {
         target = 'login';
     }
 
@@ -1409,7 +1488,7 @@ function navigateTo(screen) {
         if (typeof window.__bipbipHaptic === 'function') window.__bipbipHaptic('impact', 'light');
         if (target === 'status') renderOrdersList();
         if (target === 'cartes') { loadGiftCardsFromServer(); }
-        if (target === 'admin') { loadAdminGiftCards(); }
+        if (target === 'admin') { loadAdminGiftCards(); if (typeof loadAdminQuests === 'function') loadAdminQuests(); }
         if (target === 'home') {
             updateHeaderUserInfo();
             loadHomeWeather();
@@ -2255,14 +2334,21 @@ function renderGiftCards(cat) {
             var dot = document.createElement('span');
             dot.className = 'gc-dot' + (i === 0 ? ' active' : '');
             dot.dataset.index = i;
+            // Clickable dots: scroll to the corresponding card
+            dot.onclick = function () {
+                var targetIdx = parseInt(this.dataset.index, 10) || 0;
+                var cardW = 220 + 16;
+                carousel.scrollTo({ left: targetIdx * cardW, behavior: 'smooth' });
+            };
             dotsWrap.appendChild(dot);
         }
     });
 
-    // Update dots on scroll
-    carousel.onscroll = function () { updateGcDots(carousel); };
+    // Update dots + arrow states on scroll
+    carousel.onscroll = function () { updateGcDots(carousel); updateGcNavState(carousel); };
     // Reset scroll
     carousel.scrollLeft = 0;
+    updateGcNavState(carousel);
 }
 
 function updateGcDots(carousel) {
@@ -2273,6 +2359,25 @@ function updateGcDots(carousel) {
     dots.forEach(function (d, i) {
         d.classList.toggle('active', i === idx);
     });
+}
+
+// Desktop nav arrows: scroll carousel left/right by one card
+function scrollGiftCards(dir) {
+    var carousel = document.getElementById('gc-carousel');
+    if (!carousel) return;
+    var cardW = 220 + 16; // card width + gap
+    carousel.scrollBy({ left: dir * cardW * 2, behavior: 'smooth' });
+}
+
+// Enable/disable arrow buttons at scroll boundaries
+function updateGcNavState(carousel) {
+    var prev = document.getElementById('gc-nav-prev');
+    var next = document.getElementById('gc-nav-next');
+    if (!carousel) return;
+    var atStart = carousel.scrollLeft <= 2;
+    var atEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 2;
+    if (prev) prev.disabled = atStart;
+    if (next) next.disabled = atEnd;
 }
 
 function openGiftCardModal(card) {
@@ -2514,6 +2619,7 @@ function handleGoogleCredentialResponse(response) {
     .then(function (result) {
         if (result.ok && result.data.ok && result.data.user) {
             var user = result.data.user;
+            try { if (typeof clearTgLoginSession === 'function') clearTgLoginSession(); } catch (e) {}
             saveGoogleSession(result.data.sessionToken, String(user.telegram_id));
 
             // Stocker les infos utilisateur comme pour Telegram
@@ -2553,6 +2659,8 @@ function continueAsGuest() {
  */
 function logoutGoogle() {
     clearGoogleSession();
+    // Nettoyer aussi une éventuelle session Telegram Login Widget
+    try { if (typeof clearTgLoginSession === 'function') clearTgLoginSession(); } catch (e) {}
     window.__bipbipRegisteredUser = null;
     userPoints = 0;
     try { localStorage.setItem('bipbip_points', '0'); } catch (e) {}
@@ -2604,6 +2712,199 @@ function initGoogleAuth() {
 }
 
 /* ========== / Google Sign-In ========== */
+
+
+/* ========== Telegram Login Widget (PC / navigateur) ========== */
+
+var __bipbipTgLoginSession = null;
+
+function getTgLoginSession() {
+    if (__bipbipTgLoginSession) return __bipbipTgLoginSession;
+    try {
+        var raw = localStorage.getItem('bipbip_tg_login_session');
+        if (raw) {
+            var s = JSON.parse(raw);
+            if (s && s.token && s.userId) { __bipbipTgLoginSession = s; return s; }
+        }
+    } catch (e) {}
+    return null;
+}
+function saveTgLoginSession(token, userId) {
+    __bipbipTgLoginSession = { token: token, userId: String(userId) };
+    try { localStorage.setItem('bipbip_tg_login_session', JSON.stringify(__bipbipTgLoginSession)); } catch (e) {}
+}
+function clearTgLoginSession() {
+    __bipbipTgLoginSession = null;
+    try { localStorage.removeItem('bipbip_tg_login_session'); } catch (e) {}
+}
+
+// Patcher getApiHeaders pour ajouter aussi le header TG Login si session présente
+// + un header X-User-Id universel (utilisé par le middleware serveur quand userId
+//   n'est pas passé en body/query sur les requêtes GET)
+var _origGetApiHeaders2 = getApiHeaders;
+getApiHeaders = function (extra) {
+    var h = _origGetApiHeaders2(extra);
+    var tgls = getTgLoginSession();
+    if (tgls && !isInsideTelegram()) {
+        h['X-Telegram-Login-Session'] = tgls.token;
+    }
+    // Injecter X-User-Id pour les requêtes GET qui n'ont pas de body ni de query userId
+    try {
+        if (!isInsideTelegram()) {
+            var uid = (typeof getBrowserUserId === 'function') ? getBrowserUserId() : null;
+            if (uid) h['X-User-Id'] = String(uid);
+        }
+    } catch (e) {}
+    return h;
+};
+
+// Patcher getBrowserUserId pour renvoyer l'ID Telegram si session TG Login présente
+var _origGetBrowserUserId2 = getBrowserUserId;
+getBrowserUserId = function () {
+    var tgls = getTgLoginSession();
+    if (tgls) return tgls.userId;
+    return _origGetBrowserUserId2();
+};
+
+// Étendre isUserAuthenticated
+var _origIsUserAuthenticated = isUserAuthenticated;
+isUserAuthenticated = function () {
+    return _origIsUserAuthenticated() || !!getTgLoginSession();
+};
+
+/**
+ * Injecte le widget Telegram Login dans #telegram-login-container (appelé au load de la page login)
+ */
+function initTelegramLoginWidget() {
+    // Pas nécessaire dans Telegram Mini App
+    if (isInsideTelegram()) return;
+    var container = document.getElementById('telegram-login-container');
+    if (!container) return;
+    // Ne pas injecter deux fois
+    if (container.querySelector('script[data-telegram-login]') || container.querySelector('iframe')) return;
+
+    var botUsername = (window.serverConfig && window.serverConfig.telegramBotUsername)
+        || 'BIPBIPRechargeProCi_Bot';
+
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://telegram.org/js/telegram-widget.js?22';
+    s.setAttribute('data-telegram-login', botUsername);
+    s.setAttribute('data-size', 'large');
+    s.setAttribute('data-radius', '10');
+    s.setAttribute('data-onauth', 'onTelegramLoginWidgetAuth(user)');
+    s.setAttribute('data-request-access', 'write');
+    container.appendChild(s);
+}
+
+/**
+ * Callback global appelé par le widget Telegram Login
+ */
+window.onTelegramLoginWidgetAuth = function (user) {
+    if (!user || !user.id || !user.hash) {
+        showToast('Connexion Telegram annulée.', 'info');
+        return;
+    }
+    showToast('Connexion en cours...', 'info');
+
+    fetch(API_BASE + '/api/auth/telegram-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user)
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (result) {
+        if (result.ok && result.data.ok && result.data.user) {
+            var u = result.data.user;
+            // Nettoyer une éventuelle session Google pour éviter les sessions mélangées
+            try { if (typeof clearGoogleSession === 'function') clearGoogleSession(); } catch (e) {}
+            saveTgLoginSession(result.data.sessionToken, String(u.telegram_id));
+            window.__bipbipRegisteredUser = u;
+            if (typeof u.points === 'number') {
+                userPoints = u.points;
+                try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+            }
+            updateProfilPhoto();
+            updateHeaderUserInfo();
+            updateHeaderPoints();
+            updateProfilPoints();
+            try {
+                var refInput2 = document.getElementById('profil-referral-link');
+                if (refInput2 && u.referral_link) refInput2.value = u.referral_link;
+            } catch (e) {}
+            showToast('Bienvenue ' + (u.first_name || u.username || '') + ' !', 'success');
+            navigateTo('home');
+        } else {
+            showToast(result.data.error || 'Connexion Telegram échouée', 'error');
+        }
+    })
+    .catch(function (err) {
+        console.error('[TG Login Widget]', err);
+        showToast('Erreur réseau. Réessayez.', 'error');
+    });
+};
+
+/**
+ * Charger le profil TG Login au démarrage si session existante
+ */
+function initTgLoginAuth() {
+    var s = getTgLoginSession();
+    if (!s || isInsideTelegram()) return;
+    fetch(API_BASE + '/api/auth/telegram-login/me?uid=' + encodeURIComponent(s.userId), {
+        headers: { 'X-Telegram-Login-Session': s.token, 'Content-Type': 'application/json' }
+    })
+    .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, data: d }; }); })
+    .then(function (r) {
+        if (r.ok && r.data.ok && r.data.user) {
+            window.__bipbipRegisteredUser = r.data.user;
+            if (typeof r.data.user.points === 'number') {
+                userPoints = r.data.user.points;
+                try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (e) {}
+            }
+            updateProfilPhoto();
+            updateHeaderUserInfo();
+            updateHeaderPoints();
+            updateProfilPoints();
+            // Remplir le lien de parrainage si l'écran profil existe
+            try {
+                var refInput = document.getElementById('profil-referral-link');
+                if (refInput && r.data.user.referral_link) refInput.value = r.data.user.referral_link;
+            } catch (e) {}
+        } else {
+            clearTgLoginSession();
+        }
+    })
+    .catch(function () {});
+}
+
+/**
+ * Déconnexion Telegram Login Widget
+ */
+function logoutTelegramLogin() {
+    clearTgLoginSession();
+    window.__bipbipRegisteredUser = null;
+    userPoints = 0;
+    try { localStorage.setItem('bipbip_points', '0'); } catch (e) {}
+    showToast('Déconnecté.', 'info');
+    navigateTo('home');
+}
+
+// Initialiser le widget + la session au chargement
+(function () {
+    function init() {
+        initTgLoginAuth();
+        // Le widget est injecté à la demande quand on arrive sur l'écran login
+        // (hook dans navigateTo via un observer ou appel explicite ailleurs)
+        setTimeout(initTelegramLoginWidget, 200);
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(init, 50);
+    } else {
+        document.addEventListener('DOMContentLoaded', init);
+    }
+})();
+
+/* ========== / Telegram Login Widget ========== */
 
 function toggleWavePayBlock() {
     var block = document.getElementById('wave-pay-block');
@@ -3833,6 +4134,100 @@ function saveGiftCardsAdmin() {
         } else {
             showToast(data.error || 'Erreur', 'error');
         }
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+// ==================== ADMIN : QUETES ====================
+function loadAdminQuests() {
+    var list = document.getElementById('quest-admin-list');
+    if (!list) return;
+    list.innerHTML = '<p class="text-xs text-slate-500">Chargement...</p>';
+    fetch(API_BASE + '/api/quests/admin/list', { headers: getAdminAuthHeaders(false) })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+            if (!res.ok) { list.innerHTML = '<p class="text-xs text-rose-400">' + (res.data.error || 'Erreur') + '</p>'; return; }
+            var quests = (res.data && res.data.quests) || [];
+            if (!quests.length) { list.innerHTML = '<p class="text-xs text-slate-500">Aucune quête. Ajoute-en une ci-dessus.</p>'; return; }
+            list.innerHTML = quests.map(function (q) {
+                var active = !!q.is_active;
+                var badge = active
+                    ? '<span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Active</span>'
+                    : '<span class="text-xs px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 border border-slate-500/30">Inactive</span>';
+                return '<div class="p-3 rounded-lg bg-slate-800/60 border border-white/10 flex items-center justify-between gap-2">'
+                    + '<div class="min-w-0 flex-1">'
+                    +   '<div class="flex items-center gap-2 mb-1">'
+                    +     '<span class="text-sm font-semibold text-white truncate">' + escapeHtml(q.titre || q.code) + '</span>'
+                    +     badge
+                    +   '</div>'
+                    +   '<p class="text-xs text-slate-400 truncate">' + escapeHtml(q.description || '') + '</p>'
+                    +   '<p class="text-xs text-slate-500">Code: <code class="text-slate-400">' + escapeHtml(q.code) + '</code> · Type: ' + escapeHtml(q.type || '-') + ' · +' + (q.points_reward || 0) + ' pts</p>'
+                    + '</div>'
+                    + '<div class="flex flex-col gap-1 flex-shrink-0">'
+                    +   '<button type="button" onclick="toggleQuestActive(\'' + q.id + '\', ' + (!active) + ')" class="px-2 py-1 rounded text-xs font-medium ' + (active ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30') + '">' + (active ? 'Désactiver' : 'Activer') + '</button>'
+                    +   '<button type="button" onclick="deleteQuestAdmin(\'' + q.id + '\', \'' + escapeHtml(q.code).replace(/\x27/g, "\\\x27") + '\')" class="px-2 py-1 rounded text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30">Supprimer</button>'
+                    + '</div>'
+                    + '</div>';
+            }).join('');
+        })
+        .catch(function () { list.innerHTML = '<p class="text-xs text-rose-400">Erreur réseau</p>'; });
+}
+
+function addQuestFromAdmin() {
+    var code = (document.getElementById('quest-admin-code').value || '').trim();
+    var type = document.getElementById('quest-admin-type').value || '';
+    var titre = (document.getElementById('quest-admin-title').value || '').trim();
+    var desc = (document.getElementById('quest-admin-desc').value || '').trim();
+    var points = parseInt(document.getElementById('quest-admin-points').value, 10) || 0;
+    var active = !!document.getElementById('quest-admin-active').checked;
+    if (!code) { showToast('Code requis', 'error'); return; }
+    if (!titre) { showToast('Titre requis', 'error'); return; }
+
+    fetch(API_BASE + '/api/quests/admin', {
+        method: 'POST',
+        headers: getAdminAuthHeaders(true),
+        body: JSON.stringify({ code: code, type: type, titre: titre, description: desc, points_reward: points, is_active: active })
+    })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+        if (res.ok && res.data.ok) {
+            showToast('Quête ajoutée !', 'success');
+            document.getElementById('quest-admin-code').value = '';
+            document.getElementById('quest-admin-title').value = '';
+            document.getElementById('quest-admin-desc').value = '';
+            document.getElementById('quest-admin-points').value = '25';
+            loadAdminQuests();
+        } else {
+            showToast(res.data.error || 'Erreur (code en doublon ?)', 'error');
+        }
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+function toggleQuestActive(id, newActive) {
+    fetch(API_BASE + '/api/quests/admin/' + encodeURIComponent(id), {
+        method: 'PUT',
+        headers: getAdminAuthHeaders(true),
+        body: JSON.stringify({ is_active: newActive })
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+        if (d.ok) { showToast(newActive ? 'Quête activée' : 'Quête désactivée', 'success'); loadAdminQuests(); }
+        else showToast(d.error || 'Erreur', 'error');
+    })
+    .catch(function () { showToast('Erreur réseau', 'error'); });
+}
+
+function deleteQuestAdmin(id, code) {
+    if (!confirm('Supprimer définitivement la quête "' + code + '" ?\n(Préfère Désactiver si tu n\'es pas sûr.)')) return;
+    fetch(API_BASE + '/api/quests/admin/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: getAdminAuthHeaders(false)
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+        if (d.ok) { showToast('Quête supprimée', 'success'); loadAdminQuests(); }
+        else showToast(d.error || 'Erreur', 'error');
     })
     .catch(function () { showToast('Erreur réseau', 'error'); });
 }

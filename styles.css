@@ -529,6 +529,11 @@ html.bipbip-lite .btn-reject {
     box-shadow: 0 4px 20px rgba(251,191,36,.35);
 }
 
+/* Carousel wrapper (positioning context for nav arrows) */
+.gc-carousel-wrap {
+    position: relative;
+}
+
 /* Carousel container */
 .gc-carousel {
     display: flex;
@@ -538,7 +543,53 @@ html.bipbip-lite .btn-reject {
     -webkit-overflow-scrolling: touch;
     padding: 8px 4px 16px;
     scroll-padding-left: 4px;
+    scroll-behavior: smooth;
 }
+
+/* Desktop nav arrows for gift cards */
+.gc-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(15,23,42,.85);
+    color: #fbbf24;
+    border: 1.5px solid rgba(251,191,36,.4);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    display: none; /* hidden by default (mobile) */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5);
+    transition: background .2s, transform .2s, opacity .2s;
+    padding: 0;
+}
+.gc-nav-btn:hover {
+    background: rgba(251,191,36,.2);
+    transform: translateY(-50%) scale(1.05);
+}
+.gc-nav-btn:active { transform: translateY(-50%) scale(.95); }
+.gc-nav-btn:disabled { opacity: .35; cursor: not-allowed; }
+.gc-nav-prev { left: -10px; }
+.gc-nav-next { right: -10px; }
+
+/* Show arrows on hover-capable (desktop) pointers, width >= 768px */
+@media (hover: hover) and (min-width: 768px) {
+    .gc-nav-btn { display: flex; }
+    /* Show a slim scrollbar on desktop as additional affordance */
+    .gc-carousel.hide-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.5) transparent; }
+    .gc-carousel.hide-scrollbar::-webkit-scrollbar { display: block; height: 8px; }
+    .gc-carousel.hide-scrollbar::-webkit-scrollbar-thumb { background: rgba(251,191,36,.5); border-radius: 4px; }
+    .gc-carousel.hide-scrollbar::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* Clickable dots */
+#gc-dots .gc-dot { cursor: pointer; }
 
 /* Individual gift card */
 .gc-card {
