@@ -1,3 +1,11 @@
+// Anti-crash: éviter que les erreurs non capturées tuent le process
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH PREVENTED]', new Date().toISOString(), err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[PROMISE REJECTED]', new Date().toISOString(), reason);
+});
+
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
