@@ -1,9 +1,30 @@
 // Anti-crash: éviter que les erreurs non capturées tuent le process
+function _isNetworkErr(s) {
+  return /UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|Connect Timeout/i.test(String(s || ''));
+}
+function _compactErrMsg(reason) {
+  const raw = (reason && (reason.message || reason.code)) || String(reason);
+  const causeMsg = (reason && reason.cause && reason.cause.message) || '';
+  const msg = (raw + ' ' + causeMsg).trim();
+  const hostMatch = msg.match(/attempted addresses?: ([^,)]+)/i) ||
+                    msg.match(/([a-z0-9.-]+\.(?:supabase|telegram|coingecko|wave|djamo)\.[a-z.]+)/i);
+  const host = hostMatch ? hostMatch[1] : '';
+  return msg.split('\n')[0].slice(0, 200) + (host ? ' [' + host + ']' : '');
+}
 process.on('uncaughtException', (err) => {
-  console.error('[CRASH PREVENTED]', new Date().toISOString(), err.message);
+  if (_isNetworkErr(err && err.message)) {
+    console.error('[NET ERR]', new Date().toISOString(), _compactErrMsg(err));
+  } else {
+    console.error('[CRASH PREVENTED]', new Date().toISOString(), (err && err.stack) || err);
+  }
 });
 process.on('unhandledRejection', (reason) => {
-  console.error('[PROMISE REJECTED]', new Date().toISOString(), reason);
+  const sig = reason && (reason.message || reason.code);
+  if (_isNetworkErr(sig)) {
+    console.error('[NET ERR]', new Date().toISOString(), _compactErrMsg(reason));
+  } else {
+    console.error('[PROMISE REJECTED]', new Date().toISOString(), reason);
+  }
 });
 
 const path = require('path');
@@ -384,7 +405,15 @@ async function sendTelegramMessage(chatId, text, options = {}, token = TELEGRAM_
         
         const data = await response.json();
         if (!data.ok) {
-            console.error('[Telegram] sendMessage erreur:', data.description || data);
+            const desc = (data.description || '').toString();
+            // Erreurs "normales" : utilisateur a bloqué/supprimé le bot ou compte inactif
+            // → silencieuses (loggées en debug, pas en error pour ne pas polluer)
+            const isUserUnreachable = /chat not found|bot was blocked|user is deactivated|forbidden/i.test(desc);
+            if (isUserUnreachable) {
+                console.log('[Telegram] User unreachable (chat', chatId, '):', desc);
+            } else {
+                console.error('[Telegram] sendMessage erreur:', desc || data);
+            }
         }
         return data;
     } catch (error) {
