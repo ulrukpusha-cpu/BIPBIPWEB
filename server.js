@@ -595,23 +595,74 @@ function envFloatTon(key, defaultVal, minVal) {
 }
 
 const BIPBIP_XOF_PER_USD = envFloatTon('XOF_PER_USD', '600', 1);
-const BIPBIP_TON_FALLBACK_USD = envFloatTon('TON_FALLBACK_USD', '7', 0.01);
+const BIPBIP_TON_FALLBACK_USD = envFloatTon('TON_FALLBACK_USD', '1.3', 0.01);
 
-async function fetchTonUsdFromCoingecko() {
+// Cache TON/USD : refresh automatique toutes les 24h, persisté sur disque
+const TON_CACHE_FILE = path.join(__dirname, 'data', 'ton-rate.json');
+let _tonRateCache = { usd: 0, fetchedAt: 0 };
+
+function _loadTonCacheFromDisk() {
+    try {
+        const fs = require('fs');
+        if (fs.existsSync(TON_CACHE_FILE)) {
+            const j = JSON.parse(fs.readFileSync(TON_CACHE_FILE, 'utf-8'));
+            if (j && Number(j.usd) > 0) {
+                _tonRateCache = { usd: Number(j.usd), fetchedAt: Number(j.fetchedAt) || 0 };
+                console.log('[TON] Cache disque chargé : 1 TON =', _tonRateCache.usd, 'USD (depuis', new Date(_tonRateCache.fetchedAt).toISOString(), ')');
+            }
+        }
+    } catch (e) { console.warn('[TON] Lecture cache disque KO:', e.message); }
+}
+
+function _saveTonCacheToDisk() {
+    try {
+        const fs = require('fs');
+        const dir = path.dirname(TON_CACHE_FILE);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(TON_CACHE_FILE, JSON.stringify(_tonRateCache, null, 2));
+    } catch (e) { console.warn('[TON] Écriture cache disque KO:', e.message); }
+}
+
+async function _fetchTonUsdLive() {
     try {
         const fetch = (await import('node-fetch')).default;
         const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ton&vs_currencies=usd', { signal: controller.signal });
+        const t = setTimeout(() => controller.abort(), 8000);
+        // ✅ Bon ID CoinGecko : the-open-network (et non "ton" qui renvoie {})
+        const resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd', { signal: controller.signal });
         clearTimeout(t);
         if (!resp.ok) return 0;
         const data = await resp.json();
-        const u = data && data.ton && data.ton.usd;
+        const u = data && data['the-open-network'] && data['the-open-network'].usd;
         const v = parseFloat(u);
         return Number.isFinite(v) && v > 0 ? v : 0;
     } catch (_) {
         return 0;
     }
+}
+
+async function refreshTonUsdRate() {
+    const live = await _fetchTonUsdLive();
+    if (live > 0) {
+        _tonRateCache = { usd: live, fetchedAt: Date.now() };
+        _saveTonCacheToDisk();
+        console.log('[TON] Cours mis à jour : 1 TON =', live, 'USD (', new Date().toISOString(), ')');
+        return live;
+    }
+    console.warn('[TON] Refresh KO, garde le cache existant (', _tonRateCache.usd, 'USD)');
+    return _tonRateCache.usd;
+}
+
+// Charger cache disque au démarrage + premier fetch + refresh toutes les 24h
+_loadTonCacheFromDisk();
+setTimeout(() => { refreshTonUsdRate().catch(() => {}); }, 5000); // fetch initial 5s après démarrage
+setInterval(() => { refreshTonUsdRate().catch(() => {}); }, 24 * 60 * 60 * 1000); // toutes les 24h
+
+async function fetchTonUsdFromCoingecko() {
+    // Utilise le cache (refresh en arrière-plan), évite les appels API à chaque requête
+    if (_tonRateCache.usd > 0) return _tonRateCache.usd;
+    // Cache vide → tenter live une seule fois
+    return await _fetchTonUsdLive();
 }
 
 /** Cours TON + montant TON pour un total XOF (Mini App, même principe que StickerStreet) */
