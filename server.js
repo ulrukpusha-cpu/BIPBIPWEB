@@ -1147,42 +1147,56 @@ function isAdminRequest(req) {
 // Admin: Valider une commande (X-Admin-Key OU Telegram admin)
 app.post('/api/admin/orders/:id/validate', async (req, res) => {
     if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
+    const orderId = req.params.id;
+
+    // 1) Mise à jour DB (rapide) — répond avant les opérations longues (USSD)
+    let order;
     try {
-        const orderId = req.params.id;
-        const order = await orderStorage.setOrderValidated(orderId);
-        
-        if (!order) {
-            return res.status(404).json({ error: 'Commande introuvable' });
-        }
-        if (order.operator === 'PROMO_LIKES') {
-            if (order.userId) {
-                const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
-                if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
-                await telegramUsersService.approveSocialLink(order.userId);
-                await sendTelegramMessage(order.userId,
-                    '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
-            }
-        } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
-            const ussdResult = await executeUssdTransfer(order);
-            if (order.userId) {
-                const txt = ussdResult.success
-                    ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
-                    : `⚠️ <b>Paiement reçu</b>, transfert en cours.\n📞 ${order.phone}\n\nTa recharge est en cours de traitement automatique.`;
-                await sendTelegramMessage(order.userId, txt);
-            }
-        } else if (order.operator === 'ANNONCE_LED') {
-            if (order.notes) await annoncesService.validateAnnonce(order.notes, { viaOrderProof: true });
-            if (order.userId) {
-                await sendTelegramMessage(order.userId,
-                    '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.');
-            }
-        }
-        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
-        res.json({ success: true, message: 'Commande validée' });
+        order = await orderStorage.setOrderValidated(orderId);
     } catch (error) {
-        console.error('Erreur validation:', error);
-        res.status(500).json({ error: 'Erreur serveur' });
+        console.error('[Validate] Erreur DB:', error);
+        return res.status(500).json({ error: 'Erreur serveur' });
     }
+    if (!order) {
+        return res.status(404).json({ error: 'Commande introuvable' });
+    }
+
+    // 2) Réponse immédiate au client (l\'agent validateur ne timeout plus)
+    res.json({ success: true, message: 'Commande validée, traitement en cours' });
+
+    // 3) Post-traitement asynchrone : USSD transfer + notifications Telegram
+    //    Tout ceci peut prendre 30-60s sans bloquer la réponse HTTP
+    setImmediate(async () => {
+        try {
+            if (order.operator === 'PROMO_LIKES') {
+                if (order.userId) {
+                    const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
+                    if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
+                    await telegramUsersService.approveSocialLink(order.userId);
+                    await sendTelegramMessage(order.userId,
+                        '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
+                }
+            } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
+                const ussdResult = await executeUssdTransfer(order);
+                if (order.userId) {
+                    const txt = ussdResult.success
+                        ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d\'avoir utilisé Bipbip Recharge CI ! 🎉`
+                        : `⚠️ <b>Paiement reçu</b>, transfert en cours.\n📞 ${order.phone}\n\nTa recharge est en cours de traitement automatique.`;
+                    await sendTelegramMessage(order.userId, txt);
+                }
+            } else if (order.operator === 'ANNONCE_LED') {
+                if (order.notes) await annoncesService.validateAnnonce(order.notes, { viaOrderProof: true });
+                if (order.userId) {
+                    await sendTelegramMessage(order.userId,
+                        '✅ <b>Annonce LED validée !</b>\n\nVotre message passera dans le bandeau et les Actualités.');
+                }
+            }
+            await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+            console.log(`[Validate BG] Post-traitement OK pour ${orderId}`);
+        } catch (bgErr) {
+            console.error(`[Validate BG] Erreur post-validation ${orderId}:`, bgErr.message || bgErr);
+        }
+    });
 });
 
 // Admin: Valider une commande via identité Telegram (Web App ouverte depuis le bot, pas besoin de clé)
