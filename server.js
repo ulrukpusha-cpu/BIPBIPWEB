@@ -49,6 +49,7 @@ const actualitesService = require('./services/actualitesService');
 const telegramUsersService = require('./services/telegramUsersService');
 const annoncesRoutes = require('./routes/annonces');
 const annoncesService = require('./services/annoncesService');
+const questsService = require('./services/questsService');
 const { moderateSocialLink } = require('./services/aiModeration');
 const questsRoutes = require('./routes/quests');
 const ledService = require('./services/ledService');
@@ -1183,6 +1184,38 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                         ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d\'avoir utilisé Bipbip Recharge CI ! 🎉`
                         : `⚠️ <b>Paiement reçu</b>, transfert en cours.\n📞 ${order.phone}\n\nTa recharge est en cours de traitement automatique.`;
                     await sendTelegramMessage(order.userId, txt);
+
+                    // ────────── Credit de points pour la recharge ──────────
+                    // Regle : 1 pt par 100 FCFA, min 1 pt, max 50 pts par commande
+                    // Seulement pour users enregistres (Telegram/Google: id numerique)
+                    try {
+                        if (/^-?\d+$/.test(String(order.userId)) && Number(order.amount) > 0) {
+                            const points = Math.min(50, Math.max(1, Math.floor(Number(order.amount) / 100)));
+                            const newTotal = await telegramUsersService.addPoints(
+                                order.userId,
+                                points,
+                                'recharge',
+                                `Recharge ${order.operator} ${order.amount} FCFA (cmd ${orderId})`
+                            );
+                            await sendTelegramMessage(order.userId,
+                                `⭐ <b>+${points} points</b> gagnés sur cette recharge !\nTotal : <b>${newTotal}</b> points`
+                            );
+
+                            // Incrementer la quete "3 recharges cette semaine" (idempotent par orderId)
+                            const questResult = await questsService.incrementProgressByCode(
+                                order.userId,
+                                'recharges_semaine',
+                                { item_id: orderId }
+                            );
+                            if (questResult && questResult.just_completed && questResult.points_earned) {
+                                await sendTelegramMessage(order.userId,
+                                    `🎉 <b>Quête "3 recharges cette semaine" complétée !</b>\n+${questResult.points_earned} points bonus`
+                                );
+                            }
+                        }
+                    } catch (pointsErr) {
+                        console.error('[Validate BG] Erreur credit points recharge:', pointsErr.message || pointsErr);
+                    }
                 }
             } else if (order.operator === 'ANNONCE_LED') {
                 if (order.notes) await annoncesService.validateAnnonce(order.notes, { viaOrderProof: true });
