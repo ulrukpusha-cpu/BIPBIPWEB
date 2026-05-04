@@ -164,9 +164,126 @@ async function claimQuestByCode(userId, code) {
     };
 }
 
+
+/**
+ * Incremente la progression d'une quete par code (idempotent par item_id si fourni).
+ * Utilise pour les quetes "fais X N fois" comme "Lire 5 articles".
+ *
+ * @param {string} userId - id Telegram du user
+ * @param {string} code - code de la quete (ex: "lire_5_articles")
+ * @param {object} options - { increment: 1, item_id: 'slug-unique' }
+ *   Si item_id fourni, on n'incremente qu'une fois par item (dedupe via metadata).
+ * @returns { success, progress, target, completed, just_completed, already_claimed, points_earned }
+ */
+async function incrementProgressByCode(userId, code, options = {}) {
+    const supabase = db.getSupabase();
+    if (!supabase) return { error: 'Base indisponible' };
+    const uid = String(userId);
+    const increment = Number(options.increment) || 1;
+    const itemId = options.item_id ? String(options.item_id) : null;
+
+    // 1) Trouver la quete
+    const { data: quest, error: qErr } = await supabase
+        .from('quests')
+        .select('id, code, points_reward, target_value, is_active')
+        .eq('code', code)
+        .maybeSingle();
+    if (qErr) return { error: qErr.message };
+    if (!quest || !quest.is_active) return { error: 'Quete introuvable' };
+
+    const target = Number(quest.target_value) || 1;
+
+    // 2) Recuperer / creer user_quest
+    let { data: uq } = await supabase
+        .from('user_quests')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('quest_id', quest.id)
+        .maybeSingle();
+
+    if (uq && uq.completed) {
+        return {
+            already_claimed: true,
+            progress: uq.progress || target,
+            target,
+            completed: true,
+        };
+    }
+
+    // 3) Dedupe par item_id si fourni (via metadata.items[])
+    let items = [];
+    if (uq && uq.metadata && Array.isArray(uq.metadata.items)) {
+        items = uq.metadata.items;
+    }
+    if (itemId) {
+        if (items.indexOf(itemId) >= 0) {
+            // Item deja compte — pas d'incrementation
+            return {
+                success: true,
+                progress: uq ? (uq.progress || 0) : 0,
+                target,
+                completed: false,
+                just_completed: false,
+                duplicate: true,
+            };
+        }
+        items.push(itemId);
+    }
+
+    const oldProgress = uq ? (uq.progress || 0) : 0;
+    const newProgress = Math.min(oldProgress + increment, target);
+    const justCompleted = newProgress >= target && !(uq && uq.completed);
+
+    // 4) Upsert user_quest
+    const payload = {
+        user_id: uid,
+        quest_id: quest.id,
+        progress: newProgress,
+        completed: justCompleted,
+    };
+    if (itemId) payload.metadata = { items };
+    if (justCompleted) payload.completed_at = new Date().toISOString();
+
+    if (!uq) {
+        const ins = await supabase.from('user_quests').insert(payload).select().single();
+        if (ins.error) return { error: ins.error.message };
+    } else {
+        // Conserver le metadata existant + items
+        const upd = await supabase.from('user_quests').update(payload)
+            .eq('user_id', uid).eq('quest_id', quest.id);
+        if (upd.error) return { error: upd.error.message };
+    }
+
+    // 5) Si juste complete, crediter les points (users registres seulement)
+    let pointsEarned = 0;
+    let totalPoints = null;
+    if (justCompleted) {
+        const telegramUsersService = require('./telegramUsersService');
+        const isRegistered = /^-?\d+$/.test(uid);
+        if (isRegistered) {
+            pointsEarned = quest.points_reward || 0;
+            totalPoints = await telegramUsersService.addPoints(
+                uid, pointsEarned, 'quest', 'Quete: ' + (quest.code || '')
+            );
+        }
+    }
+
+    return {
+        success: true,
+        progress: newProgress,
+        target,
+        completed: justCompleted,
+        just_completed: justCompleted,
+        points_earned: pointsEarned,
+        total_points: totalPoints,
+        code: quest.code,
+    };
+}
+
 module.exports = {
     listActiveQuests,
     claimQuestByCode,
+    incrementProgressByCode,
     getUserProgress,
     getOrCreateUserQuest,
     setProgress,

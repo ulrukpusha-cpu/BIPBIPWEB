@@ -101,6 +101,33 @@ router.post('/claim', async (req, res) => {
     }
 });
 
+
+
+/**
+ * Tracker une lecture d'article — incremente la quete "lire_5_articles".
+ * Body: { code: "lire_5_articles", item_id: "<slug-article>" }
+ * Le item_id permet d'eviter de compter le meme article 2 fois.
+ * Retourne: { progress, target, completed, just_completed, points_earned, duplicate }
+ */
+router.post('/track-read', async (req, res) => {
+    try {
+        const userId = (req.userId || (req.body && req.body.userId) || '').toString();
+        const code = (req.body && req.body.code) ? String(req.body.code) : 'lire_5_articles';
+        const itemId = (req.body && req.body.item_id) ? String(req.body.item_id) : null;
+        if (!userId) return res.status(401).json({ error: 'Authentification requise' });
+        if (userId.startsWith('web_')) {
+            // Anonymes: on retourne success false sans erreur (pas de points)
+            return res.json({ success: false, reason: 'anonymous' });
+        }
+        const result = await questsService.incrementProgressByCode(userId, code, { item_id: itemId });
+        if (result.error) return res.status(400).json({ error: result.error });
+        return res.json(result);
+    } catch (err) {
+        console.error('quests track-read:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 // ==================== ADMIN : CRUD quêtes ====================
 // Vérification admin simple via X-Admin-Key (même pattern que les autres routes admin)
 function isAdmin(req) {

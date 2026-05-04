@@ -989,6 +989,33 @@ function loadActualites(sort) {
     initPubBanner();
 }
 
+
+// Trackeur de lecture d'articles pour la quete "lire_5_articles".
+// Appelle le backend qui incremente la progression et credite les points si 5 atteints.
+function trackArticleRead(slug) {
+    if (!slug) return;
+    // Cache local pour eviter de recompter le meme article cote serveur en cas de retry
+    var cacheKey = 'bipbip_articles_read_slugs';
+    var read = [];
+    try { read = JSON.parse(localStorage.getItem(cacheKey) || '[]'); } catch (_) {}
+    if (read.indexOf(slug) >= 0) return; // deja envoye au backend, on skip
+    read.push(slug);
+    try { localStorage.setItem(cacheKey, JSON.stringify(read.slice(-50))); } catch (_) {}
+
+    fetch(API_BASE + '/api/quests/track-read', {
+        method: 'POST',
+        headers: getApiHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ code: 'lire_5_articles', item_id: slug }),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+        if (data && data.just_completed && data.points_earned) {
+            showToast('🎉 Quete completee : +' + data.points_earned + ' points !', 'success');
+        }
+    })
+    .catch(function () { /* silencieux : pas critique pour l'UX */ });
+}
+
 function openActualite(slug) {
     fetch(API_BASE + '/api/actualites/slug/' + encodeURIComponent(slug))
         .then(function (res) { return res.json(); })
@@ -1019,6 +1046,8 @@ function openActualite(slug) {
             var contentEl = document.getElementById('article-overlay-content');
             if (contentEl) contentEl.innerHTML = html;
             if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('block'); }
+            // Tracker la lecture pour la quete "lire_5_articles"
+            trackArticleRead(slug);
         })
         .catch(function () { showToast('Erreur chargement article', 'error'); });
 }
