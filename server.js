@@ -1179,9 +1179,23 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                 }
             } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
                 const ussdResult = await executeUssdTransfer(order);
+                // Detecter type de livraison : forfait (bundle) ou credit normal
+                const isBundle = !!getOrderBundleMeta(order);
+                const deliveryType = isBundle ? 'forfait' : 'credit';
+                const deliveryLabel = isBundle ? 'Forfait reçu' : 'Crédit d\'unité reçu';
+
+                if (ussdResult.success) {
+                    // Mettre a jour le statut de la commande -> visible dans "Mes commandes"
+                    try {
+                        await orderStorage.setOrderDelivered(orderId, deliveryType);
+                    } catch (e) {
+                        console.error('[Validate BG] Erreur setOrderDelivered:', e.message || e);
+                    }
+                }
+
                 if (order.userId) {
                     const txt = ussdResult.success
-                        ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d\'avoir utilisé Bipbip Recharge CI ! 🎉`
+                        ? `✅ <b>${deliveryLabel} !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d\'avoir utilisé Bipbip Recharge CI ! 🎉`
                         : `⚠️ <b>Paiement reçu</b>, transfert en cours.\n📞 ${order.phone}\n\nTa recharge est en cours de traitement automatique.`;
                     await sendTelegramMessage(order.userId, txt);
 

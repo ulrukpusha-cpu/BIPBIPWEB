@@ -88,6 +88,37 @@ const jsonStorage = {
         return order;
     },
 
+    /**
+     * Marque une commande comme livrée (crédit/forfait reçu apres USSD réussi).
+     * @param {string} orderId
+     * @param {'credit'|'forfait'} deliveryType
+     * @returns {Promise<object|null>} la commande mise à jour
+     */
+    async setOrderDelivered(orderId, deliveryType = 'credit') {
+        // Chercher dans orders (encore en cours) ou validatedOrders (deja archive)
+        let order = orders[orderId];
+        let isInValidated = false;
+        if (!order) {
+            order = validatedOrders.find(o => o.id === orderId);
+            isInValidated = true;
+        }
+        if (!order) return null;
+        order.status = deliveryType === 'forfait' ? 'forfait_delivered' : 'credit_delivered';
+        order.deliveredAt = new Date().toISOString();
+        order.deliveryType = deliveryType;
+        if (isInValidated) {
+            // Mettre a jour la copie dans validatedOrders
+            const idx = validatedOrders.findIndex(o => o.id === orderId);
+            if (idx >= 0) validatedOrders[idx] = order;
+        } else if (orders[orderId]) {
+            // Si encore dans orders, deplacer vers validatedOrders
+            validatedOrders.push({ ...order });
+            delete orders[orderId];
+        }
+        saveOrdersFile();
+        return order;
+    },
+
     async getOrdersPending() {
         return Object.values(orders);
     },
@@ -125,6 +156,8 @@ if (useSupabase) {
             updateOrderProof: db.updateOrderProof,
             setOrderValidated: db.setOrderValidated,
             setOrderRejected: db.setOrderRejected,
+            setOrderDelivered: db.setOrderDelivered || (async () => null),
+            setOrderDelivered: db.setOrderDelivered || (async () => null),
             getOrdersPending: db.getOrdersPending,
             getValidatedOrders: db.getValidatedOrders,
             getOrdersByStatus: db.getOrdersByStatus,

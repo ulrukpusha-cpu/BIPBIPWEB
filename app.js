@@ -3664,6 +3664,8 @@ function getStatusLabel(status) {
         'pending': '⏳ En attente',
         'proof_sent': '📤 Preuve envoyée',
         'validated': '✅ Validée',
+        'credit_delivered': '✅ Crédit d\'unité reçu',
+        'forfait_delivered': '✅ Forfait reçu',
         'rejected': '❌ Rejetée'
     };
     return labels[status] || status;
