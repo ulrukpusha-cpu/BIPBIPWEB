@@ -210,38 +210,21 @@ async function incrementProgressByCode(userId, code, options = {}) {
         };
     }
 
-    // 3) Dedupe par item_id si fourni (via metadata.items[])
-    let items = [];
-    if (uq && uq.metadata && Array.isArray(uq.metadata.items)) {
-        items = uq.metadata.items;
-    }
-    if (itemId) {
-        if (items.indexOf(itemId) >= 0) {
-            // Item deja compte — pas d'incrementation
-            return {
-                success: true,
-                progress: uq ? (uq.progress || 0) : 0,
-                target,
-                completed: false,
-                just_completed: false,
-                duplicate: true,
-            };
-        }
-        items.push(itemId);
-    }
-
+    // 3) Calcul de la nouvelle progression
+    // Note: la dedupe par item_id se fait cote frontend via localStorage
+    // (cf. trackArticleRead dans app.js). Cote serveur on incremente de 1
+    // a chaque appel et on s'arrete a target_value.
     const oldProgress = uq ? (uq.progress || 0) : 0;
     const newProgress = Math.min(oldProgress + increment, target);
     const justCompleted = newProgress >= target && !(uq && uq.completed);
 
-    // 4) Upsert user_quest
+    // 4) Upsert user_quest (sans colonne metadata qui n'existe pas en DB)
     const payload = {
         user_id: uid,
         quest_id: quest.id,
         progress: newProgress,
         completed: justCompleted,
     };
-    if (itemId) payload.metadata = { items };
     if (justCompleted) payload.completed_at = new Date().toISOString();
 
     if (!uq) {
