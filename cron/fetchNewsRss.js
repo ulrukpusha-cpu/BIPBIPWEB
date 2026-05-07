@@ -13,6 +13,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+const crypto = require('crypto');
 const Parser = require('rss-parser');
 const db = require('../database/supabase-client');
 const actualitesService = require('../services/actualitesService');
@@ -60,7 +61,7 @@ async function fetchAndIngest() {
         return;
     }
 
-    const autoApprove = process.env.AUTO_APPROVE_RSS !== 'false';
+    const autoApprove = process.env.AUTO_APPROVE_RSS === 'true';
     const categories = {};
     feeds.forEach(f => { categories[f.category] = (categories[f.category] || 0) + 1; });
     console.log('[fetchNewsRss]', feeds.length, 'flux →', Object.entries(categories).map(([k, v]) => k + ':' + v).join(', '),
@@ -81,10 +82,14 @@ async function fetchAndIngest() {
                 const summary = truncate(content, 500) || title;
                 const link = item.link || item.guid || '';
                 const sources = link ? [{ name: feedTitle, url: link }] : [{ name: feedTitle }];
-                const slugSuffix = '-' + Date.now() + '-' + i;
+                // Slug stable basé sur le lien RSS (ou title si pas de lien) : permet a
+                // Supabase de detecter les doublons via la contrainte UNIQUE sur slug
+                const stableKey = link || title;
+                const stableHash = crypto.createHash('md5').update(stableKey).digest('hex').slice(0, 8);
+                const titleSlug = (title || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 180);
                 const result = await actualitesService.createActualite({
                     title,
-                    slug: (title || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 200) + slugSuffix,
+                    slug: titleSlug + '-' + stableHash,
                     content,
                     summary_short: summary,
                     sources,
