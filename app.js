@@ -994,11 +994,22 @@ function loadActualites(sort) {
 // Appelle le backend qui incremente la progression et credite les points si 5 atteints.
 function trackArticleRead(slug) {
     if (!slug) return;
-    // Cache local pour eviter de recompter le meme article cote serveur en cas de retry
+    // Cache local pour eviter de recompter le meme article cote serveur (retry, double-clic).
+    // Reset quotidien (00:00 local) pour s'aligner sur le reset 24h cote backend.
     var cacheKey = 'bipbip_articles_read_slugs';
+    var dayKey = 'bipbip_articles_read_day';
+    var today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    var lastDay = '';
+    try { lastDay = localStorage.getItem(dayKey) || ''; } catch (_) {}
     var read = [];
-    try { read = JSON.parse(localStorage.getItem(cacheKey) || '[]'); } catch (_) {}
-    if (read.indexOf(slug) >= 0) return; // deja envoye au backend, on skip
+    if (lastDay === today) {
+        try { read = JSON.parse(localStorage.getItem(cacheKey) || '[]'); } catch (_) {}
+    } else {
+        // Nouveau jour : on vide le cache des slugs lus
+        try { localStorage.setItem(dayKey, today); } catch (_) {}
+        try { localStorage.removeItem(cacheKey); } catch (_) {}
+    }
+    if (read.indexOf(slug) >= 0) return; // deja envoye aujourd'hui
     read.push(slug);
     try { localStorage.setItem(cacheKey, JSON.stringify(read.slice(-50))); } catch (_) {}
 
@@ -1009,8 +1020,18 @@ function trackArticleRead(slug) {
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-        if (data && data.just_completed && data.points_earned) {
+        if (!data || !data.success) return;
+        // Mettre a jour le total points global (header + profil) si le serveur l'a retourne
+        if (typeof data.total_points === 'number') {
+            userPoints = data.total_points;
+            try { localStorage.setItem('bipbip_points', String(userPoints)); } catch (_) {}
+            try { updateHeaderPoints(); } catch (_) {}
+            try { updateProfilPoints(); } catch (_) {}
+        }
+        if (data.just_completed && data.points_earned) {
             showToast('🎉 Quete completee : +' + data.points_earned + ' points !', 'success');
+            // Si on est sur la page Quetes, recharger pour voir la progression
+            if (typeof loadQuests === 'function') { try { loadQuests(); } catch (_) {} }
         }
     })
     .catch(function () { /* silencieux : pas critique pour l'UX */ });

@@ -201,13 +201,46 @@ async function incrementProgressByCode(userId, code, options = {}) {
         .eq('quest_id', quest.id)
         .maybeSingle();
 
+    // Quetes recurrentes : reset automatique apres la periode definie
+    // (en secondes). Si non listee ici, la quete est one-shot.
+    const RECURRENT_QUESTS = {
+        'lire_5_articles': 24 * 3600,        // 24h — quotidienne
+        'recharges_semaine': 7 * 24 * 3600,  // 7 jours — hebdomadaire
+    };
+
     if (uq && uq.completed) {
-        return {
-            already_claimed: true,
-            progress: uq.progress || target,
-            target,
-            completed: true,
-        };
+        const periodSec = RECURRENT_QUESTS[code];
+        if (periodSec && uq.completed_at) {
+            const completedAt = new Date(uq.completed_at).getTime();
+            const elapsed = (Date.now() - completedAt) / 1000;
+            if (elapsed >= periodSec) {
+                // La periode est ecoulee → on RESET cette user_quest
+                const reset = await supabase.from('user_quests')
+                    .update({ progress: 0, completed: false, completed_at: null })
+                    .eq('user_id', uid).eq('quest_id', quest.id)
+                    .select().single();
+                if (reset.error) return { error: reset.error.message };
+                uq = reset.data;  // rebascule sur la version reset, on continue
+            } else {
+                const nextResetAt = new Date(completedAt + periodSec * 1000).toISOString();
+                return {
+                    already_claimed: true,
+                    progress: uq.progress || target,
+                    target,
+                    completed: true,
+                    recurring: true,
+                    next_reset_at: nextResetAt,
+                };
+            }
+        } else {
+            // Quete one-shot deja completee
+            return {
+                already_claimed: true,
+                progress: uq.progress || target,
+                target,
+                completed: true,
+            };
+        }
     }
 
     // 3) Calcul de la nouvelle progression
