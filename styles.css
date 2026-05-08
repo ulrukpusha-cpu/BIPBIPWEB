@@ -741,3 +741,143 @@ html.bipbip-lite .btn-reject {
     80% { transform: translateX(6px); }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   Quête complétée — modal avec trophée, halo doré et confettis
+   ═══════════════════════════════════════════════════════════════ */
+.quest-celebration {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .4s ease;
+    padding: 20px;
+}
+.quest-celebration.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+.quest-celebration .trophy-wrapper {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: -10px;
+}
+.quest-celebration .trophy-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.5) 0%, rgba(245, 158, 11, 0.2) 40%, transparent 70%);
+    filter: blur(10px);
+    opacity: 0;
+    transform: scale(0.6);
+    transition: all .6s ease;
+}
+.quest-celebration.show .trophy-wrapper::before {
+    opacity: 1;
+    transform: scale(1);
+    animation: quest-halo-pulse 2.5s ease-in-out infinite .8s;
+}
+@keyframes quest-halo-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 1; }
+}
+.quest-celebration .trophy {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 24px rgba(251, 191, 36, 0.7));
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+}
+.quest-celebration.show .trophy {
+    animation: quest-trophy-bounce 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes quest-trophy-bounce {
+    0%   { transform: scale(0) rotate(-180deg); opacity: 0; }
+    60%  { transform: scale(1.25) rotate(15deg); opacity: 1; }
+    80%  { transform: scale(0.93) rotate(-5deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+.quest-celebration .trophy-fallback {
+    font-size: 7rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 24px rgba(251, 191, 36, 0.8));
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+    display: none;
+}
+.quest-celebration.show .trophy-fallback {
+    animation: quest-trophy-bounce 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.quest-celebration .quest-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    text-align: center;
+    margin: 0 0 4px 0;
+    opacity: 0;
+    transform: translateY(15px);
+    transition: all .5s ease .4s;
+    letter-spacing: 0.3px;
+}
+.quest-celebration.show .quest-text {
+    opacity: 1;
+    transform: translateY(0);
+}
+.quest-celebration .points-display {
+    font-size: 3.8rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+    margin-top: 8px;
+    letter-spacing: -1px;
+    text-shadow: 0 0 30px rgba(251, 191, 36, 0.4);
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all .5s cubic-bezier(0.34, 1.56, 0.64, 1) .55s;
+}
+.quest-celebration.show .points-display {
+    opacity: 1;
+    transform: scale(1);
+}
+.quest-celebration .continue-btn {
+    margin-top: 36px;
+    background: transparent;
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity .5s ease .9s, color .2s;
+}
+.quest-celebration.show .continue-btn {
+    opacity: 0.9;
+}
+.quest-celebration .continue-btn:hover { color: #fbbf24; }
+#quest-confetti-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+}

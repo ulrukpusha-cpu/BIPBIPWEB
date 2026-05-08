@@ -81,6 +81,137 @@ function getBrowserUserId() {
 let currentScreen = 'home';
 let momoReferenceId = null;
 let userPoints = parseInt(localStorage.getItem('bipbip_points') || '0', 10);
+
+// ═══════════════════════════════════════════════════════════════
+// Quête complétée : trophée + halo + confettis + vibration
+// Appelée chaque fois qu'une quête est complétée et des points credites
+// ═══════════════════════════════════════════════════════════════
+(function () {
+    var modalReady = false;
+    var canvas = null, ctx = null;
+    var particles = [];
+    var animId = null;
+
+    function ensureModal() {
+        if (modalReady) return;
+        modalReady = true;
+        // Modal HTML
+        var modal = document.createElement('div');
+        modal.className = 'quest-celebration';
+        modal.id = 'quest-celebration';
+        modal.innerHTML = ''
+            + '<div class="trophy-wrapper">'
+            +   '<img class="trophy" id="quest-trophy-img" src="/assets/trophy-quest.png?v=2" alt="🏆" '
+            +     'onerror="this.style.display=\'none\'; var fb=document.getElementById(\'quest-trophy-fb\'); if(fb) fb.style.display=\'inline-block\';">'
+            +   '<div class="trophy-fallback" id="quest-trophy-fb">🏆</div>'
+            + '</div>'
+            + '<div class="quest-text">Quête complétée</div>'
+            + '<div class="points-display"><span id="quest-points-earned">+10</span> pts</div>'
+            + '<button class="continue-btn" type="button">Continuer</button>';
+        document.body.appendChild(modal);
+        // Canvas confettis
+        canvas = document.createElement('canvas');
+        canvas.id = 'quest-confetti-canvas';
+        document.body.appendChild(canvas);
+        ctx = canvas.getContext('2d');
+        resize();
+        window.addEventListener('resize', resize);
+        // Close handlers
+        var closeFn = function () {
+            modal.classList.remove('show');
+        };
+        modal.querySelector('.continue-btn').addEventListener('click', closeFn);
+        modal.addEventListener('click', function (e) { if (e.target === modal) closeFn(); });
+    }
+
+    function resize() {
+        if (!canvas) return;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+
+    function makeConfetti(x, y) {
+        var COLORS = ['#fbbf24', '#f59e0b', '#fde68a', '#facc15'];
+        return {
+            x: x, y: y,
+            size: Math.random() * 5 + 3,
+            vx: (Math.random() - 0.5) * 12,
+            vy: -Math.random() * 10 - 4,
+            gravity: 0.28, friction: 0.99,
+            rotation: Math.random() * Math.PI * 2,
+            spin: (Math.random() - 0.5) * 0.3,
+            color: COLORS[Math.floor(Math.random() * 4)],
+            life: 1,
+            shape: Math.random() < 0.5 ? 'square' : 'circle'
+        };
+    }
+
+    function spawn() {
+        var cx = canvas.width / 2;
+        var cy = canvas.height / 2 - 60;
+        for (var i = 0; i < 80; i++) particles.push(makeConfetti(cx, cy));
+    }
+
+    function step() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var alive = [];
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            p.vx *= p.friction;
+            p.vy += p.gravity;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rotation += p.spin;
+            if (p.y < canvas.height + 50) {
+                alive.push(p);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
+                ctx.fillStyle = p.color;
+                if (p.shape === 'square') {
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+        particles = alive;
+        if (particles.length > 0) {
+            animId = requestAnimationFrame(step);
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            animId = null;
+        }
+    }
+
+    /**
+     * Affiche l'effet de célébration. À appeler quand une quête est complétée.
+     * @param {number} pointsEarned - Nombre de points gagnés (défaut : 10)
+     */
+    window.showQuestCelebration = function (pointsEarned) {
+        ensureModal();
+        var amount = (typeof pointsEarned === 'number' && pointsEarned > 0) ? pointsEarned : 10;
+        var ptsEl = document.getElementById('quest-points-earned');
+        if (ptsEl) ptsEl.textContent = '+' + amount;
+        var modal = document.getElementById('quest-celebration');
+        modal.classList.add('show');
+        spawn();
+        if (!animId) step();
+        setTimeout(spawn, 400);
+        if (navigator.vibrate) {
+            try { navigator.vibrate([50, 30, 50, 30, 100]); } catch (_) {}
+        }
+        // Auto-close apres 4.5s si l'user n'a pas clique
+        setTimeout(function () {
+            if (modal.classList.contains('show')) modal.classList.remove('show');
+        }, 4500);
+    };
+})();
+
+
 var lastAnnonceId = null;
 var lastAnnoncePrix = null;
 var annoncePaymentRef = null;
@@ -1029,7 +1160,7 @@ function trackArticleRead(slug) {
             try { updateProfilPoints(); } catch (_) {}
         }
         if (data.just_completed && data.points_earned) {
-            showToast('🎉 Quete completee : +' + data.points_earned + ' points !', 'success');
+            showQuestCelebration(data.points_earned);
             // Si on est sur la page Quetes, recharger pour voir la progression
             if (typeof loadQuests === 'function') { try { loadQuests(); } catch (_) {} }
         }
@@ -1135,7 +1266,10 @@ function claimDailyCheckin() {
                 }
                 updateHeaderPoints();
                 loadDailyCheckin();
-                /* Pas de toast : la mise à jour du bloc (série, bouton) suffit */
+                // Effet celebration avec les points gagnes ce jour
+                if (data.points_earned || data.points) {
+                    showQuestCelebration(data.points_earned || data.points);
+                }
             } else {
                 showToast(data.error || 'Impossible de réclamer', 'error');
                 loadDailyCheckin();
@@ -1270,7 +1404,7 @@ function verifyTelegramQuest(questCode, silent, cb) {
       .then(function (res) {
         var d = res.data || {};
         if (d.success) {
-            showToast('+' + (d.points_earned || 25) + ' points gagnés\u202f!', 'success');
+            showQuestCelebration(d.points_earned || 25);
             if (d.total_points != null && window.__bipbipRegisteredUser) {
                 window.__bipbipRegisteredUser.points = d.total_points;
             }
