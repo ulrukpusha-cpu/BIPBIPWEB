@@ -1,0 +1,60 @@
+/* Bipbip seasonal particle overlay — distilled from BIPBIPTHEME/particles.jsx */
+
+.bb-particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.bb-particles[data-attach="card"] { position: absolute; }
+
+.bb-particle {
+  position: absolute;
+  will-change: transform, opacity;
+  opacity: 0.85;
+  font-size: 22px;
+  line-height: 1;
+}
+.bb-particle.bb-glyph-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+.bb-particle.bb-glyph-firework {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 14px currentColor;
+}
+
+@keyframes bb-fall {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); }
+  100% { transform: translate3d(40px, 120vh, 0) rotate(360deg); }
+}
+@keyframes bb-rise {
+  0%   { transform: translate3d(0, 0, 0) rotate(0); opacity: 0; }
+  10%  { opacity: 0.9; }
+  90%  { opacity: 0.9; }
+  100% { transform: translate3d(-30px, -120vh, 0) rotate(15deg); opacity: 0; }
+}
+@keyframes bb-twinkle {
+  0%, 100% { transform: scale(0.3); opacity: 0; }
+  40% { transform: scale(1.2); opacity: 1; }
+  60% { transform: scale(1); opacity: 0.9; }
+  80% { transform: scale(0.7); opacity: 0.3; }
+}
+
+.bb-particle[data-anim="fall"]     { animation: bb-fall var(--bb-p-dur, 12s) linear var(--bb-p-delay, 0s) infinite; top: -10%; }
+.bb-particle[data-anim="rise"]     { animation: bb-rise var(--bb-p-dur, 12s) linear var(--bb-p-delay, 0s) infinite; top: 100%; }
+.bb-particle[data-anim="twinkle"]  { animation: bb-twinkle var(--bb-p-dur, 6s) ease-in-out var(--bb-p-delay, 0s) infinite; }
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .bb-particles { display: none !important; }
+}
+
+/* Lite mode set by main app */
+html.bipbip-lite .bb-particles { display: none !important; }

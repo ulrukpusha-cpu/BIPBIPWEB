@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipbip · Thèmes saisonniers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Mountains+of+Christmas:wght@700&family=Creepster&family=Dancing+Script:wght@600;700&family=Amiri:wght@700&family=Pacifico&family=Permanent+Marker&family=Caveat:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme-tokens.css">
+<link rel="stylesheet" href="theme-particles.css">
+
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    color: var(--bb-text);
+    min-height: 100vh;
+    background: var(--bb-bg);
+    transition: background 250ms ease, color 250ms ease;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: var(--bb-bg-decor);
+  }
+  .shell {
+    position: relative; z-index: 2;
+    max-width: 1080px; margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; margin-bottom: 40px; }
+  .kicker { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; opacity: 0.7; color: var(--bb-accent); margin: 0; font-weight: 700; }
+  h1 { font-family: var(--bb-display-font); font-size: clamp(40px, 6vw, 72px); margin: 8px 0; line-height: 1; letter-spacing: -1.5px; }
+  .sub { opacity: 0.7; max-width: 540px; font-size: 16px; line-height: 1.55; }
+
+  .picker {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 10px; border-radius: 16px;
+    background: var(--bb-card-bg); border: 1px solid var(--bb-divider);
+    backdrop-filter: blur(8px);
+  }
+  .picker button {
+    appearance: none; cursor: pointer;
+    border: 1px solid var(--bb-tile-border);
+    background: var(--bb-tile-bg);
+    color: var(--bb-text);
+    padding: 10px 14px; border-radius: 12px;
+    font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+  .picker button:hover { transform: translateY(-1px); border-color: var(--bb-accent); }
+  .picker button.is-active {
+    background: var(--bb-cta-bg); color: var(--bb-cta-text);
+    border-color: transparent; box-shadow: var(--bb-cta-shadow);
+  }
+  .picker button .emo { font-size: 18px; line-height: 1; }
+
+  .grid {
+    display: grid; gap: 24px;
+    grid-template-columns: 1.4fr 1fr;
+    margin-top: 32px;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  .hero {
+    border-radius: 24px; padding: 32px 28px;
+    background: var(--bb-hero-bg);
+    color: var(--bb-hero-text);
+    border: 1px solid var(--bb-hero-border);
+    box-shadow: var(--bb-hero-shadow);
+    position: relative; overflow: hidden;
+    min-height: 320px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .hero .label {
+    font-size: 12px; letter-spacing: 3px; text-transform: uppercase; font-weight: 700;
+    color: var(--bb-hero-label);
+  }
+  .hero h2 {
+    font-family: var(--bb-display-font);
+    font-size: clamp(36px, 5vw, 60px); margin: 12px 0 8px; line-height: 1.05; letter-spacing: -1.5px;
+  }
+  .hero p { margin: 0; opacity: 0.92; max-width: 520px; line-height: 1.5; }
+  .hero .cta {
+    margin-top: 24px; align-self: flex-start;
+    appearance: none; border: 0; cursor: pointer;
+    padding: 14px 22px; border-radius: 14px;
+    font-weight: 800; font-size: 15px;
+    background: var(--bb-cta-bg);
+    color: var(--bb-cta-text);
+    box-shadow: var(--bb-cta-shadow);
+  }
+
+  .panel {
+    border-radius: 20px; padding: 22px;
+    background: var(--bb-card-bg); border: 1px solid var(--bb-divider);
+    backdrop-filter: blur(8px);
+  }
+  .panel h3 { margin: 0 0 14px; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.75; }
+
+  .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .swatch { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--bb-tile-border);
+            display: flex; align-items: flex-end; padding: 6px; font-size: 9px;
+            font-family: ui-monospace, "JetBrains Mono", monospace;
+            color: rgba(255,255,255,0.92); text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
+  .tile { background: var(--bb-tile-bg); border: 1px solid var(--bb-tile-border);
+          border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .tile .v { font-weight: 800; font-size: 18px; }
+  .tile .k { font-size: 11px; opacity: 0.6; letter-spacing: 1.5px; text-transform: uppercase; }
+
+  .spec { font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 12px;
+          display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin-top: 16px; opacity: 0.78; }
+  .spec b { font-weight: 700; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase; font-size: 10px; }
+
+  footer { margin-top: 48px; font-size: 12px; opacity: 0.55; letter-spacing: 2px; text-transform: uppercase; }
+  code { background: rgba(127,127,127,0.18); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <div>
+      <p class="kicker" id="kicker">— Showcase</p>
+      <h1 id="title">Thèmes saisonniers</h1>
+      <p class="sub">Les 9 ambiances Bipbip Recharge. Sélectionnez-en une, ou laissez le moteur détecter automatiquement la fête en cours. Aujourd'hui : <span id="today"></span>.</p>
+    </div>
+    <div class="picker" id="picker"></div>
+  </header>
+
+  <div class="grid">
+    <section class="hero" id="hero">
+      <div>
+        <span class="label" id="heroLabel">Édition</span>
+        <h2 id="heroTitle">Bipbip Recharge</h2>
+        <p id="heroSub">Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.</p>
+      </div>
+      <button class="cta">Recharger maintenant →</button>
+    </section>
+
+    <aside class="panel">
+      <h3>Palette</h3>
+      <div class="swatches" id="swatches"></div>
+      <div class="tiles">
+        <div class="tile"><span class="k">Accent</span><span class="v" id="vAccent"></span></div>
+        <div class="tile"><span class="k">Mode</span><span class="v" id="vMode"></span></div>
+      </div>
+      <div class="spec">
+        <b>Typo display</b><span id="vFont"></span>
+        <b>Animation</b><span id="vAnim"></span>
+        <b>Fenêtre</b><span id="vWindow"></span>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    Override via <code>?season=&lt;id&gt;</code> · <code>BipbipTheme.setOverride("noel")</code> dans la console pour fixer.
+  </footer>
+</div>
+
+<script src="theme-engine.js" data-no-auto></script>
+<script>
+  // Map seasons to their hero meta (mirrors themes.jsx labels).
+  const HERO = {
+    noel:      { kicker: "Édition Noël",          title: "Joyeux Noël !",          sub: "Offrez du crédit à vos proches pendant les fêtes. Orange, MTN, Moov.", anim: "snow" },
+    nouvel:    { kicker: "Édition Nouvel An",     title: "Bonne Année 2026",       sub: "Nouvelle année, nouvelles recharges. Que la connexion soit avec vous.", anim: "fireworks" },
+    valentin:  { kicker: "Édition Saint-Valentin",title: "Envoie de l'amour 💖",   sub: "Un geste doux : rechargez le numéro de celui ou celle que vous aimez.", anim: "hearts" },
+    ramadan:   { kicker: "Édition Ramadan",       title: "Ramadan Kareem",         sub: "Partagez un geste généreux : offrez du crédit à vos proches.", anim: "lanterns" },
+    paques:    { kicker: "Édition Pâques",        title: "Joyeuses Pâques 🐣",     sub: "Craquez une promo comme un œuf — offres pastel toute la semaine.", anim: "eggs" },
+    indep:     { kicker: "Édition Indépendance",  title: "Vive la Côte d'Ivoire",  sub: "On célèbre le 7 août avec fierté : recharges rapides, partout.", anim: "flags" },
+    rentree:   { kicker: "Édition Rentrée",       title: "Back to School",         sub: "Cahier neuf, crédit neuf. Rechargez avant la première sonnerie.", anim: "pencils" },
+    halloween: { kicker: "Édition Halloween",     title: "Trick or Recharge",      sub: "Rechargez sans peur, vos crédits apparaissent comme par magie.", anim: "halloween" },
+    ete:       { kicker: "Édition Été",           title: "Mode vacances",          sub: "Bronzez sans stress : vos recharges suivent, même sur la plage.", anim: "sun" }
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  function fmtFR(d) {
+    return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  }
+
+  function fmtWindow(w) {
+    if (!w) return "—";
+    if (w.type === "recurring-md") return `${w.from} → ${w.to} (annuel)`;
+    if (w.type === "explicit") return w.ranges.map(r => `${r.from} → ${r.to}`).join(" · ");
+    return "—";
+  }
+
+  function render(seasonId) {
+    const list = window.BipbipTheme.listSeasons();
+    const s = list.find(x => x.id === seasonId);
+
+    BipbipTheme.apply(seasonId || null);
+    BipbipTheme.mountParticles({ density: 50 });
+
+    // Picker active state
+    Array.from(document.querySelectorAll("#picker button")).forEach(b => {
+      b.classList.toggle("is-active", b.dataset.id === (seasonId || ""));
+    });
+
+    if (!s) {
+      $("kicker").textContent = "— Aucun thème actif (hors saison)";
+      $("title").textContent = "Thèmes saisonniers";
+      $("heroLabel").textContent = "Édition standard";
+      $("heroTitle").textContent = "Bipbip Recharge";
+      $("heroSub").textContent = "Rechargez MTN, Orange, Moov en un clic. Paiement Djamo, MoMo ou crypto. Service 24/7.";
+      $("vAccent").textContent = getComputedStyle(document.documentElement).getPropertyValue("--bb-accent").trim();
+      $("vMode").textContent = "dark (défaut)";
+      $("vFont").textContent = "Plus Jakarta Sans";
+      $("vAnim").textContent = "—";
+      $("vWindow").textContent = "—";
+    } else {
+      const hero = HERO[s.id] || {};
+      $("kicker").textContent = `${s.emoji} ${s.label}`;
+      $("title").textContent = s.label;
+      $("heroLabel").textContent = hero.kicker || s.label;
+      $("heroTitle").textContent = hero.title || s.label;
+      $("heroSub").textContent = hero.sub || "";
+      const root = getComputedStyle(document.documentElement);
+      $("vAccent").textContent = root.getPropertyValue("--bb-accent").trim();
+      $("vMode").textContent = root.getPropertyValue("--bb-mode").trim();
+      $("vFont").textContent = root.getPropertyValue("--bb-display-font").trim().split(",")[0].replace(/"/g, "");
+      $("vAnim").textContent = hero.anim || "—";
+      $("vWindow").textContent = fmtWindow(s.window);
+    }
+
+    // Swatches
+    const tokens = ["--bb-accent","--bb-tile1","--bb-tile2","--bb-tile3","--bb-tile4"];
+    const rootCS = getComputedStyle(document.documentElement);
+    $("swatches").innerHTML = tokens.map(t => {
+      const v = rootCS.getPropertyValue(t).trim();
+      return `<div class="swatch" style="background:${v}"><span style="mix-blend-mode: luminosity">${v}</span></div>`;
+    }).join("");
+  }
+
+  // Boot
+  BipbipTheme.bootstrap({ particles: false }).then(() => {
+    const list = BipbipTheme.listSeasons();
+    const pickerEl = $("picker");
+    const items = [
+      { id: "", emoji: "🎨", label: "Auto" },
+      ...list.map(s => ({ id: s.id, emoji: s.emoji, label: s.label }))
+    ];
+    pickerEl.innerHTML = items.map(it =>
+      `<button data-id="${it.id}"><span class="emo">${it.emoji}</span>${it.label}</button>`
+    ).join("");
+    pickerEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-id]");
+      if (!btn) return;
+      const id = btn.dataset.id || null;
+      if (id) {
+        render(id);
+      } else {
+        const det = BipbipTheme.detect();
+        render(det ? det.id : null);
+      }
+    });
+
+    $("today").textContent = fmtFR(new Date());
+    const det = BipbipTheme.detect();
+    render(det ? det.id : null);
+  });
+</script>
+</body>
+</html>

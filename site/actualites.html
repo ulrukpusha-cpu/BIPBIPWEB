@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8928406232312253"
+     crossorigin="anonymous"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipbip Recharge — Actualités</title>
+<meta name="description" content="Actualités télécom & mobile money en Côte d'Ivoire. Lisez des articles et gagnez des points.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Mountains+of+Christmas:wght@700&family=Creepster&family=Dancing+Script:wght@600;700&family=Amiri:wght@700&family=Pacifico&family=Permanent+Marker&family=Caveat:wght@700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/shared/theme/theme-tokens.css">
+<link rel="stylesheet" href="/shared/theme/theme-particles.css">
+<link rel="stylesheet" href="/shared/theme/theme-ui.css">
+<link rel="stylesheet" href="/bipbip-dynamic-scene.css">
+<link rel="stylesheet" href="/site/css/site.css">
+
+<script defer src="/shared/api/api-client.js"></script>
+<script defer src="/shared/i18n/i18n.js"></script>
+<script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<link rel="dns-prefetch" href="https://accounts.google.com">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="/shared/theme/theme-engine.js" data-no-auto></script>
+
+<script defer src="/site/js/core.js"></script>
+<script defer src="/site/js/shell.js"></script>
+<script defer src="/site/js/news.js"></script>
+</head>
+
+<body class="bb-shell" data-page="actualites">
+
+  <div class="site-wrap">
+    <div class="page-head">
+      <h1 data-bbt="ph.actus.t">Actualités</h1>
+      <p data-bbt="ph.actus.s">Télécom, mobile money & tech en Côte d'Ivoire. Lis un article connecté pour gagner des points.</p>
+    </div>
+
+    <!-- Onglets catégories -->
+    <div class="news-tabs" id="newsTabs">
+      <button class="news-tab is-active" data-cat="" type="button">🌍 Tout</button>
+      <button class="news-tab" data-cat="region" type="button">🏛️ Région</button>
+      <button class="news-tab" data-cat="finance" type="button">💰 Finance</button>
+      <button class="news-tab" data-cat="tech" type="button">💻 Tech</button>
+      <button class="news-tab" data-cat="science" type="button">🔬 Science</button>
+      <button class="news-tab" data-cat="music" type="button">🎵 Musique</button>
+      <button class="news-tab" data-cat="mode" type="button">👗 Mode</button>
+    </div>
+
+    <div class="news-list" id="newsList"></div>
+    <button class="news-loadmore" id="newsLoadMore" type="button" style="display:none">Charger plus</button>
+
+    <div class="ad-banner" id="adActualites" style="display:none"></div>
+  </div>
+
+  <!-- News detail modal -->
+  <div class="bb-modal-backdrop" id="newsModal">
+    <div class="bb-modal bb-modal--wide bb-modal--scroll">
+      <div class="bb-modal__head"><h3 style="font-size:14px;color:var(--bb-muted)">Actualité</h3><button class="bb-modal__close" type="button" data-close="news" aria-label="Fermer">✕</button></div>
+      <img id="newsDetailImg" class="news-detail__img" alt="" style="display:none">
+      <h1 class="news-detail__title" id="newsDetailTitle"></h1>
+      <div class="news-detail__date" id="newsDetailDate"></div>
+      <p class="news-detail__body" id="newsDetailBody"></p>
+      <div class="news-detail__source" id="newsDetailSource" style="display:none"></div>
+    </div>
+  </div>
+
+</body>
+</html>

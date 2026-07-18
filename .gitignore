@@ -30,3 +30,22 @@ _not-found/**/*.txt
 *.landing.*
 *.video.*
 *.bak2.*
+firebase-service-account.json
+push-tokens.json
+
+# === Données runtime & sensibles (NE JAMAIS committer) ===
+deposits.json
+deposit_signatures.json
+blacklist.json
+market_quota.json
+gift-orders.json
+backlog_*.json
+gateway-stats.json
+uploads/
+storage/
+*.log
+# Backups de code
+*.bak
+*.bak-*
+*.bak.*
+*.bak_*

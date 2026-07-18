@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Bipbip Cabine</title>
+<style>
+  :root { --bg:#0c2360; --card:#13316f; --line:#27499a; --txt:#eaf1ff; --soft:#9fb6e6;
+          --green:#2fd16a; --red:#ff5a5a; --wave:#1ec6ff; --accent:#f7941d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Segoe UI',system-ui,sans-serif; background:linear-gradient(180deg,#0f2f7d,#0c2360); color:var(--txt); }
+  header { padding:18px 20px; background:rgba(0,0,0,.2); display:flex; align-items:center; justify-content:space-between; }
+  h1 { font-size:18px; margin:0; }
+  .wrap { max-width:900px; margin:0 auto; padding:20px; }
+  .gate { max-width:360px; margin:60px auto; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
+  input, button { font:inherit; }
+  input[type=text],input[type=password],input[type=number] { width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line);
+    background:#0a1c4d; color:var(--txt); margin-top:6px; }
+  label { font-size:13px; color:var(--soft); display:block; margin-top:12px; }
+  button { cursor:pointer; border:none; border-radius:10px; padding:10px 16px; font-weight:700; color:#fff; background:#2b6bf0; }
+  button.green { background:var(--green); } button.red { background:var(--red); } button.ghost { background:#1b3b85; }
+  .tabs { display:flex; gap:8px; margin:18px 0; }
+  .tabs button { background:#13316f; }
+  .tabs button.on { background:#2b6bf0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .muted { color:var(--soft); font-size:13px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+  .lock { background:#5a1f1f; color:#ffb3b3; } .ok { background:#1f5a33; color:#b3ffcd; }
+  .bar { height:8px; border-radius:999px; background:#0a1c4d; overflow:hidden; margin-top:6px; }
+  .bar>span { display:block; height:100%; background:linear-gradient(90deg,var(--green),#b9f24a); }
+  .hidden { display:none; }
+  .msg { padding:10px 14px; border-radius:10px; margin:10px 0; font-size:14px; }
+  .msg.err { background:#5a1f1f; } .msg.ok { background:#1f5a33; }
+  fieldset { border:1px solid var(--line); border-radius:12px; margin-top:16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏪 Admin — Bipbip Cabine</h1>
+  <button id="logout" class="ghost hidden" onclick="logout()">Quitter</button>
+</header>
+
+<!-- Gate -->
+<div id="gate" class="gate">
+  <h2 style="margin-top:0">Connexion admin</h2>
+  <p class="muted">Saisis la clé admin (ADMIN_SECRET_KEY).</p>
+  <label>Clé admin <input id="key" type="password" placeholder="••••••••"></label>
+  <button style="width:100%;margin-top:16px" onclick="enter()">Entrer</button>
+  <div id="gateMsg"></div>
+</div>
+
+<!-- App -->
+<div id="app" class="wrap hidden">
+  <div class="tabs">
+    <button data-tab="cabines" class="on" onclick="tab('cabines')">Cabines</button>
+    <button data-tab="orders" onclick="tab('orders')">Commandes <span id="ordBadge" class="pill ok" style="display:none"></span></button>
+    <button data-tab="deposits" onclick="tab('deposits')">Versements Wave</button>
+    <button data-tab="message" onclick="tab('message')">Message LED</button>
+  </div>
+
+  <div id="tab-cabines">
+    <fieldset style="border-color:#2fd16a">
+      <legend>⚡ Générer un code (expire automatiquement)</legend>
+      <div style="padding:0 14px 14px">
+        <div class="row" style="gap:12px">
+          <div style="flex:2;min-width:160px"><label>Nom de la cabine <input id="gn_nom" type="text" placeholder="Cabine Yopougon"></label></div>
+          <div style="flex:1;min-width:110px"><label>Validité (mois) <input id="gn_mois" type="number" value="1" min="1"></label></div>
+          <div style="flex:1;min-width:120px"><label>Commission/sem (F) <input id="gn_com" type="number" value="5000"></label></div>
+        </div>
+        <label style="margin-top:12px">Photo du commercial (optionnel, s'affiche dans son profil)
+          <input id="gn_photo" type="file" accept="image/*" style="margin-top:6px"></label>
+        <button class="green" style="margin-top:14px" onclick="generateCode()">⚡ Générer le code</button>
+        <div id="genResult"></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Créer une cabine (code manuel, sans expiration)</legend>
+      <div style="padding:0 14px 14px">
+        <div class="row" style="gap:12px">
+          <div style="flex:1;min-width:120px"><label>Code d'accès <input id="nc_code" type="text" placeholder="KBINE02"></label></div>
+          <div style="flex:2;min-width:160px"><label>Nom de la cabine <input id="nc_nom" type="text" placeholder="Cabine Adjamé"></label></div>
+          <div style="flex:1;min-width:120px"><label>Commission/sem (F) <input id="nc_com" type="number" value="5000"></label></div>
+        </div>
+        <label style="margin-top:12px">Photo du commercial (optionnel, s'affiche dans son profil)
+          <input id="nc_photo" type="file" accept="image/*" style="margin-top:6px"></label>
+        <button class="green" style="margin-top:14px" onclick="createCabine()">Créer</button>
+      </div>
+    </fieldset>
+    <div id="cabinesList" style="margin-top:16px"></div>
+  </div>
+
+  <div id="tab-orders" class="hidden">
+    <p class="muted">Commandes en attente — valide pour exécuter la recharge, ou rejette.</p>
+    <div id="ordersList"></div>
+  </div>
+
+  <div id="tab-deposits" class="hidden">
+    <div id="depositsList"></div>
+  </div>
+
+  <div id="tab-message" class="hidden">
+    <fieldset><legend>📢 Message LED diffusé à toutes les cabines</legend>
+      <div style="padding:0 14px 14px">
+        <label>Message <textarea id="msgText" rows="2" style="width:100%;margin-top:6px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0a1c4d;color:var(--txt)" placeholder="Ex : Pensez à verser vos ventes avant 18h."></textarea></label>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="green" onclick="setMessage()">Diffuser</button>
+          <button class="red" onclick="clearMessage()">Retirer le message</button>
+        </div>
+        <div id="msgCurrent" class="muted" style="margin-top:12px"></div>
+      </div>
+    </fieldset>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<script>
+var BASE = (function(){ var h=location.hostname; return (h==='localhost'||h==='127.0.0.1'||h==='')?'https://bipbiprecharge.ci':''; })();
+var KEY = sessionStorage.getItem('cabine_admin_key') || '';
+
+function hdr(){ return { 'Content-Type':'application/json', 'X-Admin-Key': KEY }; }
+async function api(path, opts){ opts=opts||{}; var r=await fetch(BASE+path,{ method:opts.method||'GET', headers:hdr(), body:opts.body?JSON.stringify(opts.body):undefined });
+  var d=await r.json().catch(function(){return null;}); if(!r.ok) throw new Error((d&&d.error)||('HTTP '+r.status)); return d; }
+function show(id){ document.getElementById(id).classList.remove('hidden'); }
+function hide(id){ document.getElementById(id).classList.add('hidden'); }
+function msg(t,ok){ var m=document.getElementById('msg'); m.innerHTML='<div class="msg '+(ok?'ok':'err')+'">'+t+'</div>'; setTimeout(function(){m.innerHTML='';},4000); }
+
+async function enter(){
+  KEY = document.getElementById('key').value.trim();
+  if(!KEY){ return; }
+  try { await api('/api/cabine/admin/cabines'); sessionStorage.setItem('cabine_admin_key',KEY);
+    hide('gate'); show('app'); show('logout'); loadCabines();
+  } catch(e){ document.getElementById('gateMsg').innerHTML='<div class="msg err">Clé invalide</div>'; }
+}
+function logout(){ sessionStorage.removeItem('cabine_admin_key'); location.reload(); }
+function tab(name){ ['cabines','orders','deposits','message'].forEach(function(t){ document.getElementById('tab-'+t).classList.toggle('hidden',t!==name);
+  document.querySelector('[data-tab="'+t+'"]').classList.toggle('on',t===name); });
+  if(name==='deposits') loadDeposits(); else if(name==='orders') loadOrders(); else if(name==='message') loadMessage(); else loadCabines(); }
+
+function fileToDataURL(input){ return new Promise(function(resolve){ var f=input&&input.files&&input.files[0]; if(!f) return resolve(null);
+  var r=new FileReader(); r.onload=function(){resolve(r.result);}; r.readAsDataURL(f); }); }
+
+async function loadOrders(){
+  try {
+    var d = await api('/api/cabine/admin/orders');
+    var list = d.orders||[];
+    var badge=document.getElementById('ordBadge');
+    if(list.length){ badge.textContent=list.length; badge.style.display='inline-block'; } else { badge.style.display='none'; }
+    var html=list.map(function(o){
+      var detail = o.type==='bundle' ? ('Forfait '+(o.bundle_id||'')) : fmt(o.amount);
+      return '<div class="card"><div class="row"><div>#'+o.id+' — <b>'+o.cabine_code+'</b> · '+String(o.operator).toUpperCase()+
+        '<br><span class="muted">'+detail+' → '+o.recipient+'</span></div>'+
+        '<div style="display:flex;gap:6px"><button class="green" onclick="validateOrder('+o.id+')">✅ Valider</button>'+
+        '<button class="red" onclick="rejectOrder('+o.id+')">❌ Rejeter</button></div></div></div>';
+    }).join('');
+    document.getElementById('ordersList').innerHTML = html || '<p class="muted">Aucune commande en attente.</p>';
+  } catch(e){ msg(e.message,false); }
+}
+async function validateOrder(id){
+  try { var r=await api('/api/cabine/admin/orders/'+id+'/validate',{method:'POST'});
+    msg(r.ok?('Commande validée — recharge envoyée'+(r.locked?' (cabine bloquée)':'')):('Échec : '+(r.error||'')), r.ok); loadOrders(); }
+  catch(e){ msg(e.message,false); }
+}
+async function rejectOrder(id){
+  try { await api('/api/cabine/admin/orders/'+id+'/reject',{method:'POST'}); msg('Commande rejetée',true); loadOrders(); }
+  catch(e){ msg(e.message,false); }
+}
+async function loadMessage(){
+  try { var d=await api('/api/cabine/message'); document.getElementById('msgText').value=d.message||'';
+    document.getElementById('msgCurrent').innerHTML = d.message?('Message actuel : <b>'+d.message+'</b>'):'Aucun message actif.'; }
+  catch(e){}
+}
+async function setMessage(){
+  var m=document.getElementById('msgText').value.trim();
+  if(!m){ msg('Message vide',false); return; }
+  try { await api('/api/cabine/admin/message',{method:'POST',body:{message:m}}); msg('Message diffusé',true); loadMessage(); }
+  catch(e){ msg(e.message,false); }
+}
+async function clearMessage(){
+  try { await api('/api/cabine/admin/message',{method:'DELETE'}); document.getElementById('msgText').value=''; msg('Message retiré',true); loadMessage(); }
+  catch(e){ msg(e.message,false); }
+}
+
+function fmt(n){ return new Intl.NumberFormat('fr-FR').format(n||0)+' F'; }
+function fmtDate(s){ if(!s) return '∞ (jamais)'; try{ return new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return s; } }
+
+async function generateCode(){
+  var nom=document.getElementById('gn_nom').value.trim();
+  var mois=Number(document.getElementById('gn_mois').value)||1;
+  var com=Number(document.getElementById('gn_com').value)||5000;
+  if(!nom){ msg('Nom de la cabine requis',false); return; }
+  try {
+    var photo = await fileToDataURL(document.getElementById('gn_photo'));
+    var r = await api('/api/cabine/admin/generate',{method:'POST',body:{nom_cabine:nom,mois:mois,commission_hebdo:com,photo:photo}});
+    document.getElementById('genResult').innerHTML =
+      '<div class="msg ok" style="display:flex;align-items:center;justify-content:space-between;gap:12px">'+
+      '<span>Code généré : <b style="font-size:20px;letter-spacing:2px">'+r.code+'</b><br><small>Expire le '+fmtDate(r.expires_at)+'</small></span>'+
+      '<button class="ghost" onclick="copyCode(\''+r.code+'\')">Copier</button></div>';
+    document.getElementById('gn_nom').value='';
+    loadCabines();
+  } catch(e){ msg(e.message,false); }
+}
+function copyCode(c){ try{ navigator.clipboard.writeText(c); msg('Code copié : '+c,true);}catch(e){ msg(c,true);} }
+async function renewCode(code){
+  try { await api('/api/cabine/admin/cabines/'+encodeURIComponent(code),{method:'PUT',body:{renew_mois:1}}); msg('Code renouvelé (+1 mois)',true); loadCabines(); }
+  catch(e){ msg(e.message,false); }
+}
+
+async function loadCabines(){
+  try {
+    var d = await api('/api/cabine/admin/cabines');
+    var html = (d.cabines||[]).map(function(c){
+      var ph = c.photo_url ? '<img src="'+(BASE+c.photo_url)+'" style="width:34px;height:34px;border-radius:999px;object-fit:cover;vertical-align:middle;margin-right:8px">' : '';
+      return '<div class="card"><div class="row"><div>'+ph+'<b>'+c.code+'</b> — '+c.nom_cabine+
+        ' <span class="pill '+(c.locked?'lock':'ok')+'">'+(c.locked?'🔒 BLOQUÉ':'🔓 OK')+'</span>'+
+        (c.expired?' <span class="pill lock">⏰ EXPIRÉ</span>':'')+
+        (c.actif?'':' <span class="pill lock">inactif</span>')+'</div>'+
+        '<div style="display:flex;gap:6px">'+
+          '<button class="ghost" onclick="renewCode(\''+c.code+'\')">+1 mois</button>'+
+          (c.actif
+            ? '<button class="red" onclick="setActif(\''+c.code+'\',false)">Désactiver</button>'
+            : '<button class="green" onclick="setActif(\''+c.code+'\',true)">Activer</button>')+'</div></div>'+
+        '<div class="muted" style="margin-top:8px">Expire : '+(c.expired?'<b style="color:#ff8a8a">':'<b>')+fmtDate(c.expires_at)+'</b>'+
+        ' · Ventes plafond : '+c.tx_since_deposit+'/'+c.tx_plafond+' · Dû Wave : '+fmt(c.montant_du)+'</div>'+
+        '<div class="muted">Commission : '+fmt(c.commission_hebdo)+
+        ' · Objectif semaine : '+c.commandes_semaine+'/'+c.objectif_hebdo+' ('+c.pct+'%)'+
+        ' · Surplus mensuel : '+c.surplus_mensuel+'</div>'+
+        '<div class="bar"><span style="width:'+c.pct+'%"></span></div></div>';
+    }).join('');
+    document.getElementById('cabinesList').innerHTML = html || '<p class="muted">Aucune cabine.</p>';
+  } catch(e){ msg(e.message,false); }
+}
+async function createCabine(){
+  var code=document.getElementById('nc_code').value.trim();
+  var nom=document.getElementById('nc_nom').value.trim();
+  var com=document.getElementById('nc_com').value;
+  if(!code||!nom){ msg('Code et nom requis',false); return; }
+  try {
+    var photo = await fileToDataURL(document.getElementById('nc_photo'));
+    await api('/api/cabine/admin/cabines',{method:'POST',body:{code:code,nom_cabine:nom,commission_hebdo:Number(com)||5000,photo:photo}});
+    msg('Cabine créée',true);
+    document.getElementById('nc_code').value=''; document.getElementById('nc_nom').value='';
+    var f=document.getElementById('nc_photo'); if(f) f.value=''; loadCabines();
+  } catch(e){ msg(e.message,false); }
+}
+async function setActif(code,actif){
+  try { await api('/api/cabine/admin/cabines/'+encodeURIComponent(code),{method:'PUT',body:{actif:actif}}); loadCabines(); }
+  catch(e){ msg(e.message,false); }
+}
+async function loadDeposits(){
+  try {
+    var d = await api('/api/cabine/admin/deposits?status=en_attente');
+    var html=(d.deposits||[]).map(function(x){
+      return '<div class="card"><div class="row"><div>#'+x.id+' — <b>'+x.cabine_code+'</b> · '+fmt(x.montant)+'</div>'+
+        '<button class="green" onclick="confirmDep('+x.id+')">✅ Confirmer (débloque)</button></div>'+
+        (x.preuve_url?'<div style="margin-top:10px"><a href="'+(BASE+x.preuve_url)+'" target="_blank"><img src="'+(BASE+x.preuve_url)+'" style="max-width:220px;border-radius:8px"></a></div>':'<div class="muted" style="margin-top:6px">⚠️ Pas de preuve jointe</div>')+
+        '</div>';
+    }).join('');
+    document.getElementById('depositsList').innerHTML = html || '<p class="muted">Aucun versement en attente.</p>';
+  } catch(e){ msg(e.message,false); }
+}
+async function confirmDep(id){
+  try { await api('/api/cabine/admin/deposits/'+id+'/confirm',{method:'POST'}); msg('Versement confirmé — cabine débloquée',true); loadDeposits(); }
+  catch(e){ msg(e.message,false); }
+}
+
+if(KEY){ document.getElementById('key').value=KEY; enter(); }
+</script>
+</body>
+</html>

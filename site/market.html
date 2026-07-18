@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8928406232312253"
+     crossorigin="anonymous"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipbip Recharge — Market</title>
+<meta name="description" content="Market Bipbip : cartes cadeaux, articles d'occasion (bazar, électronique, livres). Vendez vos articles.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Mountains+of+Christmas:wght@700&family=Creepster&family=Dancing+Script:wght@600;700&family=Amiri:wght@700&family=Pacifico&family=Permanent+Marker&family=Caveat:wght@700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/shared/theme/theme-tokens.css">
+<link rel="stylesheet" href="/shared/theme/theme-particles.css">
+<link rel="stylesheet" href="/shared/theme/theme-ui.css">
+<link rel="stylesheet" href="/bipbip-dynamic-scene.css">
+<link rel="stylesheet" href="/site/css/site.css">
+
+<script defer src="/shared/api/api-client.js"></script>
+<script defer src="/shared/i18n/i18n.js"></script>
+<script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<link rel="dns-prefetch" href="https://accounts.google.com">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="/shared/theme/theme-engine.js" data-no-auto></script>
+
+<script defer src="/site/js/core.js"></script>
+<script defer src="/site/js/shell.js"></script>
+<script defer src="/site/js/payment.js"></script>
+<script defer src="/site/js/market.js"></script>
+</head>
+
+<body class="bb-shell" data-page="market">
+
+  <div class="site-wrap">
+    <div class="page-head">
+      <h1 data-bbt="ph.market.t">Market</h1>
+      <p data-bbt="ph.market.s">Cartes cadeaux e-mailables et articles d'occasion entre particuliers.</p>
+    </div>
+
+    <!-- VIEW: home -->
+    <div id="view-home">
+      <div class="market-grid" id="marketGrid"></div>
+
+      <div class="market-subhead" style="justify-content:space-between">
+        <h2 class="section-title" style="margin:0"><iconify-icon icon="solar:box-linear" width="22"></iconify-icon> <span data-bbt="market.mine">Mes articles à vendre</span></h2>
+        <button class="bb-cta" type="button" id="openAddItemBtn"><iconify-icon icon="solar:add-circle-linear" width="18"></iconify-icon> <span data-bbt="market.sell">Vendre un article</span></button>
+      </div>
+      <section class="bb-card" style="padding:8px 22px"><div id="myItemsList"></div></section>
+
+      <div class="ad-banner" id="adMarket" style="display:none"></div>
+    </div>
+
+    <!-- VIEW: category (second-hand items) -->
+    <div id="view-category" style="display:none">
+      <div class="market-subhead">
+        <button class="market-back" type="button" data-market-back aria-label="Retour">←</button>
+        <h1 style="margin:0;font-size:24px" id="catTitle">Catégorie</h1>
+      </div>
+      <p class="cat-intro" id="catIntro"></p>
+      <div class="cards-tabs" id="catSubTabs"></div>
+      <div class="cards-grid" id="catItemsGrid"></div>
+    </div>
+
+    <!-- VIEW: gift cards -->
+    <div id="view-cards" style="display:none">
+      <div class="market-subhead">
+        <button class="market-back" type="button" data-market-back aria-label="Retour">←</button>
+        <h1 style="margin:0;font-size:24px"><iconify-icon icon="solar:gift-linear" width="24"></iconify-icon> Cartes cadeaux</h1>
+      </div>
+      <div class="cards-tabs" id="cardsTabs">
+        <button class="cards-tab is-active" type="button" data-cat="app">App</button>
+        <button class="cards-tab" type="button" data-cat="music">Music</button>
+        <button class="cards-tab" type="button" data-cat="films">Films</button>
+        <button class="cards-tab" type="button" data-cat="jeux">Jeux</button>
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </div>
+  </div>
+
+  <!-- Detail modal (gift card / item) -->
+  <div class="bb-modal-backdrop" id="itemModal">
+    <div class="bb-modal">
+      <div class="bb-modal__head"><h3 id="itemName">Article</h3><button class="bb-modal__close" type="button" data-close="item" aria-label="Fermer">✕</button></div>
+      <div class="item-detail__art" id="itemArt"></div>
+      <div class="item-detail__price" id="itemPrice"></div>
+      <p class="item-detail__desc" id="itemDesc"></p>
+      <button class="bb-cta bb-cta--block" id="itemAction" type="button">Action</button>
+      <p class="hint" style="text-align:center;margin:10px 0 0">Transaction directe entre acheteur et vendeur pour les articles d'occasion. Bipbip n'intervient pas dans le paiement de l'article.</p>
+    </div>
+  </div>
+
+  <!-- Add-item modal -->
+  <div class="bb-modal-backdrop" id="addItemModal">
+    <div class="bb-modal bb-modal--wide">
+      <div class="bb-modal__head"><h3><iconify-icon icon="solar:add-circle-linear" width="20"></iconify-icon> Ajouter un article</h3><button class="bb-modal__close" type="button" data-close="additem" aria-label="Fermer">✕</button></div>
+      <p class="hint" style="margin:0 0 12px">Il sera modéré par l'admin puis publié dans le Market.</p>
+      <form id="addItemForm">
+        <label class="profil-label">Catégorie</label>
+        <select id="newItemCat" class="profil-select" required>
+          <option value="">— Choisir une catégorie —</option>
+          <optgroup label="Bazar">
+            <option value="bazar/mode">Mode &amp; Vêtements</option>
+            <option value="bazar/maison">Maison &amp; Décoration</option>
+            <option value="bazar/beaute">Beauté &amp; Cosmétique</option>
+            <option value="bazar/sport">Sport &amp; Loisirs</option>
+            <option value="bazar/cuisine">Cuisine &amp; Électroménager</option>
+            <option value="bazar/enfants">Enfants &amp; Bébés</option>
+          </optgroup>
+          <optgroup label="Appareil électronique">
+            <option value="electronics/smartphones">Smartphones</option>
+            <option value="electronics/ordinateurs">Ordinateurs &amp; Tablettes</option>
+            <option value="electronics/audio">Audio</option>
+            <option value="electronics/tv">TV &amp; Image</option>
+            <option value="electronics/accessoires">Accessoires</option>
+            <option value="electronics/photo">Photo &amp; Vidéo</option>
+          </optgroup>
+          <optgroup label="Livre">
+            <option value="books/romans">Romans &amp; Littérature</option>
+            <option value="books/scolaire">Scolaire &amp; Universitaire</option>
+            <option value="books/perso">Développement personnel</option>
+            <option value="books/bd">BD &amp; Mangas</option>
+            <option value="books/religieux">Religieux &amp; Spirituel</option>
+            <option value="books/jeunesse">Jeunesse</option>
+          </optgroup>
+        </select>
+
+        <label class="profil-label">Nom de l'article</label>
+        <input type="text" id="newItemName" class="profil-input" placeholder="Ex : iPhone 12 Pro 128 Go" required maxlength="80">
+
+        <label class="profil-label">Description</label>
+        <textarea id="newItemDesc" class="profil-textarea" rows="3" maxlength="400" placeholder="État, âge, ce qui est inclus…" required></textarea>
+
+        <label class="profil-label">Prix (FCFA)</label>
+        <input type="number" id="newItemPrice" class="profil-input" placeholder="50 000" required min="100" step="100">
+
+        <label class="profil-label">Photos (jusqu'à 3 · carré 1000×1000 recommandé)</label>
+        <div class="item-photos">
+          <label class="item-photo-slot" data-slot="0"><iconify-icon icon="solar:camera-add-linear" width="26"></iconify-icon><span>Image 1</span></label>
+          <label class="item-photo-slot" data-slot="1"><iconify-icon icon="solar:camera-add-linear" width="26"></iconify-icon><span>Image 2</span></label>
+          <label class="item-photo-slot" data-slot="2"><iconify-icon icon="solar:camera-add-linear" width="26"></iconify-icon><span>Image 3</span></label>
+        </div>
+        <input type="file" id="newItemFile0" accept="image/*" hidden>
+        <input type="file" id="newItemFile1" accept="image/*" hidden>
+        <input type="file" id="newItemFile2" accept="image/*" hidden>
+        <span id="newItemUploadStatus" class="hint" style="display:block;margin-top:4px"></span>
+
+        <label class="profil-label">Numéro de contact</label>
+        <input type="tel" id="newItemPhone" class="profil-input" placeholder="+225 07 00 00 00 00" required>
+
+        <p class="hint" style="margin:12px 0 0"><iconify-icon icon="solar:info-circle-linear" width="14"></iconify-icon> Modération admin · 1-24h · 3 articles gratuits, puis pack 500 F.</p>
+        <button class="bb-cta bb-cta--block" type="submit" style="margin-top:14px">Soumettre pour validation</button>
+        <p class="hint" id="addItemStatus" style="display:none;margin-top:10px"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Limit modal -->
+  <div class="bb-modal-backdrop" id="itemLimitModal">
+    <div class="bb-modal" style="max-width:360px;text-align:center">
+      <iconify-icon icon="solar:bag-check-bold" width="44" style="color:var(--bb-accent)"></iconify-icon>
+      <h3 style="margin:8px 0">Limite atteinte</h3>
+      <p class="muted" style="font-size:14px;margin:0 0 16px">Tu as déjà publié <strong>3 articles gratuits</strong>. Débloque <strong>3 articles supplémentaires</strong> pour <strong style="color:var(--bb-accent)">500 F</strong>.</p>
+      <button class="bb-cta bb-cta--block" type="button" id="payPackBtn"><iconify-icon icon="solar:wallet-money-bold" width="18"></iconify-icon> Payer 500 F · +3 articles</button>
+      <button type="button" class="login-skip" data-close="limit" style="margin-top:10px">Plus tard</button>
+    </div>
+  </div>
+
+</body>
+</html>

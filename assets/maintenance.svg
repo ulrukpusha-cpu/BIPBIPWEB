@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 460" width="320" height="460">
+  <!-- ======== Costume (silhouette homme cravate) ======== -->
+  <g>
+    <!-- Cou -->
+    <rect x="148" y="142" width="24" height="20" fill="#0e1424"/>
+    <!-- Col chemise gauche -->
+    <path d="M120 156 L145 165 L160 158 L160 178 L138 172 L122 195 Z" fill="#fff"/>
+    <!-- Col chemise droit -->
+    <path d="M200 156 L175 165 L160 158 L160 178 L182 172 L198 195 Z" fill="#fff"/>
+    <!-- Nœud papillon (motif maintenance officiel) -->
+    <path d="M132 168 L155 178 L160 168 L165 178 L188 168 L188 195 L165 185 L160 195 L155 185 L132 195 Z" fill="#0e1424"/>
+    <circle cx="160" cy="182" r="3" fill="#fff"/>
+    <!-- Veste (corps en V — bras croisés implicites) -->
+    <path d="M75 200
+             C 85 280 110 360 160 380
+             C 210 360 235 280 245 200
+             L 230 175 L 200 195 L 175 192
+             L 165 198 L 155 198 L 145 192 L 120 195 L 90 175 Z"
+          fill="#0e1424" stroke="#fff" stroke-width="1.5"/>
+    <!-- Texture hachures veste -->
+    <g stroke="#fff" stroke-width="0.7" opacity="0.35" fill="none">
+      <path d="M 95 220 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0"/>
+      <path d="M 90 245 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0"/>
+      <path d="M 95 275 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0"/>
+      <path d="M 110 310 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0 q 8 6 18 0"/>
+      <path d="M 125 345 q 8 6 18 0 q 8 6 18 0"/>
+    </g>
+  </g>
+
+  <!-- ======== Triangle d'avertissement jaune (à la place de la tête) ======== -->
+  <g>
+    <polygon points="160,8 290,168 30,168" fill="#FFD60A" stroke="#0e1424" stroke-width="8" stroke-linejoin="round"/>
+    <polygon points="160,28 268,158 52,158" fill="#FFD60A" stroke="#0e1424" stroke-width="2"/>
+    <!-- Ouvrier qui creuse (icône standard chantier) -->
+    <g fill="#0e1424" transform="translate(160 115)">
+      <!-- Casque -->
+      <path d="M -20 -50 q 6 -10 18 -10 q 12 0 18 10 z" />
+      <!-- Bord casque -->
+      <rect x="-22" y="-50" width="44" height="4" rx="1"/>
+      <!-- Corps incliné -->
+      <path d="M -10 -42 L 6 -32 L 12 -10 L 2 4 L -14 -8 Z"/>
+      <!-- Bras + pelle (vers le bas-droite) -->
+      <rect x="-2" y="-30" width="4" height="32" transform="rotate(40 0 -14)"/>
+      <polygon points="22,-4 36,-10 30,8 18,4" />
+      <!-- Pile de terre -->
+      <path d="M 6 18 Q 22 4 38 18 Q 30 24 22 19 Q 14 24 6 18 Z"/>
+      <!-- Jambe -->
+      <rect x="-6" y="0" width="6" height="22"/>
+      <rect x="-6" y="20" width="14" height="4"/>
+    </g>
+  </g>
+</svg>

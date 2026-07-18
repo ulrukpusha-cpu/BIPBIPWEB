@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Moov Africa">
+  <rect width="120" height="120" rx="22" fill="#0A3D8F"/>
+  <text x="60" y="58" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="25" fill="#ffffff" text-anchor="middle">Moov</text>
+  <path d="M28 68 Q60 56 92 68" stroke="#F7941E" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <text x="60" y="90" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="16" fill="#F7941E" text-anchor="middle" letter-spacing="1">Africa</text>
+</svg>

@@ -22,11 +22,12 @@ router.get('/', (req, res) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
     const offset = parseInt(req.query.offset, 10) || 0;
     const sort = ['date', 'popularite'].includes(req.query.sort) ? req.query.sort : 'date';
-    const category = ['region', 'finance', 'tech', 'mode'].includes(req.query.category) ? req.query.category : null;
+    const category = ['region', 'finance', 'tech', 'mode', 'science', 'music'].includes(req.query.category) ? req.query.category : null;
+    const lang = req.query.lang === 'en' ? 'en' : 'fr';
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
-    actualitesService.listApproved(limit, offset, sort, category)
+    actualitesService.listApproved(limit, offset, sort, category, lang)
         .then(list => res.json({ actualites: list }))
         .catch(err => {
             console.error('actualites list:', err);
@@ -36,7 +37,7 @@ router.get('/', (req, res) => {
 
 // Détail d'une actualité par slug
 router.get('/slug/:slug', (req, res) => {
-    actualitesService.getBySlug(req.params.slug)
+    actualitesService.getBySlug(req.params.slug, req.query.lang === 'en' ? 'en' : 'fr')
         .then(article => {
             if (!article) return res.status(404).json({ error: 'Article introuvable' });
             res.json({ actualite: article });

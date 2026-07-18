@@ -257,6 +257,26 @@ async function approveSocialLink(telegramId) {
     return data ? { user: data } : { error: 'Utilisateur ou lien introuvable' };
 }
 
+// Retire un lien des Quêtes (désapprouve) sans le supprimer du profil.
+async function unapproveSocialLink(telegramId) {
+    const supabase = db.getSupabase();
+    if (!supabase) return { error: 'Base indisponible' };
+    const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+    const { data, error } = await supabase.from(tableName).update({ social_link_approved: false, updated_at: new Date().toISOString() }).eq('telegram_id', Number(telegramId)).select().single();
+    if (error) return { error: error.message };
+    return data ? { user: data } : { error: 'Utilisateur introuvable' };
+}
+
+// Supprime complètement le lien du profil (et le retire des Quêtes).
+async function removeSocialLink(telegramId) {
+    const supabase = db.getSupabase();
+    if (!supabase) return { error: 'Base indisponible' };
+    const tableName = process.env.TELEGRAM_USERS_TABLE || 'telegram_users';
+    const { data, error } = await supabase.from(tableName).update({ social_link: null, social_link_approved: false, updated_at: new Date().toISOString() }).eq('telegram_id', Number(telegramId)).select().single();
+    if (error) return { error: error.message };
+    return data ? { user: data } : { error: 'Utilisateur introuvable' };
+}
+
 /**
  * Génère un titre et une description attractifs selon le domaine/type du lien.
  */
@@ -484,6 +504,8 @@ module.exports = {
     listUsersWithSocialLink,
     listApprovedLinks,
     approveSocialLink,
+    unapproveSocialLink,
+    removeSocialLink,
     hasUserClickedLink,
     recordLinkClickAndAddPoints,
     POINTS_PER_LINK_CLICK,

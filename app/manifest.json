@@ -1,0 +1,17 @@
+{
+  "name": "Bipbip Recharge",
+  "short_name": "Bipbip",
+  "description": "Recharges mobiles MTN, Orange, Moov — édition saisonnière.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#0B1220",
+  "theme_color": "#2563EB",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/assets/bipbip_logo1.webp", "sizes": "192x192", "type": "image/webp" },
+    { "src": "/assets/bipbip_logo1.webp", "sizes": "512x512", "type": "image/webp", "purpose": "any maskable" }
+  ],
+  "categories": ["finance", "utilities"],
+  "lang": "fr"
+}

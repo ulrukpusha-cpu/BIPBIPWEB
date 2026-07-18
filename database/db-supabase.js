@@ -10,6 +10,23 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Retry court sur les LECTURES uniquement (idempotentes) pour absorber les
+// 522/timeouts intermittents de l'edge Cloudflare devant Supabase. Jamais sur
+// les ecritures (risque de doublon si la 1re a deja reussi cote serveur).
+async function withRetry(fn, label, tries = 3) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+        try { return await fn(); }
+        catch (e) {
+            lastErr = e;
+            if (i === tries - 1) break;
+            await new Promise(r => setTimeout(r, 300 * (i + 1)));
+        }
+    }
+    console.warn('[db-supabase] ' + (label || 'read') + ' KO apres ' + tries + ' essais:', (lastErr && lastErr.message) ? String(lastErr.message).split('\n')[0].slice(0, 160) : lastErr);
+    throw lastErr;
+}
+
 function rowToOrder(row) {
     if (!row) return null;
     return {
@@ -54,34 +71,40 @@ async function getOrderById(orderId) {
 }
 
 async function getOrdersPending() {
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .in('status', ['pending', 'proof_sent'])
-        .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(rowToOrder);
+    return withRetry(async () => {
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .in('status', ['pending', 'proof_sent'])
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(rowToOrder);
+    }, 'getOrdersPending');
 }
 
 async function getValidatedOrders() {
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('status', 'validated')
-        .order('validated_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(rowToOrder);
+    return withRetry(async () => {
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('status', 'validated')
+            .order('validated_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(rowToOrder);
+    }, 'getValidatedOrders');
 }
 
 async function getOrdersByStatus(status) {
     if (status === 'validated') return getValidatedOrders();
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('status', status)
-        .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(rowToOrder);
+    return withRetry(async () => {
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('status', status)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []).map(rowToOrder);
+    }, 'getOrdersByStatus(' + status + ')');
 }
 
 async function getAllOrders() {
@@ -103,7 +126,8 @@ async function updateOrderProof(orderId, proofPath, status = 'proof_sent', payme
     const { error } = await supabase
         .from('orders')
         .update(patch)
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .in('status', ['pending', 'proof_sent']);   // garde : ne PAS ecraser un statut final (deja valide / livre / rejete)
     if (error) throw error;
     return getOrderById(orderId);
 }
@@ -162,6 +186,19 @@ async function getOrdersByUserId(userId) {
     return (data || []).map(rowToOrder);
 }
 
+// Finalisation apres livraison USSD reussie : passe la commande a credit_delivered
+// / forfait_delivered (UPDATE idempotent). Absente auparavant -> les commandes
+// restaient bloquees en 'validated'. Pas de colonne delivered_at/delivery_type en base.
+async function setOrderDelivered(orderId, deliveryType = 'credit') {
+    const status = deliveryType === 'forfait' ? 'forfait_delivered' : 'credit_delivered';
+    const { error } = await supabase
+        .from('orders')
+        .update({ status })
+        .eq('id', orderId);
+    if (error) throw error;
+    return getOrderById(orderId);
+}
+
 module.exports = {
     supabase,
     getOrderById,
@@ -172,6 +209,7 @@ module.exports = {
     updateOrderProof,
     setOrderValidated,
     setOrderRejected,
+    setOrderDelivered,
     getStats,
     getOrdersByUserId
 };

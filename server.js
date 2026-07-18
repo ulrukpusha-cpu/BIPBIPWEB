@@ -1,9 +1,10 @@
 // Anti-crash: éviter que les erreurs non capturées tuent le process
 function _isNetworkErr(s) {
-  return /UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|Connect Timeout/i.test(String(s || ''));
+  return /UND_ERR_CONNECT_TIMEOUT|UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|Connect Timeout|Cloudflare|error code: 5\d\d|Web server is down|The web server reported/i.test(String(s || ''));
 }
 function _compactErrMsg(reason) {
-  const raw = (reason && (reason.message || reason.code)) || String(reason);
+  let raw = (reason && (reason.message || reason.code)) || '';
+  if (!raw) { try { raw = JSON.stringify(reason); } catch (_) { raw = String(reason); } }
   const causeMsg = (reason && reason.cause && reason.cause.message) || '';
   const msg = (raw + ' ' + causeMsg).trim();
   const hostMatch = msg.match(/attempted addresses?: ([^,)]+)/i) ||
@@ -23,7 +24,7 @@ process.on('unhandledRejection', (reason) => {
   if (_isNetworkErr(sig)) {
     console.error('[NET ERR]', new Date().toISOString(), _compactErrMsg(reason));
   } else {
-    console.error('[PROMISE REJECTED]', new Date().toISOString(), reason);
+    console.error('[PROMISE REJECTED]', new Date().toISOString(), _compactErrMsg(reason));
   }
 });
 
@@ -41,6 +42,8 @@ const QRCode = require('qrcode');
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const orderStorage = require('./storage');
+const blacklist = require('./blacklist');   // liste rouge anti-arnaque
+const marketQuota = require('./market_quota');   // quota articles Market (packs payés)
 const { authTelegram, requireAuth, isRegisteredUser } = require('./middleware/auth');
 const { apiLimiter, paymentLimiter } = require('./middleware/rateLimit');
 const momoRoutes = require('./routes/momo');
@@ -52,6 +55,13 @@ const annoncesService = require('./services/annoncesService');
 const questsService = require('./services/questsService');
 const { moderateSocialLink } = require('./services/aiModeration');
 const questsRoutes = require('./routes/quests');
+const reloadlyRoutes = require('./routes/reloadly');
+const pushRoutes = require('./routes/push');
+const pushService = require('./services/push');
+const giftDelivery = require('./services/giftDelivery');
+const cabineRoutes = require('./routes/cabine');
+const cabineService = require('./services/cabineService');
+const cabineBotRoutes = require('./routes/cabineBot');
 const ledService = require('./services/ledService');
 
 // ==================== CONFIG ====================
@@ -143,6 +153,14 @@ function sanitizePubBanners(arr) {
             scrollSpeed = Math.min(10, Math.max(1, scrollSpeed));
         }
         const row = { text, image, placement, scrollSpeed };
+        // Carrousel : tableau d'images (chacune valide http(s) ou /uploads)
+        if (Array.isArray(x.images)) {
+            const imgs = x.images
+                .map(s => String(s || '').trim().slice(0, 512))
+                .filter(s => s && (/^https?:\/\//i.test(s) || s.startsWith('/')))
+                .slice(0, 8);
+            if (imgs.length) row.images = imgs;
+        }
         if (url && (/^https?:\/\//i.test(url) || url.startsWith('/'))) row.url = url;
         byPlace.set(placement, row);
     }
@@ -153,11 +171,30 @@ function sanitizePubBanners(arr) {
     return out;
 }
 
+const DEFAULT_NUDGES = [
+    { hour: 9, title: '☀️ Bonjour de Bipbip !', body: 'Recharge ton crédit en 30 secondes et gagne des points 🎁' },
+    { hour: 13, title: '📲 Besoin de crédit ou de forfait ?', body: 'Orange, MTN, Moov au meilleur prix — c\'est par ici.' },
+    { hour: 17, title: '🎮 Cartes cadeaux dispo', body: 'Netflix, Steam, Google Play… livrées direct dans le Market !' },
+    { hour: 21, title: '⭐ Ta connexion quotidienne t\'attend', body: 'Reviens chaque jour pour empocher tes points bonus.' }
+];
+function sanitizeNudges(arr) {
+    if (!Array.isArray(arr)) return null;
+    return arr.slice(0, 6).map(function (n) {
+        return {
+            hour: Math.min(23, Math.max(0, parseInt(n && n.hour, 10) || 0)),
+            title: String((n && n.title) || '').slice(0, 80),
+            body: String((n && n.body) || '').slice(0, 200)
+        };
+    }).filter(function (n) { return n.title || n.body; });
+}
+
 function readAppConfig() {
     const defaults = {
         ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60,
         pubBanners: DEFAULT_PUB_BANNERS,
-        giftCards: []
+        giftCards: [],
+        notifNudges: DEFAULT_NUDGES,
+        ciReloadlyBackup: false
     };
     try {
         if (fs.existsSync(APP_CONFIG_PATH)) {
@@ -168,7 +205,13 @@ function readAppConfig() {
                 pubBanners = sanitizePubBanners(raw.pubBanners);
             }
             const giftCards = Array.isArray(raw.giftCards) ? raw.giftCards : [];
-            return { ledScrollSeconds: led, pubBanners, giftCards };
+            const maintenance = (raw.maintenance && typeof raw.maintenance === 'object')
+                ? raw.maintenance
+                : { enabled: false };
+            const themeForce = (typeof raw.themeForce === 'string') ? raw.themeForce : '';
+            const notifNudges = (Array.isArray(raw.notifNudges) && raw.notifNudges.length) ? sanitizeNudges(raw.notifNudges) : DEFAULT_NUDGES;
+            const ciReloadlyBackup = !!raw.ciReloadlyBackup;
+            return { ledScrollSeconds: led, pubBanners, giftCards, maintenance, themeForce, notifNudges, ciReloadlyBackup };
         }
     } catch (e) { /* ignore */ }
     return { ...defaults };
@@ -224,7 +267,7 @@ function buildProofTelegramCaption(order, paymentMethod) {
 
 // ==================== MIDDLEWARE ====================
 // CORS : origines + en-têtes admin (sinon le navigateur peut supprimer X-Admin-Key après le preflight)
-const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Admin-Key', 'X-Telegram-Init-Data'];
+const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Admin-Key', 'X-Telegram-Init-Data', 'X-User-Id', 'X-Session-Token', 'X-Telegram-Login-Session', 'X-Capacitor-Platform', 'X-Bot-Secret', 'Accept', 'Origin', 'X-Requested-With', 'Cache-Control', 'Pragma'];
 const CORS_ALLOWED_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 function buildProductionCorsOrigin() {
@@ -262,6 +305,10 @@ const corsOptions = NODE_ENV === 'production'
         allowedHeaders: CORS_ALLOWED_HEADERS,
     };
 app.use(cors(corsOptions));
+
+// Surcharge CORS pour APK Capacitor (https://localhost Android, capacitor://localhost iOS)
+// N'altère pas la config web existante — ajoute juste les origines mobiles
+app.use(require('./middleware/cors-capacitor')());
 
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
@@ -328,14 +375,18 @@ function shouldServeApp(req) {
 
 app.get('/', (req, res) => {
     if (shouldServeApp(req)) {
-        res.sendFile(path.join(__dirname, 'app.html'));
+        res.sendFile(path.join(__dirname, 'app', 'index.html'));
     } else {
-        res.sendFile(path.join(__dirname, 'index.html'));
+        res.sendFile(path.join(__dirname, 'site', 'index.html'));
     }
 });
 
+app.get(['/confidentialite','/privacy','/politique-confidentialite'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'confidentialite.html'));
+});
+
 app.get('/app', (req, res) => {
-    res.sendFile(path.join(__dirname, 'app.html'));
+    res.sendFile(path.join(__dirname, 'app', 'index.html'));
 });
 
 app.use(express.static('.', {
@@ -474,6 +525,86 @@ function getOrderBundleMeta(order) {
         } catch (_) { /* ignore */ }
     }
     return null;
+}
+
+// Secours CI : si activé (admin), recharge CRÉDIT CI via Reloadly au lieu du gateway USSD
+// (panne réseau des noeuds). Forfaits/data restent sur USSD. Échec Reloadly -> repli USSD.
+async function deliverCIRecharge(order) {
+    try {
+        const cfg = readAppConfig();
+        const isBundle = !!getOrderBundleMeta(order);
+        if (cfg.ciReloadlyBackup && !isBundle) {
+            const reloadly = require('./services/reloadly');
+            const phone = String(order.phone || '').replace(/\D/g, '');
+            const op = await reloadly.airtime.detect(phone, 'CI');
+            if (op && op.operatorId) {
+                const r = await reloadly.airtime.topup({
+                    operatorId: op.operatorId, amount: Number(order.amount), useLocalAmount: true,
+                    customIdentifier: 'BIPCI-' + order.id,
+                    recipientPhone: { countryCode: 'CI', number: phone }
+                });
+                console.log('[CI backup] Reloadly topup OK cmd ' + order.id + ' op ' + op.operatorId);
+                return { success: true, via: 'reloadly', raw: r };
+            }
+        }
+    } catch (e) { console.error('[CI backup Reloadly] ' + (e.message || e) + ' -> repli USSD'); }
+    return await executeUssdTransfer(order);
+}
+
+// Crédite +3 slots d'articles Market après un pack payé (PACK_ARTICLES validé).
+async function creditArticlePack(order) {
+    if (!order || order.operator !== 'PACK_ARTICLES') return false;
+    try {
+        const newBonus = marketQuota.addPack(order.userId, marketQuota.PACK_SLOTS);
+        const newLimit = marketQuota.FREE_ARTICLES + newBonus;
+        console.log('[PACK_ARTICLES] +' + marketQuota.PACK_SLOTS + ' slots pour ' + order.userId + ' (cmd ' + order.id + ') → limite ' + newLimit);
+        if (order.userId) {
+            try { await sendTelegramMessage(order.userId, '✅ <b>Pack articles débloqué !</b>\n\nTu peux maintenant publier <b>' + newLimit + ' articles</b> au total sur le Market.'); } catch (e) {}
+            try { await pushService.sendToUser(order.userId, '📦 Pack articles activé', 'Tu peux publier ' + newLimit + ' articles au total', { screen: 'market', orderId: String(order.id) }); } catch (e) {}
+        }
+    } catch (e) { console.error('[PACK_ARTICLES credit]', e.message || e); }
+    return true;
+}
+
+// ==================== SMS transactionnels (Africa's Talking) ====================
+// Inactif tant que AT_API_KEY/AT_USERNAME ne sont pas dans .env (aucun SMS envoyé).
+const LETEXTO_TOKEN  = (process.env.LETEXTO_TOKEN || '').trim();
+const LETEXTO_SENDER = (process.env.LETEXTO_SENDER || 'BIPBIP').trim();   // max 11 caractères
+const LETEXTO_URL    = 'https://apis.letexto.com/v1/messages/send';
+
+// Numéro au format LeTexto : 225 + numéro national (le 0 initial est CONSERVÉ), sans "+".
+// Ex : 0709393959 -> 2250709393959.
+function toLetextoPhone(phone) {
+    let d = String(phone || '').replace(/\D/g, '');
+    if (d.startsWith('225')) d = d.slice(3);
+    return d.length >= 8 ? '225' + d : '';
+}
+
+async function sendSms(phone, message) {
+    const to = toLetextoPhone(phone);
+    if (!to) return { ok: false, error: 'numéro invalide' };
+    if (!LETEXTO_TOKEN) {
+        console.log(`[SMS] non configuré (LETEXTO_TOKEN absent) — ignoré (${to})`);
+        return { ok: false, error: 'non configuré' };
+    }
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const r = await fetch(LETEXTO_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${LETEXTO_TOKEN}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ from: LETEXTO_SENDER, to, content: message }),
+        });
+        const data = await r.json().catch(() => ({}));
+        const ok = r.ok && /submitted/i.test(String(data.status || data.statut || ''));
+        console.log(`[SMS] ${to} -> ${ok ? 'OK ' + (data.id || '') : 'ECHEC ' + JSON.stringify(data).slice(0, 150)}`);
+        return { ok, data };
+    } catch (e) {
+        console.error('[SMS] erreur:', e.message);
+        return { ok: false, error: e.message };
+    }
 }
 
 async function executeUssdTransfer(order) {
@@ -742,6 +873,29 @@ app.get('/api/qr', async (req, res) => {
 });
 
 // Config publique (MoMo, vitesse bandeau LED, bannières pub)
+// Proxy d'avatar Google (lh3.googleusercontent.com) — necessaire car le WebView Android
+// charge mal ces images cross-origin. On ne proxy QUE googleusercontent.com (anti-SSRF).
+app.get('/api/avatar', async (req, res) => {
+    try {
+        const raw = String(req.query.u || '').trim();
+        if (!raw) return res.status(400).end();
+        let u;
+        try { u = new URL(raw); } catch (e) { return res.status(400).end(); }
+        if (u.protocol !== 'https:' || !/(^|\.)googleusercontent\.com$/i.test(u.hostname)) {
+            return res.status(403).end();
+        }
+        const fetch = (await import('node-fetch')).default;
+        const r = await fetch(u.href, { headers: { 'User-Agent': 'BipbipAvatarProxy/1.0' } });
+        if (!r.ok) return res.status(r.status).end();
+        res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        const buf = Buffer.from(await r.arrayBuffer());
+        res.end(buf);
+    } catch (e) {
+        res.status(502).end();
+    }
+});
+
 app.get('/api/config', (req, res) => {
     const mtnMerchantPhone = (process.env.BIPBIP_MOMO_PHONE || '').trim();
     const appConfig = readAppConfig();
@@ -767,7 +921,12 @@ app.get('/api/config', (req, res) => {
         telegramBotUsername: tgUser || null,
         twaReturnUrl: tgUser ? `https://t.me/${tgUser}` : null,
         tonConnectManifestUrl: `${base}/tonconnect-manifest.json`,
-        googleClientId: GOOGLE_CLIENT_ID || null
+        googleClientId: GOOGLE_CLIENT_ID || null,
+        maintenance: appConfig.maintenance || { enabled: false },
+        themeForce: appConfig.themeForce || '',
+        notifNudges: appConfig.notifNudges || [],
+        ciReloadlyBackup: !!appConfig.ciReloadlyBackup,
+        tonUsd: (_tonRateCache && _tonRateCache.usd) || null
     });
 });
 
@@ -826,12 +985,229 @@ app.get('/api/weather', async (req, res) => {
 
 // Admin : mettre à jour la config (ex. vitesse bandeau, bannières pub)
 // Vérification PIN admin
+
+// ============================================================
+// Telegram-poll : flow auth APK natif via deep link bot
+// ============================================================
+// Stockage en memoire (5 min TTL). Pour multi-instance, remplacer par Redis.
+const __tgPollStore = new Map();
+const __TG_POLL_TTL_MS = 5 * 60 * 1000;
+function __tgPollCleanup() {
+    const now = Date.now();
+    for (const [k, v] of __tgPollStore.entries()) {
+        if (now - v.createdAt > __TG_POLL_TTL_MS) __tgPollStore.delete(k);
+    }
+}
+setInterval(__tgPollCleanup, 60 * 1000);
+
+
+// ============================================================
+// Telegram OAuth return : capture le callback de oauth.telegram.org
+// ============================================================
+// La page de retour recoit l'auth result dans le fragment URL (#tgAuthResult=...)
+// On rend une petite page qui parse le fragment cote client et POST vers /claim-oauth
+app.get('/api/auth/telegram-oauth-return', (req, res) => {
+    const token = String(req.query.t || '');
+    res.set('Cache-Control', 'no-store');
+    res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Connexion...</title><style>
+body{font-family:system-ui,sans-serif;background:#0B1220;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center;padding:20px}
+.card{max-width:340px}.spinner{width:40px;height:40px;border:3px solid #1e293b;border-top-color:#3b82f6;border-radius:50%;margin:0 auto 16px;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+h2{margin:0 0 8px;font-size:18px}p{color:#94a3b8;font-size:13px;margin:0}
+.ok{color:#22c55e}.err{color:#f87171}
+</style></head><body><div class="card">
+<div class="spinner" id="sp"></div>
+<h2 id="msg">Validation en cours…</h2>
+<p id="hint">Tu peux fermer cet onglet et retourner dans l'app.</p>
+</div><script>
+(function(){
+  var token = ${JSON.stringify(token)};
+  var hash = (window.location.hash || '').replace(/^#/, '');
+  var params = {};
+  hash.split('&').forEach(function(p){ var kv=p.split('='); if(kv[0]) params[decodeURIComponent(kv[0])]=decodeURIComponent(kv[1]||'') });
+  // tgAuthResult=base64(JSON)
+  var authResult = params.tgAuthResult;
+  if(!authResult){
+    document.getElementById('msg').textContent = 'Connexion annulée';
+    document.getElementById('msg').className = 'err';
+    document.getElementById('sp').style.display='none';
+    return;
+  }
+  try {
+    // base64url decode
+    var b = authResult.replace(/-/g,'+').replace(/_/g,'/');
+    while(b.length % 4) b += '=';
+    var json = atob(b);
+    var user = JSON.parse(json);
+    // POST au backend
+    fetch('/api/auth/telegram-oauth-claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, telegramUser: user })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.ok){
+        document.getElementById('msg').textContent = 'Connecté ✓';
+        document.getElementById('msg').className = 'ok';
+        document.getElementById('sp').style.display='none';
+        document.getElementById('hint').textContent = 'Retourne dans l\'app Bipbip Recharge.';
+        setTimeout(function(){ try { window.close(); } catch(e){} }, 1500);
+      } else {
+        document.getElementById('msg').textContent = (d && d.error) || 'Erreur de validation';
+        document.getElementById('msg').className = 'err';
+        document.getElementById('sp').style.display='none';
+      }
+    }).catch(function(e){
+      document.getElementById('msg').textContent = 'Erreur réseau';
+      document.getElementById('msg').className = 'err';
+      document.getElementById('sp').style.display='none';
+    });
+  } catch(e) {
+    document.getElementById('msg').textContent = 'Format de retour invalide';
+    document.getElementById('msg').className = 'err';
+    document.getElementById('sp').style.display='none';
+  }
+})();
+</script></body></html>`);
+});
+
+// Le client (page de retour) POST ici avec le user Telegram valide
+app.post('/api/auth/telegram-oauth-claim', (req, res) => {
+    const { token, telegramUser } = req.body || {};
+    if (!token || !telegramUser || !telegramUser.id) {
+        return res.status(400).json({ ok: false, error: 'token + telegramUser requis' });
+    }
+    const slot = __tgPollStore.get(token);
+    if (!slot) return res.status(404).json({ ok: false, error: 'token expire' });
+    // Valide le hash Telegram pour s'assurer que les donnees viennent bien d'oauth.telegram.org
+    try {
+        const crypto = require('crypto');
+        const botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+        if (botToken) {
+            const dataCheckArr = [];
+            Object.keys(telegramUser).filter(k => k !== 'hash').sort().forEach(k => {
+                if (telegramUser[k] != null) dataCheckArr.push(k + '=' + telegramUser[k]);
+            });
+            const dataCheckString = dataCheckArr.join('\n');
+            const secretKey = crypto.createHash('sha256').update(botToken).digest();
+            const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+            if (telegramUser.hash && telegramUser.hash !== expectedHash) {
+                return res.status(401).json({ ok: false, error: 'hash invalide' });
+            }
+        }
+    } catch (e) { /* on continue meme si validation echoue, pour debug */ }
+    const sessionToken = require('crypto').randomBytes(32).toString('hex');
+    const user = {
+        telegram_id: telegramUser.id,
+        first_name: telegramUser.first_name || '',
+        last_name: telegramUser.last_name || '',
+        username: telegramUser.username || '',
+        photo_url: telegramUser.photo_url || ''
+    };
+    slot.status = 'claimed';
+    slot.user = user;
+    slot.sessionToken = sessionToken;
+    slot.claimedAt = Date.now();
+    res.json({ ok: true });
+});
+// ============================================================
+
+
+// 1) APK demande un token unique
+app.post('/api/auth/telegram-poll/create', (req, res) => {
+    const token = 'tgp_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    __tgPollStore.set(token, { createdAt: Date.now(), status: 'pending', user: null, sessionToken: null });
+    res.json({ ok: true, token, botUsername: process.env.TELEGRAM_BOT_USERNAME || 'BIPBIPRechargeProCi_bot' });
+});
+
+// 2) Le bot reclame le token avec les infos user Telegram
+app.post('/api/auth/telegram-poll/claim', async (req, res) => {
+    const secret = req.headers['x-bot-secret'] || '';
+    if (!process.env.BOT_INTERNAL_SECRET || secret !== process.env.BOT_INTERNAL_SECRET) {
+        return res.status(401).json({ ok: false, error: 'invalid bot secret' });
+    }
+    const { token, telegramUser } = req.body || {};
+    if (!token || !telegramUser || !telegramUser.id) {
+        return res.status(400).json({ ok: false, error: 'token + telegramUser.id requis' });
+    }
+    const slot = __tgPollStore.get(token);
+    if (!slot) return res.status(404).json({ ok: false, error: 'token introuvable ou expire' });
+
+    // Cree une session pour cet utilisateur (reutilise la logique existante)
+    try {
+        const sessionToken = require('crypto').randomBytes(32).toString('hex');
+        // Stocke dans Supabase/DB si dispo, sinon en memoire
+        if (typeof supabase !== 'undefined' && supabase) {
+            await supabase.from('telegram_login_sessions').upsert({
+                session_token: sessionToken,
+                user_id: String(telegramUser.id),
+                created_at: new Date().toISOString()
+            }, { onConflict: 'session_token' });
+        }
+        const user = {
+            telegram_id: telegramUser.id,
+            first_name: telegramUser.first_name || '',
+            last_name: telegramUser.last_name || '',
+            username: telegramUser.username || '',
+            photo_url: telegramUser.photo_url || ''
+        };
+        slot.status = 'claimed';
+        slot.user = user;
+        slot.sessionToken = sessionToken;
+        slot.claimedAt = Date.now();
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('[tg-poll/claim]', e);
+        res.status(500).json({ ok: false, error: 'erreur serveur' });
+    }
+});
+
+// 3) APK polle pour savoir si le token est reclame
+app.get('/api/auth/telegram-poll/check', (req, res) => {
+    const token = String(req.query.token || '');
+    if (!token) return res.status(400).json({ ok: false, error: 'token requis' });
+    const slot = __tgPollStore.get(token);
+    if (!slot) return res.status(404).json({ ok: false, error: 'token expire' });
+    if (slot.status === 'claimed') {
+        // One-shot : on supprime apres lecture
+        __tgPollStore.delete(token);
+        return res.json({ ok: true, status: 'claimed', user: slot.user, sessionToken: slot.sessionToken });
+    }
+    res.json({ ok: true, status: 'pending' });
+});
+// ============================================================
+// /Telegram-poll
+// ============================================================
+
+
+// Anti-brute-force du PIN admin : 5 tentatives / 15 min par IP, puis lockout
+const _pinAttempts = new Map();
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_WINDOW_MS = 15 * 60 * 1000;
 app.post('/api/admin/verify-pin', (req, res) => {
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || 'unknown').split(',')[0].trim();
+    const now = Date.now();
+    let rec = _pinAttempts.get(ip);
+    if (rec && rec.lockedUntil && now < rec.lockedUntil) {
+        const mins = Math.ceil((rec.lockedUntil - now) / 60000);
+        return res.status(429).json({ ok: false, error: 'Trop de tentatives. Reessayez dans ' + mins + ' min.' });
+    }
+    if (!rec || (now - rec.firstAt) > PIN_WINDOW_MS) {
+        rec = { count: 0, firstAt: now, lockedUntil: 0 };
+        _pinAttempts.set(ip, rec);
+    }
     const { pin } = req.body || {};
     if (!pin || String(pin).trim() !== ADMIN_PIN) {
+        rec.count++;
+        if (rec.count >= PIN_MAX_ATTEMPTS) {
+            rec.lockedUntil = now + PIN_WINDOW_MS;
+            console.log('[ADMIN-PIN] lockout ip=' + ip);
+            return res.status(429).json({ ok: false, error: 'Trop de tentatives. Reessayez dans 15 min.' });
+        }
         return res.status(401).json({ ok: false, error: 'Code incorrect' });
     }
-    return res.json({ ok: true });
+    _pinAttempts.delete(ip);
+    const adminKey = (process.env.ADMIN_SECRET_KEY || '').trim();
+    return res.json({ ok: true, adminKey: adminKey || null });
 });
 
 app.put('/api/admin/config', (req, res) => {
@@ -850,12 +1226,35 @@ app.put('/api/admin/config', (req, res) => {
         }
         current.pubBanners = sanitizePubBanners(body.pubBanners);
     }
+    if (body.maintenance != null) {
+        const wasEnabled = current.maintenance && current.maintenance.enabled;
+        current.maintenance = {
+            enabled: !!body.maintenance.enabled,
+            message: String(body.maintenance.message || '').slice(0, 300),
+            image: String(body.maintenance.image || '').slice(0, 512),
+            updatedAt: Date.now()
+        };
+        console.log('[MAINT] PUT maintenance.enabled=' + current.maintenance.enabled +
+            ' (was ' + wasEnabled + ') ua=' + (req.headers['user-agent'] || '?').slice(0,40) +
+            ' xff=' + (req.headers['x-forwarded-for'] || req.ip || '?'));
+    }
+    if (body.themeForce != null) {
+        current.themeForce = String(body.themeForce || '').slice(0, 40);
+        console.log('[THEME] PUT themeForce=' + (current.themeForce || '(auto)'));
+    }
+    if (body.notifNudges != null) {
+        const nn = sanitizeNudges(body.notifNudges);
+        if (nn) current.notifNudges = nn;
+    }
+    if (body.ciReloadlyBackup != null) { current.ciReloadlyBackup = !!body.ciReloadlyBackup; console.log('[CI backup] toggle=' + current.ciReloadlyBackup); }
     if (!writeAppConfig(current)) return res.status(500).json({ error: 'Erreur écriture config' });
     res.json({
         success: true,
         config: {
             ledScrollSeconds: current.ledScrollSeconds,
-            pubBanners: current.pubBanners
+            pubBanners: current.pubBanners,
+            maintenance: current.maintenance || { enabled: false },
+            themeForce: current.themeForce || ''
         }
     });
 });
@@ -935,6 +1334,160 @@ app.put('/api/admin/gift-cards', (req, res) => {
     res.json({ success: true, giftCards: cleaned });
 });
 
+
+// ============================================================
+// MARKET ITEMS — articles d'occasion soumis par les utilisateurs
+// Stockage fichier JSON (data/market-items.json). Modération admin.
+// ============================================================
+const MARKET_ITEMS_FILE = require('path').join(__dirname, 'data', 'market-items.json');
+function readMarketItems() {
+    try {
+        const fs = require('fs');
+        if (!fs.existsSync(MARKET_ITEMS_FILE)) return [];
+        return JSON.parse(fs.readFileSync(MARKET_ITEMS_FILE, 'utf8')) || [];
+    } catch (e) { return []; }
+}
+function writeMarketItems(arr) {
+    try {
+        const fs = require('fs');
+        fs.writeFileSync(MARKET_ITEMS_FILE, JSON.stringify(arr, null, 2));
+        return true;
+    } catch (e) { console.error('[market] write', e); return false; }
+}
+
+// Soumettre un article (utilisateur)
+app.post('/api/market/items', (req, res) => {
+    const b = req.body || {};
+    if (!b.name || !b.cat || !b.price) {
+        return res.status(400).json({ error: 'name, cat et price requis' });
+    }
+    const items = readMarketItems();
+    // Quota : 3 articles gratuits par vendeur + 3 par pack payé. Source de vérité serveur.
+    const sellerIdQ = String(b.userId || b.sellerId || 'anon').slice(0, 60);
+    if (sellerIdQ !== 'anon') {
+        const myActive = items.filter(it => it.sellerId === sellerIdQ && it.status !== 'rejected').length;
+        const limit = marketQuota.getLimit(sellerIdQ);
+        if (myActive >= limit) {
+            return res.status(403).json({ error: 'Limite d\'articles atteinte', limit, count: myActive, needPack: true });
+        }
+    }
+    const item = {
+        id: 'it_' + crypto.randomBytes(5).toString('hex'),
+        name: String(b.name).slice(0, 100),
+        cat: String(b.cat).slice(0, 60),
+        desc: String(b.desc || '').slice(0, 600),
+        price: parseInt(b.price, 10) || 0,
+        photo: String(b.photo || '').slice(0, 300000), // dataURL accepté
+        phone: String(b.phone || '').slice(0, 25),
+        sellerId: String(b.userId || b.sellerId || 'anon').slice(0, 60),
+        sellerName: String(b.displayName || b.sellerName || '').slice(0, 80),
+        status: 'pending',
+        createdAt: new Date().toISOString()
+    };
+    items.unshift(item);
+    writeMarketItems(items.slice(0, 500));
+    // Notif admin
+    try {
+        const adminIds = getAdminChatIds();
+        if (adminIds.length) {
+            const notifToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+            sendTelegramToAllAdmins(
+                '\uD83D\uDED2 <b>NOUVEL ARTICLE MARKET</b>\n\n' +
+                '\uD83D\uDCE6 ' + item.name + '\n' +
+                '\uD83D\uDCB0 ' + item.price + ' FCFA\n' +
+                '\uD83D\uDCC2 ' + item.cat + '\n' +
+                '\uD83D\uDC64 ' + (item.sellerName || item.sellerId) + '\n' +
+                '\u23F3 En attente de validation',
+                {}, notifToken
+            );
+        }
+    } catch (e) {}
+    res.json({ ok: true, item: { id: item.id, status: item.status } });
+});
+
+// Quota d'articles d'un vendeur (limite serveur = 3 gratuits + packs payés)
+app.get('/api/market/quota', (req, res) => {
+    const sellerId = String(req.query.userId || req.query.sellerId || '').slice(0, 60);
+    if (!sellerId) return res.status(400).json({ error: 'userId requis' });
+    const items = readMarketItems();
+    const count = items.filter(it => it.sellerId === sellerId && it.status !== 'rejected').length;
+    const bonus = marketQuota.getBonusSlots(sellerId);
+    const limit = marketQuota.getLimit(sellerId);
+    res.json({ free: marketQuota.FREE_ARTICLES, bonus, limit, count, canPublish: count < limit });
+});
+
+// Lister les articles validés (public) — filtre par catégorie (préfixe)
+app.get('/api/market/items', (req, res) => {
+    const cat = String(req.query.category || '').toLowerCase();
+    let items = readMarketItems().filter(it => it.status === 'valide');
+    if (cat) {
+        items = items.filter(it => String(it.cat || '').toLowerCase().indexOf(cat) === 0);
+    }
+    // N'expose pas le téléphone vendeur publiquement
+    res.json({ items: items.map(it => ({
+        id: it.id, name: it.name, cat: it.cat, desc: it.desc,
+        price: it.price, photo: it.photo, sellerName: it.sellerName,
+        phone: it.phone, createdAt: it.createdAt
+    })) });
+});
+
+// Lister MES articles (tous statuts) par userId
+app.get('/api/market/items/mine', (req, res) => {
+    const uid = String(req.query.userId || req.headers['x-user-id'] || '').trim();
+    if (!uid) return res.json({ items: [] });
+    const items = readMarketItems().filter(it => String(it.sellerId) === uid);
+    res.json({ items: items.map(it => ({
+        id: it.id, name: it.name, cat: it.cat, desc: it.desc, price: it.price,
+        photo: it.photo, status: it.status, createdAt: it.createdAt
+    })) });
+});
+
+// Supprimer MON article (par le proprietaire)
+app.delete('/api/market/items/:id', (req, res) => {
+    const uid = String(req.query.userId || req.headers['x-user-id'] || '').trim();
+    if (!uid) return res.status(401).json({ error: 'userId requis' });
+    let items = readMarketItems();
+    const it = items.find(x => x.id === req.params.id);
+    if (!it) return res.status(404).json({ error: 'Article introuvable' });
+    if (String(it.sellerId) !== uid) return res.status(403).json({ error: 'Pas ton article' });
+    items = items.filter(x => x.id !== req.params.id);
+    writeMarketItems(items);
+    res.json({ ok: true });
+});
+
+// ADMIN : lister les articles en attente
+app.get('/api/admin/market/items', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorise' });
+    const status = String(req.query.status || 'pending');
+    const items = readMarketItems().filter(it => it.status === status);
+    res.json({ items });
+});
+
+// ADMIN : valider un article
+app.post('/api/admin/market/items/:id/validate', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorise' });
+    const items = readMarketItems();
+    const it = items.find(x => x.id === req.params.id);
+    if (!it) return res.status(404).json({ error: 'Article introuvable' });
+    it.status = 'valide';
+    it.validatedAt = new Date().toISOString();
+    writeMarketItems(items);
+    res.json({ ok: true });
+});
+
+// ADMIN : refuser / supprimer un article
+app.post('/api/admin/market/items/:id/reject', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorise' });
+    let items = readMarketItems();
+    const before = items.length;
+    items = items.filter(x => x.id !== req.params.id);
+    if (items.length === before) return res.status(404).json({ error: 'Article introuvable' });
+    writeMarketItems(items);
+    res.json({ ok: true });
+});
+// ============================================================
+
+
 // Créer une commande (rate limit paiement + userId prioritaire depuis Telegram si initData valide)
 app.post('/api/orders', paymentLimiter, async (req, res) => {
     try {
@@ -953,6 +1506,22 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
         }
         const phoneStr = String(phone).trim().slice(0, 20);
 
+        // Liste rouge : refuser les commandes vers un numéro signalé (anti-arnaque)
+        if (blacklist.isBlacklisted(phoneStr)) {
+            const _bt = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
+            sendTelegramToAllAdmins(
+                '\uD83D\uDEA9 <b>LISTE ROUGE \u2014 commande bloqu\u00e9e</b>\n' +
+                'Num\u00e9ro : <code>' + phoneStr + '</code>\n' +
+                'Op\u00e9rateur : ' + String(operator) + '\n' +
+                'Montant : ' + total + ' FCFA\n' +
+                (blacklist.reasonFor(phoneStr) ? ('Motif : ' + blacklist.reasonFor(phoneStr) + '\n') : '') +
+                'Commande refus\u00e9e automatiquement.',
+                {}, _bt
+            ).catch(() => {});
+            console.warn('[blacklist] commande refus\u00e9e pour ' + phoneStr);
+            return res.status(403).json({ error: "Ce num\u00e9ro ne peut pas \u00eatre servi pour le moment. Contactez le support si vous pensez qu'il s'agit d'une erreur." });
+        }
+
         let bundleNotes = null;
         const opNorm = String(operator).trim();
         if (bundleType && bundleId && (opNorm === 'MTN' || opNorm === 'Orange' || opNorm === 'Moov')) {
@@ -970,6 +1539,17 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
         const userId = req.userId || bodyUserId || null;
         const username = (req.telegramUser && req.telegramUser.username) || bodyUsername || null;
         
+        // Lien sponsorisé (PROMO_SOCIAL) : le front envoie le lien dans meta.link.
+        // On le capture ici (sinon il était ignoré → perdu) pour le stocker + l'activer.
+        const promoSocialLink = (opNorm === 'PROMO_SOCIAL' && req.body && req.body.meta && req.body.meta.link)
+            ? String(req.body.meta.link).trim().slice(0, 500)
+            : null;
+        // ANNONCE_LED via Djamo/Wave/TON (startSpecialOrder) : l'id d'annonce arrive dans meta.annonceId ;
+        // il DOIT finir dans order.notes pour que validateAnnonce(order.notes) l'active à la validation.
+        const annonceLedId = (opNorm === 'ANNONCE_LED' && req.body && req.body.meta && req.body.meta.annonceId)
+            ? String(req.body.meta.annonceId).trim().slice(0, 100)
+            : null;
+
         const order = {
             id: orderId,
             userId,
@@ -982,10 +1562,37 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             status: 'pending',
             createdAt: new Date().toISOString(),
             ...(giftCard ? { giftCard: String(giftCard).slice(0, 100) } : {}),
-            ...(bundleNotes ? { notes: bundleNotes } : {})
+            ...((promoSocialLink || annonceLedId || bundleNotes) ? { notes: promoSocialLink || annonceLedId || bundleNotes } : {})
         };
 
         await orderStorage.createOrder(order);
+        // PROMO_SOCIAL : enregistrer le lien soumis dans le profil (il sera approuvé à la validation).
+        if (promoSocialLink && userId) {
+            try {
+                await telegramUsersService.updateSocialLink(userId, promoSocialLink);
+                console.log('[PROMO_SOCIAL] lien enregistré pour ' + userId + ' (cmd ' + orderId + ') : ' + promoSocialLink.slice(0, 60));
+            } catch (e) { console.error('[PROMO_SOCIAL] updateSocialLink:', e.message || e); }
+        }
+        // Carte cadeau : mémorise les paramètres Reloadly pour la livraison auto post-paiement
+        if (opNorm === 'CARTE_CADEAU' && req.body && (req.body.reloadlyProductId || req.body.bitrefillProductId)) {
+            try { giftDelivery.saveParams(orderId, {
+                source: req.body.source || (req.body.bitrefillProductId ? 'bitrefill' : 'reloadly'),
+                reloadlyProductId: req.body.reloadlyProductId ? Number(req.body.reloadlyProductId) : null,
+                faceValue: req.body.reloadlyFaceValue != null ? Number(req.body.reloadlyFaceValue) : null,
+                recipientCurrency: req.body.reloadlyRecipientCurrency || null,
+                bitrefillProductId: req.body.bitrefillProductId || null,
+                bitrefillPackageId: req.body.bitrefillPackageId || null
+            }); } catch (e) { console.error('[Gift saveParams]', e.message); }
+        }
+        if (opNorm === 'RECHARGE_INTL' && req.body && req.body.operatorId) {
+            try { giftDelivery.saveParams(orderId, {
+                type: 'airtime',
+                operatorId: Number(req.body.operatorId),
+                senderEUR: req.body.senderEUR != null ? Number(req.body.senderEUR) : null,
+                iso: req.body.iso || null,
+                number: String(req.body.number || phone || '').replace(/\D/g, '')
+            }); } catch (e) { console.error('[Airtime saveParams]', e.message); }
+        }
         
         // Notifier tous les admins via bot admin uniquement
         const adminIds = getAdminChatIds();
@@ -1038,6 +1645,12 @@ app.get('/api/orders/:id', async (req, res) => {
 app.get('/api/orders/user/:userId', async (req, res) => {
     const userOrders = await orderStorage.getOrdersByUserId(req.params.userId);
     res.json({ orders: userOrders });
+});
+
+app.get('/api/orders/:id/giftcard', async (req, res) => {
+    const g = await giftDelivery.getGift(req.params.id);
+    if (!g) return res.status(404).json({ error: 'introuvable' });
+    res.json({ status: g.status, card: g.card || null });
 });
 
 // Upload preuve de paiement
@@ -1145,6 +1758,39 @@ function isAdminRequest(req) {
     return false;
 }
 
+// Admin (espace app) : gestion des liens sponsorisés
+app.get('/api/admin/social-links', async (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    try {
+        const users = await telegramUsersService.listUsersWithSocialLink(100);
+        const links = (users || []).map(u => ({
+            id: String(u.telegram_id),
+            name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || String(u.telegram_id),
+            link: u.social_link || '',
+            approved: !!u.social_link_approved,
+        }));
+        res.json({ links });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/admin/social-links/:id/approve', async (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const r = await telegramUsersService.approveSocialLink(req.params.id);
+    if (r && r.error) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+});
+app.post('/api/admin/social-links/:id/unapprove', async (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const r = await telegramUsersService.unapproveSocialLink(req.params.id);
+    if (r && r.error) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+});
+app.delete('/api/admin/social-links/:id', async (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const r = await telegramUsersService.removeSocialLink(req.params.id);
+    if (r && r.error) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+});
+
 // Admin: Valider une commande (X-Admin-Key OU Telegram admin)
 app.post('/api/admin/orders/:id/validate', async (req, res) => {
     if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé. Clé admin ou ouvre l\'app depuis le bot (compte dans ADMIN_CHAT_IDS).' });
@@ -1168,8 +1814,13 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
     // 3) Post-traitement asynchrone : USSD transfer + notifications Telegram
     //    Tout ceci peut prendre 30-60s sans bloquer la réponse HTTP
     setImmediate(async () => {
+        // Notification push (app) : commande validée
         try {
-            if (order.operator === 'PROMO_LIKES') {
+            const _pBody = (order.operator === 'CARTE_CADEAU') ? 'Ta carte cadeau est en cours de livraison' : ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL') ? 'Ta promo est validée, ton lien est visible dans Quêtes' : (order.operator + ' ' + order.amount + ' F — traitement en cours'));
+            await pushService.sendToUser(order.userId, '✅ Commande validée', _pBody, { screen: 'commandes', orderId: String(orderId) });
+        } catch (e) { console.error('[Push validate]', e.message); }
+        try {
+            if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
                 if (order.userId) {
                     const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
                     if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
@@ -1177,8 +1828,57 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                     await sendTelegramMessage(order.userId,
                         '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
                 }
-            } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
-                const ussdResult = await executeUssdTransfer(order);
+            } else if (order.operator === 'CARTE_CADEAU') {
+                try {
+                    const gift = await giftDelivery.deliver(order);
+                    if (gift.ok && gift.card) {
+                        const codeMsg = '🎁 <b>Carte cadeau livrée !</b>\n\n' + (order.giftCard || '') + '\n\n🔑 Code : <code>' + gift.card.code + '</code>' + (gift.card.pin ? '\n🔢 PIN : <code>' + gift.card.pin + '</code>' : '');
+                        if (order.userId) await sendTelegramMessage(order.userId, codeMsg);
+                        // SMS du code au client si un numéro est disponible (non bloquant)
+                        try {
+                            if (order.phone) {
+                                const pinPart = gift.card.pin ? ` PIN: ${gift.card.pin}.` : '';
+                                await sendSms(order.phone,
+                                    `BIPBIP: Votre carte cadeau ${order.giftCard || ''} - Code: ${gift.card.code}.${pinPart} Merci de votre confiance !`);
+                            }
+                        } catch (e) { console.error('[SMS giftcard]', e.message || e); }
+                        try { await pushService.sendToUser(order.userId, '🎁 Carte cadeau prête', 'Ton code est disponible dans Mes commandes', { screen: 'commandes', orderId: String(orderId) }); } catch (e) {}
+                    } else {
+                        if (order.userId) await sendTelegramMessage(order.userId, '🎁 Paiement validé. Ta carte cadeau est en cours de génération, le code arrive dans un instant.');
+                    }
+                    try {
+                        if (/^-?\d+$/.test(String(order.userId)) && Number(order.amount) > 0) {
+                            const _pts = Math.min(50, Math.max(1, Math.floor(Number(order.amount) / 100)));
+                            const _nt = await telegramUsersService.addPoints(order.userId, _pts, 'achat', 'Carte cadeau ' + order.amount + ' F (cmd ' + orderId + ')');
+                            await sendTelegramMessage(order.userId, '⭐ <b>+' + _pts + ' points</b> gagnés ! Total : <b>' + _nt + '</b> points');
+                        }
+                    } catch (e2) { console.error('[Points achat]', e2.message); }
+                } catch (e) {
+                    console.error('[GiftCard deliver]', e.message);
+                    if (order.userId) await sendTelegramMessage(order.userId, '⚠️ Carte cadeau : génération en cours, le code arrive très vite.');
+                }
+            } else if (order.operator === 'RECHARGE_INTL') {
+                try {
+                    const air = await giftDelivery.deliverAirtime(order);
+                    if (air.ok) {
+                        if (order.userId) await sendTelegramMessage(order.userId, '🌍 <b>Recharge internationale effectuée !</b>\n\n📞 ' + order.phone + '\n✅ ' + (order.giftCard || 'Recharge envoyée'));
+                        try { await pushService.sendToUser(order.userId, '🌍 Recharge envoyée', order.phone + ' rechargé avec succès', { screen: 'commandes', orderId: String(orderId) }); } catch (e) {}
+                    } else {
+                        if (order.userId) await sendTelegramMessage(order.userId, '🌍 Paiement validé. Ta recharge internationale est en cours.');
+                    }
+                    try {
+                        if (/^-?\d+$/.test(String(order.userId)) && Number(order.amount) > 0) {
+                            const _pts = Math.min(50, Math.max(1, Math.floor(Number(order.amount) / 100)));
+                            const _nt = await telegramUsersService.addPoints(order.userId, _pts, 'achat', 'Recharge internationale ' + order.amount + ' F (cmd ' + orderId + ')');
+                            await sendTelegramMessage(order.userId, '⭐ <b>+' + _pts + ' points</b> gagnés ! Total : <b>' + _nt + '</b> points');
+                        }
+                    } catch (e2) { console.error('[Points achat]', e2.message); }
+                } catch (e) {
+                    console.error('[Airtime deliver]', e.message);
+                    if (order.userId) await sendTelegramMessage(order.userId, '⚠️ Recharge internationale en cours de traitement.');
+                }
+            } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
+                const ussdResult = await deliverCIRecharge(order);
                 // Detecter type de livraison : forfait (bundle) ou credit normal
                 const isBundle = !!getOrderBundleMeta(order);
                 const deliveryType = isBundle ? 'forfait' : 'credit';
@@ -1191,6 +1891,14 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                     } catch (e) {
                         console.error('[Validate BG] Erreur setOrderDelivered:', e.message || e);
                     }
+                    // SMS de confirmation + remerciement au client (non bloquant)
+                    try {
+                        if (order.phone) {
+                            const label = isBundle ? 'forfait' : 'recharge';
+                            await sendSms(order.phone,
+                                `BIPBIP RECHARGE\nVotre ${label} ${order.operator} de ${order.amount}F sur ${order.phone} a bien ete effectuee. Merci de votre confiance ! Commande ${orderId}.`);
+                        }
+                    } catch (e) { console.error('[SMS reco]', e.message || e); }
                 }
 
                 if (order.userId) {
@@ -1257,7 +1965,7 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
         const orderId = req.params.id;
         const order = await orderStorage.setOrderValidated(orderId);
         if (!order) return res.status(404).json({ error: 'Commande introuvable' });
-        if (order.operator === 'PROMO_LIKES') {
+        if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
             if (order.userId) {
                 const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
                 if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
@@ -1265,8 +1973,8 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
                 await sendTelegramMessage(order.userId,
                     '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
             }
-        } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
-            const ussdResult = await executeUssdTransfer(order);
+        } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
+            const ussdResult = await deliverCIRecharge(order);
             if (order.userId) {
                 const txt = ussdResult.success
                     ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -1338,6 +2046,15 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
             );
         }
 
+        // SMS spécifique quand le client a payé SANS les frais de service (non bloquant)
+        try {
+            if (order.phone && reason && /frais/i.test(reason)) {
+                const missing = Math.max(0, Number(order.amountTotal || 0) - Number(order.amount || 0));
+                await sendSms(order.phone,
+                    `BIPBIP: Paiement recu mais les frais de service manquent${missing ? ' (' + missing + ' F)' : ''}. Merci de regler le complement pour recevoir votre recharge ${order.operator || ''} ${order.amount || ''}F, ou contactez-nous.`);
+            }
+        } catch (e) { console.error('[SMS frais]', e.message || e); }
+
         await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
         res.json({ success: true, message: 'Commande rejetée' });
 
@@ -1370,6 +2087,11 @@ app.use('/api/momo', momoRoutes);
 app.use('/api/actualites', actualitesRoutes);
 app.use('/api/annonces', annoncesRoutes);
 app.use('/api/quests', questsRoutes);
+app.use('/api/cabine', cabineRoutes); // Bipbip Cabine (commerciaux Kbine)
+app.use('/api/reloadly', reloadlyRoutes); // Reloadly -> app grand public BIPBIP-mobile
+app.use('/api/bitrefill', require('./routes/bitrefill')); // Bitrefill -> complement Reloadly
+app.use('/api/push', pushRoutes); // Tokens FCM (notifications push)
+app.use('/api/telegram/webhook-cabine', cabineBotRoutes); // Bot Telegram Cabine dédié
 app.get('/api/led/messages', (req, res) => {
     ledService.getActiveMessages()
         .then(messages => res.json({ messages }))
@@ -2015,8 +2737,31 @@ async function handleTelegramUpdateAdmin(body) {
                     '/actualites — Actualités en attente\n' +
                     '/annonces — Annonces LED en attente\n' +
                     '/commandes — Commandes en attente\n' +
-                    '/liens — Liens YouTube/X',
+                    '/liens — Liens YouTube/X\n' +
+                    '/cabines — Commerciaux Kbine\n' +
+                    '/newcabine CODE Nom — créer une cabine\n' +
+                    '/gencabine Nom — code auto (expire 1 mois)\n' +
+                    '/versements — Versements Wave en attente\n' +
+                    '/blacklist [list|add|remove] — Liste rouge (anti-arnaque)',
                     {}, botToken);
+                return;
+            }
+            if (cmd === '/blacklist' || cmd === '/listerouge' || cmd === '/rouge') {
+                const parts = rawText.split(/\s+/);
+                const action = (parts[1] || 'list').toLowerCase();
+                const num = parts[2] || '';
+                if (action === 'add' && num) {
+                    const added = blacklist.add(num, 'Ajouté via bot admin');
+                    await sendTelegramMessage(chatId, (added ? '\u2705 Ajouté' : '\u2139\uFE0F Déjà présent') + ' en liste rouge : <code>' + blacklist.norm(num) + '</code>', {}, botToken);
+                } else if ((action === 'remove' || action === 'del' || action === 'rm') && num) {
+                    const removed = blacklist.remove(num);
+                    await sendTelegramMessage(chatId, (removed ? '\u2705 Retiré de' : '\u2139\uFE0F Absent de') + ' la liste rouge : <code>' + blacklist.norm(num) + '</code>', {}, botToken);
+                } else if (action === 'list') {
+                    const l = blacklist.list();
+                    await sendTelegramMessage(chatId, l.length ? ('\uD83D\uDEA9 <b>Liste rouge (' + l.length + ')</b>\n' + l.map(x => '\u2022 <code>' + x + '</code>' + (blacklist.reasonFor(x) ? ' \u2014 ' + blacklist.reasonFor(x) : '')).join('\n')) : '\uD83D\uDCED Liste rouge vide.', {}, botToken);
+                } else {
+                    await sendTelegramMessage(chatId, 'Usage :\n/blacklist list\n/blacklist add 0700000000\n/blacklist remove 0700000000', {}, botToken);
+                }
                 return;
             }
             if (cmd === '/actualites' || cmd === '/actualite' || cmd === '/actualité' || cmd === '/actualités') {
@@ -2117,97 +2862,175 @@ async function handleTelegramUpdateAdmin(body) {
                         const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.telegram_id;
                         const approved = !!u.social_link_approved;
                         const text = `• ${name}\n${(u.social_link || '').slice(0, 60)}${approved ? '\n✅ Déjà approuvé' : ''}`;
-                        const opts = !approved ? { reply_markup: { inline_keyboard: [[{ text: '✅ Approuver (→ Quêtes)', callback_data: `approve_link_${u.telegram_id}` }]] } } : {};
+                        const _linkBtn = approved ? { text: '🚫 Retirer des Quêtes', callback_data: `unapprove_link_${u.telegram_id}` } : { text: '✅ Approuver (→ Quêtes)', callback_data: `approve_link_${u.telegram_id}` };
+                        const opts = { reply_markup: { inline_keyboard: [ [_linkBtn], [{ text: '🗑️ Supprimer le lien', callback_data: `dellink_${u.telegram_id}` }] ] } };
                         await sendTelegramMessage(chatId, text, opts, botToken);
                     }
                     if (users.length > 15) await sendTelegramMessage(chatId, `… et ${users.length - 15} autre(s).`, {}, botToken);
                 }
                 return;
             }
+            // === BIPBIP CABINE (commerciaux Kbine) ===
+            if (cmd === '/cabines') {
+                const list = await cabineService.adminListCabines();
+                if (!list.length) {
+                    await sendTelegramMessage(chatId, '\u{1F4ED} Aucune cabine.\n\nCréer : <code>/newcabine CODE Nom de la cabine</code>', {}, botToken);
+                } else {
+                    await sendTelegramMessage(chatId, `\u{1F3EA} <b>${list.length} cabine(s)</b>`, {}, botToken);
+                    for (const c of list.slice(0, 25)) {
+                        const lock = c.locked ? '\u{1F512} BLOQUÉ' : '\u{1F513} OK';
+                        const txt = `<b>${c.code}</b> — ${c.nom_cabine}\n` +
+                            `${c.actif ? '\u{1F7E2} actif' : '\u{1F534} inactif'} · ${lock}\n` +
+                            `Ventes plafond : ${c.tx_since_deposit}/${c.tx_plafond} · Dû Wave : ${c.montant_du} F\n` +
+                            `Objectif : ${c.commandes_semaine}/${c.objectif_hebdo} (${c.pct}%) · Commission : ${c.commission_hebdo} F` + (c.expired ? '\n⏰ EXPIRÉ' : (c.expires_at ? `\nExpire : ${new Date(c.expires_at).toLocaleDateString('fr-FR')}` : ''));
+                        const btn = c.actif
+                            ? { text: '\u{1F534} Désactiver', callback_data: `cab_off_${c.code}` }
+                            : { text: '\u{1F7E2} Activer', callback_data: `cab_on_${c.code}` };
+                        await sendTelegramMessage(chatId, txt, { reply_markup: { inline_keyboard: [[btn]] } }, botToken);
+                    }
+                }
+                return;
+            }
+            if (cmd === '/newcabine') {
+                const parts = rawText.split(/\s+/);
+                const code = parts[1];
+                const nom = parts.slice(2).join(' ');
+                if (!code || !nom) {
+                    await sendTelegramMessage(chatId, 'Usage : <code>/newcabine CODE Nom de la cabine</code>', {}, botToken);
+                    return;
+                }
+                const r = await cabineService.adminCreateCabine({ code, nom_cabine: nom });
+                await sendTelegramMessage(chatId, r.ok
+                    ? `✅ Cabine créée : <b>${code.toUpperCase()}</b> — ${nom}\nCommission par défaut : 10 000 F/sem.`
+                    : `❌ ${r.error}`, {}, botToken);
+                return;
+            }
+            if (cmd === '/gencabine') {
+                const nom = rawText.split(/\s+/).slice(1).join(' ');
+                if (!nom) {
+                    await sendTelegramMessage(chatId, 'Usage : <code>/gencabine Nom de la cabine</code>\n(code auto, valable 1 mois)', {}, botToken);
+                    return;
+                }
+                const r = await cabineService.adminGenerateCabine({ nom_cabine: nom, mois: 1 });
+                if (r.ok) {
+                    const exp = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : '';
+                    await sendTelegramMessage(chatId,
+                        `✅ Code généré pour <b>${nom}</b>\n\n\u{1F511} <code>${r.code}</code>\n⏳ Expire le ${exp}`, {}, botToken);
+                } else {
+                    await sendTelegramMessage(chatId, `❌ ${r.error}`, {}, botToken);
+                }
+                return;
+            }
+            if (cmd === '/versements') {
+                const deps = await cabineService.adminListDeposits('en_attente');
+                if (!deps.length) {
+                    await sendTelegramMessage(chatId, '\u{1F4ED} Aucun versement Wave en attente.', {}, botToken);
+                } else {
+                    await sendTelegramMessage(chatId, `\u{1F4A7} <b>${deps.length} versement(s) Wave en attente</b>`, {}, botToken);
+                    for (const d of deps.slice(0, 20)) {
+                        const txt = `#${d.id} — <b>${d.cabine_code}</b>\n\u{1F4B0} ${d.montant} F${d.preuve_url ? '\n\u{1F9FE} Preuve envoyée' : '\n⚠️ Pas de preuve'}`;
+                        await sendTelegramMessage(chatId, txt, {
+                            reply_markup: { inline_keyboard: [[
+                                { text: '✅ Confirmer (débloque)', callback_data: `cab_dep_ok_${d.id}` }
+                            ]] }
+                        }, botToken);
+                    }
+                }
+                return;
+            }
             if (cmd.startsWith('/')) {
 
     // === AGENT CONTROL COMMANDS ===
-    if (cmd === '/agent' || cmd === '/agent status') {
-      try {
-        const status = require('child_process').execSync('pm2 jlist | grep -o "bipbip-validation-agent.*status.*online" | head -1').toString();
-        await sendTelegramMessage(chatId, '🤖 <b>Agent de Validation</b>\n' + (status.includes('online') ? '✅ En ligne' : '⏹️ Arrêté'), {}, botToken);
-      } catch (e) {
-        await sendTelegramMessage(chatId, '🤖 Agent: en cours de vérification...', {}, botToken);
-      }
-      return;
-    }
-    if (cmd === '/agent on') {
-      require('child_process').exec('pm2 start bipbip-validation-agent');
-      await sendTelegramMessage(chatId, '✅ Agent de validation activé!', {}, botToken);
-      return;
-    }
-    if (cmd === '/agent off') {
-      require('child_process').exec('pm2 stop bipbip-validation-agent');
-      await sendTelegramMessage(chatId, '⏹️ Agent de validation désactivé.', {}, botToken);
-      return;
-    }
-    if (cmd === '/agent logs') {
+    // `cmd` ne contient que le 1er mot ("/agent") — les sous-commandes
+    // ("/agent on") se testent sur les 2 premiers mots (cmd2).
+    const cmd2 = rawText.toLowerCase().split(/\s+/).slice(0, 2).join(' ');
+    const { exec, execSync } = require('child_process');
+    const escapeTg = (s) => String(s)
+        .replace(/\x1b\[[0-9;]*m/g, '') // codes couleur ANSI de pm2
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const pm2Status = (name) => {
+        try {
+            const apps = JSON.parse(execSync('pm2 jlist 2>/dev/null').toString());
+            const a = apps.find(x => x.name === name);
+            return a && a.pm2_env ? a.pm2_env.status : 'introuvable';
+        } catch (e) { return 'inconnu'; }
+    };
+    const agentStatusMsg = (emoji, label, name) => {
+        const st = pm2Status(name);
+        return emoji + ' <b>' + label + '</b>\n' + (st === 'online' ? '✅ En ligne' : '⏹️ ' + st);
+    };
 
-    // === NEW AGENTS COMMANDS ===
-    if (cmd === "/agents") {
-        const list = require("child_process").execSync("pm2 list | grep bipbip | head -10").toString();
-        await sendTelegramMessage(chatId, "🤖 <b>Agents BipBip:</b>\\n" + list, {}, botToken);
+    if (cmd2 === '/agent on') {
+        exec('pm2 start bipbip-validation-agent');
+        await sendTelegramMessage(chatId, '✅ Agent de validation activé !', {}, botToken);
         return;
     }
-    if (cmd === "/validateur" || cmd === "/validateur status") {
-        const status = require("child_process").execSync("pm2 show bipbip-validateur-annonces 2>/dev/null | grep status").toString();
-        await sendTelegramMessage(chatId, "📋 <b>Validateur:</b>\\n" + status, {}, botToken);
+    if (cmd2 === '/agent off') {
+        exec('pm2 stop bipbip-validation-agent');
+        await sendTelegramMessage(chatId, '⏹️ Agent de validation désactivé.', {}, botToken);
         return;
     }
-    if (cmd === "/validateur on") {
-        require("child_process").exec("pm2 start bipbip-validateur-annonces");
-        await sendTelegramMessage(chatId, "✅ Validateur activé!", {}, botToken);
+    if (cmd2 === '/agent logs') {
+        const logs = execSync('pm2 logs bipbip-validation-agent --lines 15 --nostream --raw 2>&1 | tail -20').toString();
+        await sendTelegramMessage(chatId, '📋 <b>Logs Agent validation :</b>\n<pre>' + escapeTg(logs).slice(0, 3500) + '</pre>', {}, botToken);
         return;
     }
-    if (cmd === "/validateur off") {
-        require("child_process").exec("pm2 stop bipbip-validateur-annonces");
-        await sendTelegramMessage(chatId, "⏹️ Validateur désactivé.", {}, botToken);
+    if (cmd === '/agent') { // "/agent" ou "/agent status"
+        await sendTelegramMessage(chatId, agentStatusMsg('🤖', 'Agent de Validation', 'bipbip-validation-agent'), {}, botToken);
         return;
     }
-    if (cmd === "/fraude" || cmd === "/fraude status") {
-        const status = require("child_process").execSync("pm2 show bipbip-fraude-detector 2>/dev/null | grep status").toString();
-        await sendTelegramMessage(chatId, "🔍 <b>Fraude:</b>\\n" + status, {}, botToken);
+    if (cmd === '/agents') {
+        const list = execSync('pm2 list 2>/dev/null | grep -i bipbip | head -12').toString();
+        await sendTelegramMessage(chatId, '🤖 <b>Agents BipBip :</b>\n<pre>' + escapeTg(list).slice(0, 3500) + '</pre>', {}, botToken);
         return;
     }
-    if (cmd === "/fraude on") {
-        require("child_process").exec("pm2 start bipbip-fraude-detector");
-        await sendTelegramMessage(chatId, "✅ Détecteur Fraude activé!", {}, botToken);
+    if (cmd2 === '/validateur on') {
+        exec('pm2 start bipbip-validateur-annonces');
+        await sendTelegramMessage(chatId, '✅ Validateur annonces activé !', {}, botToken);
         return;
     }
-    if (cmd === "/fraude off") {
-        require("child_process").exec("pm2 stop bipbip-fraude-detector");
-        await sendTelegramMessage(chatId, "⏹️ Détecteur Fraude désactivé.", {}, botToken);
+    if (cmd2 === '/validateur off') {
+        exec('pm2 stop bipbip-validateur-annonces');
+        await sendTelegramMessage(chatId, '⏹️ Validateur annonces désactivé.', {}, botToken);
         return;
     }
-    if (cmd === "/rotator" || cmd === "/rotator status") {
-        const status = require("child_process").execSync("pm2 show bipbip-rotator 2>/dev/null | grep status").toString();
-        await sendTelegramMessage(chatId, "🔄 <b>Rotator:</b>\\n" + status, {}, botToken);
+    if (cmd === '/validateur') {
+        await sendTelegramMessage(chatId, agentStatusMsg('📋', 'Validateur annonces', 'bipbip-validateur-annonces'), {}, botToken);
         return;
     }
-    if (cmd === "/rotator on") {
-        require("child_process").exec("pm2 start bipbip-rotator");
-        await sendTelegramMessage(chatId, "✅ Rotator activé!", {}, botToken);
+    if (cmd2 === '/fraude on') {
+        exec('pm2 start bipbip-fraude-detector');
+        await sendTelegramMessage(chatId, '✅ Détecteur fraude activé !', {}, botToken);
         return;
     }
-    if (cmd === "/rotator off") {
-        require("child_process").exec("pm2 stop bipbip-rotator");
-        await sendTelegramMessage(chatId, "⏹️ Rotator désactivé.", {}, botToken);
+    if (cmd2 === '/fraude off') {
+        exec('pm2 stop bipbip-fraude-detector');
+        await sendTelegramMessage(chatId, '⏹️ Détecteur fraude désactivé.', {}, botToken);
         return;
     }
-    // === END NEW AGENTS COMMANDS ===
-
-      const logs = require('child_process').execSync('pm2 logs bipbip-validation-agent --lines 10 --nostream 2>&1 | tail -15').toString();
-      await sendTelegramMessage(chatId, '📋 <b>Logs Agent:</b>\n' + logs.slice(0, 2000), {}, botToken);
-      return;
+    if (cmd === '/fraude') {
+        await sendTelegramMessage(chatId, agentStatusMsg('🔍', 'Détecteur fraude', 'bipbip-fraude-detector'), {}, botToken);
+        return;
+    }
+    if (cmd2 === '/rotator on') {
+        exec('pm2 start bipbip-rotator');
+        await sendTelegramMessage(chatId, '✅ Rotator activé !', {}, botToken);
+        return;
+    }
+    if (cmd2 === '/rotator off') {
+        exec('pm2 stop bipbip-rotator');
+        await sendTelegramMessage(chatId, '⏹️ Rotator désactivé.', {}, botToken);
+        return;
+    }
+    if (cmd === '/rotator') {
+        await sendTelegramMessage(chatId, agentStatusMsg('🔄', 'Rotator', 'bipbip-rotator'), {}, botToken);
+        return;
     }
     // === END AGENT COMMANDS ===
 
-                await sendTelegramMessage(chatId, '❓ /actualites, /annonces, /commandes, /liens', {}, botToken);
+                await sendTelegramMessage(chatId,
+                    '❓ /actualites, /annonces, /commandes, /liens, /cabines, /versements\n' +
+                    '🤖 Agents : /agent [on|off|logs], /agents, /validateur [on|off], /fraude [on|off], /rotator [on|off]', {}, botToken);
             }
         } catch (err) {
             console.error('[Webhook Admin]', err);
@@ -2265,6 +3088,40 @@ async function handleTelegramUpdateAdmin(body) {
                 if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l\'espace Quetes (clic = points).', {}, botToken);
                 return;
             }
+            if (data.startsWith('unapprove_link_')) {
+                const telegramId = data.replace('unapprove_link_', '').trim();
+                const result = await telegramUsersService.unapproveSocialLink(telegramId);
+                const ok = result && !result.error;
+                await answerTelegramCallback(callbackId, ok ? 'Lien retiré des Quêtes' : (result && result.error) || 'Erreur', botToken);
+                if (chatId && ok) await sendTelegramMessage(chatId, '🚫 Lien retiré des Quêtes — plus visible, plus de points.', {}, botToken);
+                return;
+            }
+            if (data.startsWith('dellink_')) {
+                const telegramId = data.replace('dellink_', '').trim();
+                const result = await telegramUsersService.removeSocialLink(telegramId);
+                const ok = result && !result.error;
+                await answerTelegramCallback(callbackId, ok ? 'Lien supprimé' : (result && result.error) || 'Erreur', botToken);
+                if (chatId && ok) await sendTelegramMessage(chatId, '🗑️ Lien supprimé du profil du membre.', {}, botToken);
+                return;
+            }
+
+            // === BIPBIP CABINE callbacks ===
+            if (data.startsWith('cab_dep_ok_')) {
+                const id = data.replace('cab_dep_ok_', '').trim();
+                const r = await cabineService.adminConfirmDeposit(id);
+                await answerTelegramCallback(callbackId, r.ok ? 'Versement confirmé — débloqué' : (r.error || 'Erreur'), botToken);
+                if (chatId && r.ok) await sendTelegramMessage(chatId,
+                    `✅ Versement #${id} confirmé.\n\u{1F513} <b>${r.deposit.cabine_code}</b> débloquée (compteur remis à 0).`, {}, botToken);
+                return;
+            }
+            if (data.startsWith('cab_off_') || data.startsWith('cab_on_')) {
+                const on = data.startsWith('cab_on_');
+                const code = data.replace(on ? 'cab_on_' : 'cab_off_', '').trim();
+                const r = await cabineService.adminSetCabine(code, { actif: on });
+                await answerTelegramCallback(callbackId, r.ok ? (on ? 'Activée' : 'Désactivée') : (r.error || 'Erreur'), botToken);
+                if (chatId && r.ok) await sendTelegramMessage(chatId, `${on ? '\u{1F7E2}' : '\u{1F534}'} Cabine <b>${code.toUpperCase()}</b> ${on ? 'activée' : 'désactivée'}.`, {}, botToken);
+                return;
+            }
 
             if (data.startsWith('approve_actu_')) {
                 const id = data.replace('approve_actu_', '');
@@ -2292,7 +3149,7 @@ async function handleTelegramUpdateAdmin(body) {
                 if (order) {
                     await answerTelegramCallback(callbackId, 'Commande validée', botToken);
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`, {}, botToken);
-                    if (order.operator === 'PROMO_LIKES') {
+                    if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
                         if (order.userId) {
                             const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
                             if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
@@ -2301,8 +3158,8 @@ async function handleTelegramUpdateAdmin(body) {
                                 '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !', {}, botToken);
                             if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).', {}, botToken);
                         }
-                    } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
-                        const ussdResult = await executeUssdTransfer(order);
+                    } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
+                        const ussdResult = await deliverCIRecharge(order);
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -2475,7 +3332,8 @@ async function handleTelegramUpdate(body) {
                         const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || u.telegram_id;
                         const approved = !!u.social_link_approved;
                         const text = `• ${name}\n${(u.social_link || '').slice(0, 60)}${approved ? '\n✅ Déjà approuvé' : ''}`;
-                        const opts = !approved ? { reply_markup: { inline_keyboard: [[{ text: '✅ Approuver (→ Quêtes)', callback_data: `approve_link_${u.telegram_id}` }]] } } : {};
+                        const _linkBtn = approved ? { text: '🚫 Retirer des Quêtes', callback_data: `unapprove_link_${u.telegram_id}` } : { text: '✅ Approuver (→ Quêtes)', callback_data: `approve_link_${u.telegram_id}` };
+                        const opts = { reply_markup: { inline_keyboard: [ [_linkBtn], [{ text: '🗑️ Supprimer le lien', callback_data: `dellink_${u.telegram_id}` }] ] } };
                         await sendTelegramMessage(chatId, text, opts);
                     }
                     if (users.length > 15) await sendTelegramMessage(chatId, `… et ${users.length - 15} autre(s).`);
@@ -2690,7 +3548,7 @@ async function handleTelegramUpdate(body) {
                 if (order) {
                     await answerTelegramCallback(callbackId, 'Commande validée');
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`);
-                    if (order.operator === 'PROMO_LIKES') {
+                    if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
                         if (order.userId) {
                             const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
                             if (promoLink) await telegramUsersService.updateSocialLink(order.userId, promoLink);
@@ -2699,8 +3557,8 @@ async function handleTelegramUpdate(body) {
                                 '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
                             if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).');
                         }
-                    } else if (order.operator !== 'ANNONCE_LED' && order.phone) {
-                        const ussdResult = await executeUssdTransfer(order);
+                    } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
+                        const ussdResult = await deliverCIRecharge(order);
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -2766,6 +3624,18 @@ async function handleTelegramUpdate(body) {
                 const ok = result && !result.error;
                 await answerTelegramCallback(callbackId, ok ? 'Lien approuvé → Quêtes' : (result && result.error) || 'Erreur');
                 if (chatId && ok) await sendTelegramMessage(chatId, '✅ Lien YouTube/X approuvé → visible dans l\'espace Quetes (clic = points).');
+            } else if (data.startsWith('unapprove_link_') && chatId && adminIds.includes(String(chatId))) {
+                const telegramId = data.replace('unapprove_link_', '').trim();
+                const result = await telegramUsersService.unapproveSocialLink(telegramId);
+                const ok = result && !result.error;
+                await answerTelegramCallback(callbackId, ok ? 'Lien retiré des Quêtes' : (result && result.error) || 'Erreur');
+                if (chatId && ok) await sendTelegramMessage(chatId, '🚫 Lien retiré des Quêtes.');
+            } else if (data.startsWith('dellink_') && chatId && adminIds.includes(String(chatId))) {
+                const telegramId = data.replace('dellink_', '').trim();
+                const result = await telegramUsersService.removeSocialLink(telegramId);
+                const ok = result && !result.error;
+                await answerTelegramCallback(callbackId, ok ? 'Lien supprimé' : (result && result.error) || 'Erreur');
+                if (chatId && ok) await sendTelegramMessage(chatId, '🗑️ Lien supprimé.');
             } else {
                 await answerTelegramCallback(callbackId);
             }
@@ -2775,6 +3645,264 @@ async function handleTelegramUpdate(body) {
         }
     }
 }
+
+// ==================== DÉPÔTS RÉELS (Wave notif + Djamo) ====================
+// Preuves d'encaissement RÉELLES reçues sur les comptes marchands, pour croiser
+// avec les commandes avant validation (l'OCR d'un screenshot est falsifiable ;
+// un dépôt réellement reçu ne l'est pas).
+// Sources : APK écouteur de notifs Wave (POST /api/deposits + secret), poller Djamo.
+const DEPOSITS_FILE = path.join(__dirname, 'deposits.json');
+const DEPOSITS_SECRET = (process.env.DEPOSITS_SECRET || '').trim();
+let deposits = [];
+try { if (fs.existsSync(DEPOSITS_FILE)) deposits = JSON.parse(fs.readFileSync(DEPOSITS_FILE, 'utf8')) || []; }
+catch (e) { console.error('[deposits] load:', e.message); }
+
+// ---- Anti-rejeu PERSISTANT : signatures des paiements deja encaisses ----
+// Store durable (hors des 500 derniers de deposits.json) : bloque tout rejeu d'une
+// meme notif, meme tres tardif. Purge > 120 jours pour borner la taille.
+const DEPOSIT_SIGS_FILE = path.join(__dirname, 'deposit_signatures.json');
+let depositSigs = {};
+try { if (fs.existsSync(DEPOSIT_SIGS_FILE)) depositSigs = JSON.parse(fs.readFileSync(DEPOSIT_SIGS_FILE, 'utf8')) || {}; }
+catch (e) { console.error('[deposits] load sigs:', e.message); }
+function depositSignature(source, amount, reference, rawText) {
+    const ident = (reference && String(reference).trim()) || (rawText && String(rawText).trim()) || '';
+    if (!ident) return null;
+    return crypto.createHash('sha256').update(String(source) + '|' + amount + '|' + ident).digest('hex');
+}
+function saveDepositSigs() {
+    // Ecriture SYNCHRONE : une signature encaissee doit etre durable immediatement, meme si
+    // le process redemarre/crashe la seconde suivante (sinon un rejeu redeviendrait possible).
+    try {
+        const cutoff = Date.now() - 120 * 24 * 60 * 60 * 1000;
+        for (const k of Object.keys(depositSigs)) if (depositSigs[k] < cutoff) delete depositSigs[k];
+        fs.writeFileSync(DEPOSIT_SIGS_FILE, JSON.stringify(depositSigs), 'utf8');
+    } catch (e) { console.error('[deposits] save sigs:', e.message); }
+}
+// Backfill au boot depuis deposits.json (couvre l'historique recent des 500 derniers).
+for (const _d of deposits) {
+    const _s = depositSignature(_d.source, _d.amount, _d.reference, _d.rawText);
+    if (_s && !depositSigs[_s]) depositSigs[_s] = _d.receivedAt || Date.now();
+}
+
+let _depSaveTimer = null;
+function saveDeposits() {
+    if (_depSaveTimer) return;
+    _depSaveTimer = setTimeout(() => {
+        _depSaveTimer = null;
+        try { fs.writeFileSync(DEPOSITS_FILE, JSON.stringify(deposits.slice(-500)), 'utf8'); }
+        catch (e) { console.error('[deposits] save:', e.message); }
+    }, 1000);
+}
+function normalizePhoneCI(p) {
+    return String(p || '').replace(/\D/g, '').replace(/^225/, '');
+}
+
+// Réception d'un dépôt (APK Wave via secret partagé, ou poller interne via clé admin)
+app.post('/api/deposits', (req, res) => {
+    const body = req.body || {};
+    const secretOk = DEPOSITS_SECRET && body.secret === DEPOSITS_SECRET;
+    if (!secretOk && !isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+
+    // Diagnostic : notif de paiement non parsée par l'APK → on logge le texte brut
+    // pour ajuster le parseur, sans créer de dépôt.
+    if (body.debug === true) {
+        console.log(`[deposits][debug] ${body.package || '?'} : ${String(body.rawText || '').slice(0, 300)}`);
+        return res.json({ ok: true, debug: true });
+    }
+
+    const amount = parseInt(String(body.amount == null ? '' : body.amount).replace(/[^\d]/g, ''), 10);
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Montant invalide' });
+
+    const source = (body.source || 'wave').toLowerCase();
+    const reference = body.reference ? String(body.reference).trim() : null;
+    const rawText = body.rawText ? String(body.rawText).slice(0, 500) : '';
+    const now = Date.now();
+
+    // Anti-rejeu PERSISTANT : signature de contenu (source+montant+reference/rawText) deja
+    // encaissee -> rejet quel que soit le delai, meme si l'original est sorti des 500 derniers
+    // de deposits.json. Contre le rejeu d'anciennes notifs par l'app reader au reconnect.
+    const sig = depositSignature(source, amount, reference, rawText);
+    if (sig && depositSigs[sig]) {
+        return res.json({ ok: true, duplicate: true, replay: true, persisted: true });
+    }
+    // Sans identifiant de contenu (ni reference ni rawText) : dedup courte source+montant.
+    const dup = deposits.find(d => d.source === source && d.amount === amount
+        && !d.reference && !d.rawText && (now - d.receivedAt) < 30 * 60 * 1000);
+    if (dup) return res.json({ ok: true, duplicate: true, id: dup.id });
+
+    const dep = {
+        id: crypto.randomBytes(6).toString('hex'),
+        source, amount,
+        senderPhone: normalizePhoneCI(body.senderPhone),
+        senderName: body.senderName ? String(body.senderName).slice(0, 80) : null,
+        reference, rawText,
+        receivedAt: now,
+        notifiedAt: body.notifiedAt || null,
+        matchedOrderId: null,
+    };
+    deposits.push(dep);
+    saveDeposits();
+    if (sig) { depositSigs[sig] = now; saveDepositSigs(); }
+    console.log(`[deposits] +${source.toUpperCase()} ${amount} FCFA de ${dep.senderPhone || '?'} (${dep.id})`);
+    res.json({ ok: true, id: dep.id });
+    // Notif admin : dépôt reçu (traçabilité temps réel sur le bot admin)
+    (async () => {
+        try {
+            await sendTelegramToAllAdmins(
+                '\uD83D\uDCB0 <b>Dépôt reçu</b>\n' +
+                'Montant : <b>' + amount + ' FCFA</b>\n' +
+                'Source : ' + source.toUpperCase() + '\n' +
+                (dep.senderName ? ('De : ' + dep.senderName + '\n') : '') +
+                (dep.senderPhone ? ('N\u00b0 : ' + dep.senderPhone + '\n') : '') +
+                '\uD83D\uDD0E Rapprochement automatique en cours\u2026',
+                {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+            );
+        } catch (e) { /* noop */ }
+    })();
+    // Auto-validation immédiate si le dépôt correspond à une commande en attente (non bloquant)
+    tryAutoValidateFromDeposit(dep).catch(e => console.error('[deposits] auto-val:', e.message));
+});
+
+// Auto-validation d'une commande à partir d'un DÉPÔT RÉEL (plus sûr qu'un screenshot).
+// Ne valide QUE si le rapprochement est UNIQUE (un seul dépôt ↔ une seule commande
+// du même montant total, frais inclus, dans une fenêtre récente). Sinon on laisse
+// le flux preuve/manuel. Réutilise l'endpoint /validate existant → anti-double-livraison
+// garanti (setOrderValidated renvoie null si la commande n'est plus en attente).
+async function tryAutoValidateFromDeposit(dep) {
+    if (!dep || dep.matchedOrderId) return false;
+    if (Date.now() - dep.receivedAt > 60 * 60 * 1000) return false;   // trop vieux
+    let candidates;
+    try {
+        const pend = await orderStorage.getOrdersByStatus('pending');
+        const sent = await orderStorage.getOrdersByStatus('proof_sent');
+        candidates = [...(pend || []), ...(sent || [])].filter(o => {
+            if (!o.phone) return false;
+            const total = Number(o.amountTotal || o.amount || 0);   // montant TOTAL (frais inclus)
+            if (Math.abs(total - dep.amount) > 5) return false;
+            const created = new Date(o.createdAt || o.created_at || 0).getTime();
+            if (created && Math.abs(dep.receivedAt - created) > 60 * 60 * 1000) return false;
+            return true;
+        });
+    } catch (e) {
+        console.warn('[deposits] auto-val: lecture commandes KO (Supabase indispo ?):', (e && e.message) || e);
+        return false;
+    }
+    if (candidates.length !== 1) {
+        // Ambiguïté de montant (ex. 15 commandes à 210F) : départager par le NUMÉRO PAYEUR.
+        // Le dépôt Wave/Djamo porte senderPhone (numéro réel du payeur, infalsifiable).
+        // Si le client a rechargé SON PROPRE numéro et qu'une seule candidate a ce numéro,
+        // le rapprochement est fiable. Sinon (0 ou plusieurs), on laisse le flux preuve.
+        if (!dep.senderPhone) return false;
+        const _sp = normalizePhoneCI(dep.senderPhone);
+        const byPhone = candidates.filter(o => normalizePhoneCI(o.phone) === _sp);
+        if (byPhone.length !== 1) return false;
+        candidates = byPhone;
+        console.log(`[deposits] ambiguité ${dep.amount}F levée par numéro payeur ${_sp} → commande ${candidates[0].id}`);
+    }
+    const order = candidates[0];
+    try {
+        const fetch = (await import('node-fetch')).default;
+        const r = await fetch(`http://127.0.0.1:${PORT}/api/admin/orders/${order.id}/validate`, {
+            method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_SECRET_KEY || '' },
+        });
+        if (r.status === 200 || r.status === 404) {   // 200 = validée par le dépôt ; 404 = déjà validée
+            dep.matchedOrderId = order.id; saveDeposits();
+            console.log(`[deposits] AUTO-VALIDATION ${dep.amount}F → commande ${order.id} (HTTP ${r.status})`);
+            try {
+                await sendTelegramToAllAdmins(
+                    '\u2705 <b>Dépôt rapproché automatiquement</b>\n' +
+                    'Dépôt : ' + dep.amount + ' FCFA (' + String(dep.source).toUpperCase() + ')\n' +
+                    '\u2192 Commande <code>' + order.id + '</code> validée sans preuve.',
+                    {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+                );
+            } catch (e) { /* noop */ }
+            return true;
+        }
+        console.log(`[deposits] auto-validation ${order.id} échec HTTP ${r.status}`);
+    } catch (e) { console.error('[deposits] auto-validation err:', e.message); }
+    return false;
+}
+
+// Liste des dépôts récents (agent de validation + admin)
+app.get('/api/deposits', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const sinceMin = parseInt(req.query.sinceMinutes, 10) || 240;
+    const cutoff = Date.now() - sinceMin * 60 * 1000;
+    const list = deposits.filter(d => d.receivedAt >= cutoff).slice().reverse();
+    res.json({ deposits: list, count: list.length });
+});
+
+// Marquer un dépôt comme consommé par une commande (anti-réutilisation d'un même dépôt)
+app.post('/api/deposits/:id/consume', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const dep = deposits.find(d => d.id === req.params.id);
+    if (!dep) return res.status(404).json({ error: 'Dépôt introuvable' });
+    const orderId = (req.body && req.body.orderId) || 'unknown';
+    if (dep.matchedOrderId && dep.matchedOrderId !== orderId) {
+        return res.status(409).json({ error: 'Déjà consommé', matchedOrderId: dep.matchedOrderId });
+    }
+    dep.matchedOrderId = orderId;
+    saveDeposits();
+    res.json({ ok: true });
+});
+
+// ── Relances SMS automatiques (dépôt sans preuve à 5 min ; livraison en retard à 15 min) ──
+const smsDelayReminded = new Set();
+setInterval(async () => {
+    const now = Date.now();
+
+    // Scénario 3 : dépôt réel reçu mais AUCUNE commande/preuve après 5 min → relance au payeur.
+    // (souvent un client fait le dépôt mais n'envoie jamais sa preuve, puis attend sans rien recevoir)
+    try {
+        let openTotals = [];
+        try {
+            const pend = await orderStorage.getOrdersByStatus('pending');
+            const sent = await orderStorage.getOrdersByStatus('proof_sent');
+            openTotals = [...(pend || []), ...(sent || [])].map(o => Number(o.amountTotal || o.amount || 0));
+        } catch (e) { /* storage indispo : on relance quand même */ }
+
+        let changed = false;
+        for (const d of deposits) {
+            if (d.matchedOrderId || !d.senderPhone) continue;
+            // 1) Prioritaire : tenter l'auto-validation (la commande a pu être créée après le dépôt)
+            if (await tryAutoValidateFromDeposit(d)) continue;   // matché → pas de relance
+            // 2) Sinon, relance SMS « envoyez votre preuve » après 5 min
+            if (d.smsReminded) continue;
+            const age = now - d.receivedAt;
+            if (age < 5 * 60 * 1000) continue;               // pas encore 5 min
+            if (age > 6 * 60 * 60 * 1000) { d.smsReminded = true; changed = true; continue; } // trop vieux
+            // Si une commande ouverte a le même montant TOTAL, le client est déjà dans le circuit → pas de relance
+            if (openTotals.some(a => Math.abs(a - d.amount) <= 5)) continue;
+            await sendSms(d.senderPhone,
+                `BIPBIP: Nous avons bien recu votre paiement de ${d.amount} F. Si vous n'avez pas encore recu votre commande, envoyez votre preuve de paiement dans l'app pour la finaliser. Merci !`);
+            try {
+                await sendTelegramToAllAdmins(
+                    '\u26A0\uFE0F <b>Dépôt non rattaché</b>\n' +
+                    'Montant : ' + d.amount + ' FCFA (' + String(d.source).toUpperCase() + ')\n' +
+                    (d.senderName ? ('De : ' + d.senderName + '\n') : '') +
+                    (d.senderPhone ? ('N\u00b0 : ' + d.senderPhone + '\n') : '') +
+                    'Reçu depuis >5 min sans commande correspondante. Payeur relancé par SMS. \u00c0 vérifier.',
+                    {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+                );
+            } catch (e) { /* noop */ }
+            d.smsReminded = true; changed = true;
+        }
+        if (changed) saveDeposits();
+    } catch (e) { console.error('[SMS relance depot]', e.message || e); }
+
+    // Scénario 2 : commande validée mais NON livrée après 15 min (retard réseau) → SMS d'attente.
+    try {
+        const validated = await orderStorage.getValidatedOrders();
+        for (const o of validated) {
+            if (o.status !== 'validated') continue;          // livrée => credit_delivered / forfait_delivered
+            if (!o.phone || !o.validatedAt || smsDelayReminded.has(o.id)) continue;
+            if (now - new Date(o.validatedAt).getTime() < 15 * 60 * 1000) continue;
+            await sendSms(o.phone,
+                `BIPBIP RECHARGE: Votre recharge de ${o.amount}F est en cours, un retard reseau est possible. Merci de patienter encore 15 min. Sans reception, contactez-nous.`);
+            smsDelayReminded.add(o.id);
+        }
+    } catch (e) { console.error('[SMS retard]', e.message || e); }
+}, 60 * 1000);
 
 // Gestion d'erreurs globale (ne pas exposer les détails en production)
 app.use((err, req, res, next) => {

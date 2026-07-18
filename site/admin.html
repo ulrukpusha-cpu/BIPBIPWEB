@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipbip Recharge — Admin</title>
+<meta name="robots" content="noindex">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/shared/theme/theme-tokens.css">
+<link rel="stylesheet" href="/shared/theme/theme-particles.css">
+<link rel="stylesheet" href="/shared/theme/theme-ui.css">
+<link rel="stylesheet" href="/bipbip-dynamic-scene.css">
+<link rel="stylesheet" href="/site/css/site.css">
+
+<script defer src="/shared/api/api-client.js"></script>
+<script defer src="/shared/i18n/i18n.js"></script>
+<script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<script src="/shared/theme/theme-engine.js" data-no-auto></script>
+
+<script defer src="/site/js/core.js"></script>
+<script defer src="/site/js/shell.js"></script>
+<script defer src="/site/js/admin.js"></script>
+</head>
+
+<body class="bb-shell" data-page="admin">
+
+  <div class="site-wrap">
+    <div class="page-head">
+      <h1><iconify-icon icon="solar:shield-user-bold" width="28"></iconify-icon> Panneau admin</h1>
+      <p>Maintenance, bannières, cartes cadeaux, quêtes, commandes et modération.</p>
+    </div>
+
+    <!-- Gate (avant déverrouillage PIN) -->
+    <div id="adminGate" class="admin-gate">
+      <iconify-icon icon="solar:lock-keyhole-bold" width="48" style="color:var(--bb-accent)"></iconify-icon>
+      <p class="muted" style="margin:14px 0">Accès réservé. Déverrouille avec ton code PIN.</p>
+      <button class="bb-cta" type="button" id="adminUnlockBtn">Déverrouiller</button>
+    </div>
+
+    <!-- Panneau (après PIN) -->
+    <div id="adminPanel" style="display:none">
+      <div class="admin-grid">
+
+        <!-- Maintenance -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,#ef4444 35%,transparent)">
+          <h3><iconify-icon icon="solar:danger-triangle-bold" width="16" style="color:#ef4444"></iconify-icon> Mode maintenance (Accueil)</h3>
+          <p class="hint">Couvre la page d'accueil (Recharge). Les autres pages restent accessibles.</p>
+          <label class="profil-label">Image de maintenance</label>
+          <label for="adminMaintImgFile" class="profil-btn-secondary" style="width:100%"><iconify-icon icon="solar:upload-linear" width="14"></iconify-icon> Choisir une image</label>
+          <input id="adminMaintImgFile" type="file" accept="image/*" hidden onchange="adminUploadMaintImage(event)">
+          <img id="adminMaintImgPreview" alt="" style="display:none;margin-top:8px;width:100%;max-height:160px;object-fit:contain;border-radius:10px;border:1px solid var(--bb-tile-border)">
+          <p id="adminMaintImgStatus" class="hint" style="margin:6px 0 0"></p>
+          <label class="profil-label" style="margin-top:10px">Message (optionnel)</label>
+          <input id="adminMaintMessage" type="text" class="profil-input" placeholder="Ex : Retour estimé à 18h00" maxlength="300">
+          <div class="profil-row-2">
+            <button class="profil-btn-secondary" type="button" onclick="adminToggleMaintenance(false)">Désactiver</button>
+            <button class="profil-btn-warn" type="button" onclick="adminToggleMaintenance(true)" style="background:#ef4444;border-color:#ef4444;color:#fff">Activer</button>
+          </div>
+          <p id="adminMaintStatus" class="hint" style="margin:10px 0 0">Statut : —</p>
+        </div>
+
+        <!-- LED speed -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,var(--bb-warn) 30%,transparent)">
+          <h3><iconify-icon icon="solar:bolt-circle-bold" width="16" style="color:var(--bb-warn)"></iconify-icon> Vitesse du bandeau LED</h3>
+          <p class="hint">Plus le chiffre est grand, plus le défilement est rapide.</p>
+          <div style="display:flex;align-items:center;gap:10px;margin:10px 0">
+            <span class="hint">Lent</span>
+            <input type="range" id="adminLedSpeed" min="1" max="10" step="1" value="5" style="flex:1;accent-color:var(--bb-accent)" oninput="document.getElementById('adminLedSpeedLabel').textContent=this.value">
+            <span class="hint">Rapide</span>
+            <strong id="adminLedSpeedLabel" style="color:var(--bb-warn);width:22px;text-align:center">5</strong>
+          </div>
+          <div class="profil-row-2">
+            <span id="adminLedSpeedCurrent" class="hint" style="align-self:center">Vitesse actuelle : —</span>
+            <button class="profil-btn-warn" type="button" onclick="adminSaveLedSpeed()">Enregistrer</button>
+          </div>
+        </div>
+
+        <!-- Banners -->
+        <div class="profil-section">
+          <h3><iconify-icon icon="solar:gallery-wide-bold" width="16"></iconify-icon> Bannières publicitaires</h3>
+          <p class="hint">2 emplacements : Market &amp; Actualités. Carrousel (bascule /6 s).</p>
+          <div id="adminBannersList" style="display:flex;flex-direction:column;gap:10px;margin:10px 0"></div>
+          <h4>Ajouter une image</h4>
+          <label class="profil-label">Emplacement</label>
+          <select id="adminBannerPlacement" class="profil-select">
+            <option value="home1">Market</option>
+            <option value="actualites">Actualités</option>
+          </select>
+          <label class="profil-label">Image (1200×375 idéal)</label>
+          <input id="adminBannerFile" type="file" accept="image/*" class="profil-input" style="padding:8px">
+          <label class="profil-label">Texte (optionnel)</label>
+          <input id="adminBannerText" type="text" class="profil-input" placeholder='Ex: "Promo Noël -10%"'>
+          <label class="profil-label">Lien (optionnel)</label>
+          <input id="adminBannerUrl" type="url" class="profil-input" placeholder="https://...">
+          <div class="profil-row-2">
+            <button class="profil-btn-secondary" type="button" onclick="adminDeleteBanner(document.getElementById('adminBannerPlacement').value)">Vider</button>
+            <button class="profil-btn-warn" type="button" onclick="adminSaveBanner()">+ Ajouter</button>
+          </div>
+        </div>
+
+        <!-- Gift cards -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,var(--bb-warn) 30%,transparent)">
+          <h3><iconify-icon icon="solar:gift-bold" width="16" style="color:var(--bb-warn)"></iconify-icon> Cartes cadeaux</h3>
+          <h4>Ajouter une carte</h4>
+          <div class="profil-row-2">
+            <input type="text" id="gcAdminName" placeholder="Nom (ex: Netflix)" class="profil-input">
+            <input type="text" id="gcAdminValue" placeholder="Valeur (ex: 25€)" class="profil-input">
+          </div>
+          <div class="profil-row-2">
+            <input type="number" id="gcAdminPrice" placeholder="Prix XOF" class="profil-input">
+            <select id="gcAdminCategory" class="profil-select"><option value="app">App</option><option value="music">Music</option><option value="films">Films</option><option value="jeux">Jeux</option></select>
+          </div>
+          <input type="text" id="gcAdminImg" placeholder="URL image ou /uploads/..." class="profil-input" style="margin-top:8px">
+          <div class="profil-row-2">
+            <input type="file" id="gcAdminFile" accept="image/*" class="profil-input" style="padding:8px">
+            <input type="text" id="gcAdminFlag" placeholder="Drapeau 🇫🇷" maxlength="4" class="profil-input">
+          </div>
+          <button class="profil-btn-warn" type="button" onclick="adminAddGiftCard()" style="width:100%;margin-top:8px">+ Ajouter la carte</button>
+          <div id="adminGiftCardsList" style="display:flex;flex-direction:column;gap:8px;margin:10px 0"></div>
+          <button class="profil-btn-secondary" type="button" onclick="adminSaveGiftCards()" style="width:100%"><iconify-icon icon="solar:diskette-linear" width="14"></iconify-icon> Sauvegarder les cartes</button>
+        </div>
+
+        <!-- Quests -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,#0ea5e9 30%,transparent)">
+          <h3><iconify-icon icon="solar:medal-ribbon-bold" width="16" style="color:#0ea5e9"></iconify-icon> Quêtes</h3>
+          <h4>Ajouter une quête</h4>
+          <div class="profil-row-2">
+            <input type="text" id="questAdminCode" placeholder="Code (ex: tiktok_follow)" class="profil-input">
+            <select id="questAdminType" class="profil-select"><option value="telegram_subscribe">telegram_subscribe</option><option value="telegram_boost">telegram_boost</option><option value="referral">referral</option><option value="recharge">recharge</option><option value="annonce">annonce</option><option value="reading">reading</option></select>
+          </div>
+          <input type="text" id="questAdminTitle" placeholder="Titre affiché" class="profil-input" style="margin-top:8px">
+          <input type="text" id="questAdminDesc" placeholder="Description courte" class="profil-input" style="margin-top:8px">
+          <div class="profil-row-2">
+            <input type="number" id="questAdminPoints" min="0" value="25" class="profil-input" placeholder="Points">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px"><input type="checkbox" id="questAdminActive" checked> Active</label>
+          </div>
+          <button class="profil-btn-warn" type="button" onclick="adminAddQuest()" style="width:100%;margin-top:8px">+ Ajouter la quête</button>
+          <div id="adminQuestsList" style="display:flex;flex-direction:column;gap:8px;margin:10px 0"></div>
+          <button class="profil-btn-secondary" type="button" onclick="loadAdminQuests()" style="width:100%"><iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon> Recharger</button>
+        </div>
+
+        <!-- Orders -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,#6366f1 30%,transparent)">
+          <h3><iconify-icon icon="solar:clipboard-list-bold" width="16" style="color:#6366f1"></iconify-icon> Commandes</h3>
+          <div style="display:flex;gap:8px;margin:10px 0">
+            <button class="orders-tab is-active" type="button" data-tab="pending" onclick="loadAdminOrders('pending')">En attente</button>
+            <button class="orders-tab" type="button" data-tab="validated" onclick="loadAdminOrders('validated')">Validées</button>
+          </div>
+          <div id="adminOrdersList" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+
+        <!-- Market moderation -->
+        <div class="profil-section" style="border-color:color-mix(in srgb,#22c55e 30%,transparent)">
+          <h3><iconify-icon icon="solar:bag-check-bold" width="16" style="color:#22c55e"></iconify-icon> Articles Market à valider</h3>
+          <div id="adminMarketList" style="display:flex;flex-direction:column;gap:8px"></div>
+          <button class="profil-btn-secondary" type="button" onclick="loadAdminMarketItems()" style="width:100%;margin-top:8px"><iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon> Recharger</button>
+        </div>
+
+        <!-- LED messages -->
+        <div class="profil-section">
+          <h3><iconify-icon icon="solar:bolt-circle-bold" width="16"></iconify-icon> Messages LED actifs</h3>
+          <div id="adminLedList" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"></div>
+        </div>
+
+        <!-- Theme -->
+        <div class="profil-section">
+          <h3><iconify-icon icon="solar:palette-bold" width="16"></iconify-icon> Thème saisonnier</h3>
+          <p class="hint">Force un thème pour tous, ou laisse l'auto par date.</p>
+          <select id="adminThemeSelect" class="profil-select" style="margin-top:8px">
+            <option value="">Auto (selon la date)</option>
+            <option value="noel">🎄 Noël</option><option value="nouvel">✨ Nouvel An</option><option value="valentin">💞 Saint-Valentin</option>
+            <option value="ramadan">🌙 Ramadan</option><option value="paques">🐣 Pâques</option><option value="indep">🇨🇮 Indépendance CI</option>
+            <option value="rentree">🎒 Rentrée</option><option value="halloween">🎃 Halloween</option><option value="ete">🌴 Été</option>
+          </select>
+          <button class="profil-btn-secondary" type="button" onclick="adminApplyTheme()" style="margin-top:10px;width:100%">Appliquer le thème</button>
+        </div>
+
+        <!-- Session -->
+        <div class="profil-section">
+          <h3><iconify-icon icon="solar:key-minimalistic-bold" width="16"></iconify-icon> Session admin</h3>
+          <p class="hint">Statut : <strong id="adminKeyStatus">—</strong></p>
+          <button class="profil-btn-secondary" type="button" onclick="adminLogout()" style="margin-top:8px">Déconnexion admin</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

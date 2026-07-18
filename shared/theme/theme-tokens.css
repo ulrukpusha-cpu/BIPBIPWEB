@@ -1,0 +1,280 @@
+/* =========================================================
+   Bipbip Recharge — Seasonal theme tokens
+   Source: BIPBIPTHEME/themes.jsx (9 seasons), distilled into CSS vars.
+   Applied via :root[data-season="<id>"]. No data-season = brand default.
+   ========================================================= */
+
+:root {
+  --bb-bg: linear-gradient(180deg, #0B1220 0%, #050914 100%);
+  --bb-text: #F8FAFC;
+  --bb-muted: #94A3B8;
+  --bb-card-bg: rgba(17, 24, 39, 0.7);
+  --bb-tile-bg: rgba(30, 41, 59, 0.55);
+  --bb-tile-border: rgba(148, 163, 184, 0.18);
+  --bb-divider: rgba(148, 163, 184, 0.18);
+  --bb-accent: #2563EB;
+  --bb-accent-text: #ffffff;
+  --bb-good: #22C55E;
+  --bb-warn: #F59E0B;
+  --bb-hero-bg: linear-gradient(135deg, #1E3A8A 0%, #2563EB 60%, #06B6D4 100%);
+  --bb-hero-text: #ffffff;
+  --bb-hero-border: rgba(148, 163, 184, 0.25);
+  --bb-hero-label: #BFDBFE;
+  --bb-hero-shadow: 0 14px 40px rgba(37, 99, 235, 0.35);
+  --bb-cta-bg: linear-gradient(135deg, #2563EB, #06B6D4);
+  --bb-cta-text: #ffffff;
+  --bb-cta-shadow: 0 10px 24px rgba(37, 99, 235, 0.45);
+  --bb-tile1: #60A5FA;
+  --bb-tile2: #22C55E;
+  --bb-tile3: #F59E0B;
+  --bb-tile4: #A78BFA;
+  --bb-display-font: "Plus Jakarta Sans", system-ui, sans-serif;
+  --bb-mode: dark;
+  --bb-bg-decor:
+    radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.10), transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(6, 182, 212, 0.08), transparent 50%);
+}
+
+/* ───── 1. Noël ───── */
+:root[data-season="noel"] {
+  --bb-bg: linear-gradient(180deg, #0A1F2C 0%, #081725 100%);
+  --bb-accent: #F59E0B;
+  --bb-hero-bg: linear-gradient(135deg, #7F1D1D 0%, #991B1B 45%, #1F4A3A 100%);
+  --bb-hero-border: rgba(245, 158, 11, 0.35);
+  --bb-hero-label: #FCD34D;
+  --bb-hero-shadow: 0 12px 36px rgba(127, 29, 29, 0.5);
+  --bb-cta-bg: linear-gradient(135deg, #DC2626, #F59E0B);
+  --bb-cta-shadow: 0 10px 24px rgba(220, 38, 38, 0.45);
+  --bb-tile1: #F87171;
+  --bb-tile2: #34D399;
+  --bb-tile3: #FCD34D;
+  --bb-tile4: #F472B6;
+  --bb-display-font: "Mountains of Christmas", "Fraunces", serif;
+  --bb-bg-decor:
+    radial-gradient(circle at 80% 10%, rgba(245, 158, 11, 0.08), transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(34, 197, 94, 0.08), transparent 50%);
+}
+
+/* ───── 2. Nouvel An ───── */
+:root[data-season="nouvel"] {
+  --bb-bg: linear-gradient(180deg, #0A0F2C 0%, #050814 100%);
+  --bb-accent: #FDE68A;
+  --bb-hero-bg: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #831843 100%);
+  --bb-hero-border: rgba(253, 230, 138, 0.4);
+  --bb-hero-label: #FDE68A;
+  --bb-hero-shadow: 0 14px 40px rgba(30, 27, 75, 0.6);
+  --bb-cta-bg: linear-gradient(135deg, #FDE68A, #F59E0B);
+  --bb-cta-text: #0A0F2C;
+  --bb-cta-shadow: 0 10px 24px rgba(253, 230, 138, 0.35);
+  --bb-tile1: #FDE68A;
+  --bb-tile2: #EC4899;
+  --bb-tile3: #60A5FA;
+  --bb-tile4: #A78BFA;
+  --bb-display-font: "Fraunces", serif;
+  --bb-bg-decor:
+    radial-gradient(circle at 15% 20%, rgba(253, 230, 138, 0.08), transparent 35%),
+    radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.08), transparent 40%);
+}
+
+/* ───── 3. Saint-Valentin ───── */
+:root[data-season="valentin"] {
+  --bb-bg: linear-gradient(180deg, #2C0B1E 0%, #1A0612 100%);
+  --bb-accent: #F472B6;
+  --bb-hero-bg: linear-gradient(135deg, #BE185D 0%, #E11D48 55%, #EC4899 100%);
+  --bb-hero-border: rgba(251, 207, 232, 0.45);
+  --bb-hero-label: #FCE7F3;
+  --bb-hero-shadow: 0 14px 40px rgba(190, 24, 93, 0.55);
+  --bb-cta-bg: linear-gradient(135deg, #EC4899, #BE185D);
+  --bb-cta-shadow: 0 10px 24px rgba(236, 72, 153, 0.45);
+  --bb-tile1: #F472B6;
+  --bb-tile2: #FB7185;
+  --bb-tile3: #FDA4AF;
+  --bb-tile4: #E879F9;
+  --bb-display-font: "Dancing Script", "Fraunces", cursive;
+  --bb-bg-decor:
+    radial-gradient(circle at 15% 20%, rgba(244, 114, 182, 0.12), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(236, 72, 153, 0.10), transparent 50%);
+}
+
+/* ───── 4. Ramadan / Aïd ───── */
+:root[data-season="ramadan"] {
+  --bb-bg: linear-gradient(180deg, #0A1D2C 0%, #051726 100%);
+  --bb-accent: #F5D588;
+  --bb-hero-bg: linear-gradient(135deg, #064E3B 0%, #0F766E 55%, #7C5E1A 100%);
+  --bb-hero-border: rgba(245, 213, 136, 0.4);
+  --bb-hero-label: #F5D588;
+  --bb-hero-shadow: 0 14px 40px rgba(6, 78, 59, 0.6);
+  --bb-cta-bg: linear-gradient(135deg, #F5D588, #B45309);
+  --bb-cta-text: #1F1308;
+  --bb-cta-shadow: 0 10px 24px rgba(245, 213, 136, 0.35);
+  --bb-tile1: #F5D588;
+  --bb-tile2: #14B8A6;
+  --bb-tile3: #A3E635;
+  --bb-tile4: #FB923C;
+  --bb-display-font: "Amiri", "Fraunces", serif;
+  --bb-bg-decor:
+    radial-gradient(circle at 80% 15%, rgba(245, 213, 136, 0.10), transparent 40%),
+    radial-gradient(circle at 15% 85%, rgba(15, 118, 110, 0.10), transparent 45%);
+}
+
+/* ───── 5. Pâques (light) ───── */
+:root[data-season="paques"] {
+  --bb-bg: linear-gradient(180deg, #FEF9F0 0%, #FDEBD0 100%);
+  --bb-text: #1E293B;
+  --bb-muted: #78716C;
+  --bb-card-bg: #FFFFFF;
+  --bb-tile-bg: #FFFFFF;
+  --bb-tile-border: rgba(146, 64, 14, 0.12);
+  --bb-divider: rgba(146, 64, 14, 0.12);
+  --bb-accent: #EC4899;
+  --bb-hero-bg: linear-gradient(135deg, #FBCFE8 0%, #A7F3D0 50%, #BFDBFE 100%);
+  --bb-hero-text: #4C1D2E;
+  --bb-hero-border: rgba(255, 255, 255, 0.8);
+  --bb-hero-label: #7C2D12;
+  --bb-hero-shadow: 0 20px 40px rgba(244, 114, 182, 0.25);
+  --bb-cta-bg: linear-gradient(135deg, #F472B6, #A78BFA);
+  --bb-cta-shadow: 0 10px 24px rgba(244, 114, 182, 0.35);
+  --bb-tile1: #F472B6;
+  --bb-tile2: #34D399;
+  --bb-tile3: #FBBF24;
+  --bb-tile4: #60A5FA;
+  --bb-display-font: "Pacifico", "Fraunces", cursive;
+  --bb-mode: light;
+  --bb-bg-decor:
+    radial-gradient(circle at 15% 20%, rgba(251, 207, 232, 0.5), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(191, 219, 254, 0.5), transparent 50%);
+}
+
+/* ───── 6. Indépendance CI ───── */
+:root[data-season="indep"] {
+  --bb-bg: linear-gradient(180deg, #0F1824 0%, #0A0F18 100%);
+  --bb-accent: #FF7900;
+  --bb-hero-bg: linear-gradient(100deg, #FF7900 0%, #FF7900 33%, #F8FAFC 33%, #F8FAFC 66%, #009E60 66%, #009E60 100%);
+  --bb-hero-text: #0B1220;
+  --bb-hero-border: rgba(255, 255, 255, 0.6);
+  --bb-hero-label: #0B1220;
+  --bb-hero-shadow: 0 14px 40px rgba(255, 121, 0, 0.4);
+  --bb-cta-bg: linear-gradient(135deg, #FF7900, #D97706);
+  --bb-cta-shadow: 0 10px 24px rgba(255, 121, 0, 0.4);
+  --bb-tile1: #FF7900;
+  --bb-tile2: #009E60;
+  --bb-tile3: #F8FAFC;
+  --bb-tile4: #FDBA74;
+  --bb-display-font: "Permanent Marker", "Fraunces", cursive;
+  --bb-bg-decor:
+    linear-gradient(180deg, rgba(255, 121, 0, 0.05), transparent 30%),
+    linear-gradient(0deg, rgba(0, 158, 96, 0.05), transparent 30%);
+}
+
+/* ───── 7. Rentrée (light) ───── */
+:root[data-season="rentree"] {
+  --bb-bg: #F4F6F2;
+  --bb-text: #1B2A1F;
+  --bb-muted: #6B7A6E;
+  --bb-card-bg: #FFFFFF;
+  --bb-tile-bg: #FFFFFF;
+  --bb-tile-border: rgba(27, 42, 31, 0.12);
+  --bb-divider: rgba(27, 42, 31, 0.12);
+  --bb-accent: #15803D;
+  --bb-hero-bg: linear-gradient(135deg, #14532D 0%, #166534 55%, #CA8A04 100%);
+  --bb-hero-text: #ffffff;
+  --bb-hero-border: rgba(202, 138, 4, 0.4);
+  --bb-hero-label: #FDE68A;
+  --bb-hero-shadow: 0 18px 36px rgba(20, 83, 45, 0.3);
+  --bb-cta-bg: linear-gradient(135deg, #15803D, #166534);
+  --bb-cta-shadow: 0 10px 24px rgba(21, 128, 61, 0.35);
+  --bb-tile1: #15803D;
+  --bb-tile2: #CA8A04;
+  --bb-tile3: #DC2626;
+  --bb-tile4: #2563EB;
+  --bb-display-font: "Caveat", "Fraunces", cursive;
+  --bb-mode: light;
+  --bb-bg-decor:
+    repeating-linear-gradient(0deg, transparent 0, transparent 36px, rgba(21, 128, 61, 0.06) 36px, rgba(21, 128, 61, 0.06) 37px);
+}
+
+/* ───── 8. Halloween ───── */
+:root[data-season="halloween"] {
+  --bb-bg: linear-gradient(180deg, #1A0B2E 0%, #0F0720 100%);
+  --bb-accent: #FB923C;
+  --bb-hero-bg: linear-gradient(135deg, #4C1D95 0%, #7C2D12 55%, #1A0B2E 100%);
+  --bb-hero-border: rgba(251, 146, 60, 0.4);
+  --bb-hero-label: #FB923C;
+  --bb-hero-shadow: 0 14px 40px rgba(76, 29, 149, 0.55);
+  --bb-cta-bg: linear-gradient(135deg, #FB923C, #7C2D12);
+  --bb-cta-shadow: 0 10px 24px rgba(251, 146, 60, 0.4);
+  --bb-tile1: #FB923C;
+  --bb-tile2: #A855F7;
+  --bb-tile3: #84CC16;
+  --bb-tile4: #F43F5E;
+  --bb-display-font: "Creepster", "Fraunces", cursive;
+  --bb-bg-decor:
+    radial-gradient(circle at 20% 15%, rgba(251, 146, 60, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.10), transparent 50%);
+}
+
+/* ───── 9. Été / Vacances (light) ───── */
+:root[data-season="ete"] {
+  --bb-bg: linear-gradient(180deg, #FFF4E1 0%, #FFE7C7 100%);
+  --bb-text: #1F2937;
+  --bb-muted: #78716C;
+  --bb-card-bg: #FFFFFF;
+  --bb-tile-bg: #FFFFFF;
+  --bb-tile-border: rgba(120, 113, 108, 0.18);
+  --bb-divider: rgba(120, 113, 108, 0.18);
+  --bb-accent: #EA580C;
+  --bb-hero-bg: linear-gradient(135deg, #14B8A6 0%, #06B6D4 50%, #FBA74A 100%);
+  --bb-hero-text: #ffffff;
+  --bb-hero-border: rgba(255, 255, 255, 0.6);
+  --bb-hero-label: #FFF7ED;
+  --bb-hero-shadow: 0 18px 40px rgba(20, 184, 166, 0.35);
+  --bb-cta-bg: linear-gradient(135deg, #EA580C, #F59E0B);
+  --bb-cta-shadow: 0 10px 24px rgba(234, 88, 12, 0.4);
+  --bb-tile1: #14B8A6;
+  --bb-tile2: #EA580C;
+  --bb-tile3: #EAB308;
+  --bb-tile4: #3B82F6;
+  --bb-display-font: "Pacifico", "Fraunces", cursive;
+  --bb-mode: light;
+  --bb-bg-decor:
+    radial-gradient(circle at 85% 20%, rgba(253, 224, 71, 0.25), transparent 40%),
+    radial-gradient(circle at 15% 85%, rgba(20, 184, 166, 0.12), transparent 50%);
+}
+
+/* ───── Theme-aware hooks any page can use ───── */
+.bb-themed-bg {
+  background: var(--bb-bg);
+  color: var(--bb-text);
+  position: relative;
+}
+.bb-themed-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--bb-bg-decor);
+  z-index: 0;
+}
+.bb-themed-accent { color: var(--bb-accent); }
+.bb-themed-cta {
+  background: var(--bb-cta-bg);
+  color: var(--bb-cta-text);
+  box-shadow: var(--bb-cta-shadow);
+}
+.bb-themed-hero {
+  background: var(--bb-hero-bg);
+  color: var(--bb-hero-text);
+  border: 1px solid var(--bb-hero-border);
+  box-shadow: var(--bb-hero-shadow);
+}
+.bb-themed-card {
+  background: var(--bb-card-bg);
+  border: 1px solid var(--bb-divider);
+}
+.bb-themed-tile {
+  background: var(--bb-tile-bg);
+  border: 1px solid var(--bb-tile-border);
+}
+.bb-display-font {
+  font-family: var(--bb-display-font);
+}

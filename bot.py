@@ -86,6 +86,50 @@ def _api_reject_order(order_id, reason=""):
 
 # ================== START ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Intercept /start auth_<token> : flow d'authentification APK natif
+    if update.message and context.args:
+        arg = context.args[0]
+        if arg.startswith('auth_'):
+            token = arg[5:]
+            tg_user = update.message.from_user
+            user_payload = {
+                'id': tg_user.id,
+                'first_name': tg_user.first_name or '',
+                'last_name': tg_user.last_name or '',
+                'username': tg_user.username or '',
+                'photo_url': ''
+            }
+            try:
+                import os, json
+                import urllib.request
+                req_body = json.dumps({'token': token, 'telegramUser': user_payload}).encode('utf-8')
+                req = urllib.request.Request(
+                    'http://localhost:3000/api/auth/telegram-poll/claim',
+                    data=req_body,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'X-Bot-Secret': os.environ.get('BOT_INTERNAL_SECRET', '')
+                    },
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    if resp.status == 200:
+                        await update.message.reply_text(
+                            "✅ **Connexion réussie !**\n\nRetourne dans l'app Bipbip Recharge, "
+                            "tu es maintenant connecté.",
+                            parse_mode='Markdown'
+                        )
+                        return
+                    else:
+                        await update.message.reply_text(
+                            "❌ Échec de la connexion. Le code a peut-être expiré.\n"
+                            "Retourne dans l'app et réessaie."
+                        )
+                        return
+            except Exception as e:
+                await update.message.reply_text(f"⚠️ Erreur : {e}")
+                return
+
     keyboard = [
         [InlineKeyboardButton("💳 Acheter", callback_data="buy")],
         [InlineKeyboardButton("💰 Tarifs", callback_data="prices")],

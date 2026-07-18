@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8928406232312253"
+     crossorigin="anonymous"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bipbip Recharge — Profil</title>
+<meta name="description" content="Votre profil Bipbip Recharge : points, parrainage, connexion Google.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Mountains+of+Christmas:wght@700&family=Creepster&family=Dancing+Script:wght@600;700&family=Amiri:wght@700&family=Pacifico&family=Permanent+Marker&family=Caveat:wght@700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="/shared/theme/theme-tokens.css">
+<link rel="stylesheet" href="/shared/theme/theme-particles.css">
+<link rel="stylesheet" href="/shared/theme/theme-ui.css">
+<link rel="stylesheet" href="/bipbip-dynamic-scene.css">
+<link rel="stylesheet" href="/site/css/site.css">
+
+<script defer src="/shared/api/api-client.js"></script>
+<script defer src="/shared/i18n/i18n.js"></script>
+<script defer src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<link rel="dns-prefetch" href="https://accounts.google.com">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="/shared/theme/theme-engine.js" data-no-auto></script>
+<script defer src="/site/js/core.js"></script>
+<script defer src="/site/js/shell.js"></script>
+</head>
+
+<body class="bb-shell" data-page="profil">
+
+  <div class="site-wrap">
+    <div class="page-head">
+      <h1 data-bbt="ph.profil.t">Mon profil</h1>
+      <p data-bbt="ph.profil.s">Connectez-vous avec Google pour sauvegarder vos points, vos quêtes et votre historique.</p>
+    </div>
+
+    <!-- Carte profil (visible connecté ET invité) -->
+    <section class="bb-card profil-card">
+      <div class="profil-photo" id="profilPhoto"><iconify-icon icon="solar:user-bold"></iconify-icon></div>
+      <div class="profil-meta">
+        <h2 id="profilName">Invité</h2>
+        <div class="sub" id="profilHint">Non connecté · Tes points ne sont pas sauvegardés</div>
+      </div>
+      <div class="profil-points">
+        <div class="val" id="profilPoints">0</div>
+        <div class="cap">Points</div>
+      </div>
+    </section>
+
+    <!-- Bloc connexion (invité) -->
+    <section class="bb-card login-card" id="profilLoginCta">
+      <div class="login-avatar"><iconify-icon icon="solar:user-circle-bold" width="56"></iconify-icon></div>
+      <h3>Connectez-vous</h3>
+      <p>Profitez de toutes les fonctionnalités : points, quêtes, parrainage et historique.</p>
+      <button class="login-btn login-btn--google" type="button" onclick="BB.loginGoogle('googleSigninFallback')">
+        <svg width="20" height="20" viewBox="0 0 48 48" style="flex-shrink:0">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+        </svg>
+        <span>Continuer avec Google</span>
+      </button>
+      <div id="googleSigninFallback" style="display:none;justify-content:center;margin:10px 0 0"></div>
+      <p class="login-hint">Vous pouvez aussi utiliser le site sans compte, mais vos points et votre historique ne seront pas sauvegardés.</p>
+    </section>
+
+    <!-- Bloc parrainage + déconnexion (connecté) -->
+    <section class="bb-card site-form" id="profilAccount">
+      <h2>Mon compte</h2>
+      <div>
+        <div class="lbl">Lien de parrainage</div>
+        <input class="site-input mono" id="profilReferral" readonly value="https://bipbiprecharge.ci/r/—">
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-ghost" type="button" onclick="copyReferral()"><iconify-icon icon="solar:copy-linear"></iconify-icon> Copier le lien</button>
+        <button class="btn-ghost btn-danger" id="logoutBtn" type="button" onclick="BB.logoutUser()" style="display:none"><iconify-icon icon="solar:logout-2-linear"></iconify-icon> Déconnexion</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+  function copyReferral() {
+    var el = document.getElementById('profilReferral');
+    el.select();
+    try { navigator.clipboard.writeText(el.value); window.BB && BB.appToast('Lien copié !', 'success'); }
+    catch (e) { document.execCommand('copy'); window.BB && BB.appToast('Lien copié !', 'success'); }
+  }
+  </script>
+</body>
+</html>
