@@ -49,3 +49,9 @@ storage/
 *.bak-*
 *.bak.*
 *.bak_*
+
+# Support : conversations clients (widget Aide + bot Telegram) — PRIVE
+support_conversations.json
+# Relances SMS + meta liens : donnees runtime
+sms_reminded.json
+social_link_meta.json

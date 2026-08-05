@@ -5,13 +5,14 @@
  * ou, en dernier recours, de la balise og:image de la page de l'article.
  * Par défaut les articles sont créés en "approved" pour affichage immédiat.
  *
- * Sources : liste curatée intégrée (DEFAULT_FEEDS) + surcharge/ajout via .env :
- *   RSS_FEEDS_REGION, RSS_FEEDS_FINANCE, RSS_FEEDS_TECH, RSS_FEEDS_MODE,
- *   RSS_FEEDS_SCIENCE, RSS_FEEDS_MUSIC   (URLs séparées par des virgules)
- *   RSS_FEED_URLS  (fallback, catégorisé "region")
- *   AUTO_APPROVE_RSS=true  (défaut: true = affichage direct)
- *   RSS_DISABLE_DEFAULTS=true  (n'utiliser que les flux du .env)
- *   RSS_MAX_PER_FEED=6
+ * Sources :
+ *   - DEFAULT_FEEDS (curatées, intégrées)
+ *   - Variables d'env : RSS_FEEDS_REGION, RSS_FEEDS_FINANCE, RSS_FEEDS_TECH, RSS_FEEDS_MODE, RSS_FEEDS_SCIENCE, RSS_FEEDS_MUSIC
+ *   - Redis : rss:feeds:list (feeds ajoutés via bot Telegram) — NOUVEAU
+ *   - RSS_FEED_URLS / RSS_FEED_URL (fallback, cat="region")
+ *   - AUTO_APPROVE_RSS=true (défaut: true)
+ *   - RSS_DISABLE_DEFAULTS=true (n'utiliser que les flux .env + Redis)
+ *   - RSS_MAX_PER_FEED=6
  */
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -20,6 +21,7 @@ const crypto = require('crypto');
 const Parser = require('rss-parser');
 const db = require('../database/supabase-client');
 const actualitesService = require('../services/actualitesService');
+const redis = require('redis');
 
 const parser = new Parser({
     timeout: 15000,
@@ -34,6 +36,38 @@ const parser = new Parser({
         ],
     },
 });
+
+// ── Redis client for bot feeds ──────────────────────────────────────────────
+const REDIS_URL = process.env.REDIS_URL || 'redis://:BipbipSecure2026!@127.0.0.1:6379/0';
+const REDIS_KEY = 'rss:feeds:list';
+let redisClient = null;
+
+function getRedisClient() {
+    if (redisClient) return redisClient;
+    try {
+        redisClient = redis.createClient({ url: REDIS_URL });
+        redisClient.on('error', (err) => console.error('[fetchNewsRss] Redis error:', err.message));
+        redisClient.connect().catch(err => console.error('[fetchNewsRss] Redis connect failed:', err.message));
+        console.log('[fetchNewsRss] Redis client initialized');
+    } catch (e) {
+        console.error('[fetchNewsRss] Redis init failed:', e.message);
+    }
+    return redisClient;
+}
+
+async function getRedisFeeds() {
+    const client = getRedisClient();
+    if (!client || !client.isOpen) return [];
+    try {
+        const feeds = await client.lRange(REDIS_KEY, 0, -1);
+        return feeds.map(f => {
+            try { return JSON.parse(f); } catch { return null; }
+        }).filter(f => f && f.active !== false && f.url);
+    } catch (err) {
+        console.error('[fetchNewsRss] Redis fetch failed:', err.message);
+        return [];
+    }
+}
 
 // ── Liste curatée de flux vérifiés (réponse OK + image) ──────────────────────
 const DEFAULT_FEEDS = {
@@ -78,13 +112,13 @@ const DEFAULT_FEEDS = {
     ],
 };
 
-const CATEGORIES = ['region', 'finance', 'tech', 'mode', 'science', 'music'];
+const CATEGORIES = ['region', 'finance', 'tech', 'mode', 'science', 'music', 'custom'];
 
 function splitUrls(str) {
     return (str || '').split(',').map(u => u.trim()).filter(Boolean);
 }
 
-function getCategorizedFeeds() {
+async function getCategorizedFeeds() {
     const seen = new Set();
     const feeds = [];
     const add = (url, category) => {
@@ -100,10 +134,19 @@ function getCategorizedFeeds() {
         for (const cat of CATEGORIES) (DEFAULT_FEEDS[cat] || []).forEach(u => add(u, cat));
     }
     // Surcharge / ajout via .env
-    for (const cat of CATEGORIES) {
+    for (const cat of CATEGORIES.filter(c => c !== 'custom')) {
         splitUrls(process.env['RSS_FEEDS_' + cat.toUpperCase()]).forEach(u => add(u, cat));
     }
     splitUrls(process.env.RSS_FEED_URLS || process.env.RSS_FEED_URL).forEach(u => add(u, 'region'));
+
+    // ── NOUVEAU: Feeds depuis Redis (bot Telegram) ──────────────────────────
+    const redisFeeds = await getRedisFeeds();
+    for (const rf of redisFeeds) {
+        // Utilise la plateforme comme catégorie ou 'custom'
+        const cat = CATEGORIES.includes(rf.platform) ? rf.platform : 'custom';
+        add(rf.url, cat);
+    }
+
     return feeds;
 }
 
@@ -205,20 +248,39 @@ function getGroqKey() {
 const GROQ_KEY = getGroqKey();
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 const EN_FEED_HINTS = ['coindesk', 'cointelegraph', 'theverge', 'arstechnica', 'wired.com', 'nasa.gov', 'newscientist', 'pitchfork', 'nme.com', 'billboard', 'rollingstone'];
+
 function isEnglishFeed(url) {
     const u = (url || '').toLowerCase();
     return EN_FEED_HINTS.some(h => u.includes(h));
+}
+
+// Check if feed should be translated (from Redis language field or domain hints)
+function shouldTranslateFeed(feed) {
+    // Priority 1: explicit language from Redis (bot feeds)
+    if (feed.language && feed.language !== 'auto' && feed.language !== 'fr') {
+        return true;
+    }
+    // Priority 2: known English domains (default feeds)
+    if (isEnglishFeed(feed.url)) {
+        return true;
+    }
+    // Priority 3: category-based (custom feeds from bot)
+    const englishCategories = ['custom', 'tech', 'finance'];
+    if (englishCategories.includes(feed.category)) {
+        return true;
+    }
+    return false;
 }
 async function translateToFrench(title, summary, content) {
     if (!GROQ_KEY) return null;
     const body = {
         model: GROQ_MODEL,
         temperature: 0.2,
-        max_tokens: 1600,
+        max_tokens: 2400,
         response_format: { type: 'json_object' },
         messages: [
             { role: 'system', content: 'Tu es un traducteur professionnel anglais→français pour une app d\'actualités. Traduis fidèlement en français naturel et journalistique. Ne traduis PAS les noms propres, marques, ni les noms de personnes. Réponds UNIQUEMENT en JSON strict: {"title":"...","summary_short":"...","content":"..."}.' },
-            { role: 'user', content: JSON.stringify({ title: title || '', summary_short: summary || '', content: (content || '').slice(0, 1800) }) },
+            { role: 'user', content: JSON.stringify({ title: title || '', summary_short: summary || '', content: (content || '').slice(0, 700) }) },
         ],
     };
     try {
@@ -230,9 +292,15 @@ async function translateToFrench(title, summary, content) {
             body: JSON.stringify(body),
         });
         clearTimeout(to);
-        if (!r.ok) return null;
+        if (!r.ok) {
+            let why = r.status; try { const e = await r.json(); why = (e.error && e.error.code) || r.status; } catch (_) {}
+            console.error('[fetchNewsRss] Groq traduction KO (' + why + ') — article gardé en anglais');
+            return null;
+        }
         const d = await r.json();
+        const fr = d && d.choices && d.choices[0] && d.choices[0].finish_reason;
         const c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+        if (fr === 'length') { console.error('[fetchNewsRss] traduction tronquée (max_tokens) — article gardé en anglais'); return null; }
         if (!c) return null;
         const j = JSON.parse(c);
         if (!j.title && !j.content) return null;
@@ -245,7 +313,7 @@ async function fetchAndIngest() {
         console.log('[fetchNewsRss] Supabase non configuré, skip.');
         return;
     }
-    const feeds = getCategorizedFeeds();
+    const feeds = await getCategorizedFeeds();
     if (feeds.length === 0) {
         console.log('[fetchNewsRss] Aucun flux RSS configuré.');
         return;
@@ -301,7 +369,7 @@ async function fetchAndIngest() {
                 } else {
                     count++;
                     // Traduction FR (uniquement pour un NOUVEL article de source anglaise)
-                    if (isEnglishFeed(feed.url) && translationsUsed < MAX_TRANSLATIONS && result.actualite && result.actualite.id) {
+                    if (shouldTranslateFeed(feed) && translationsUsed < MAX_TRANSLATIONS && result.actualite && result.actualite.id) {
                         translationsUsed++;
                         const tr = await translateToFrench(title, summary, content);
                         if (tr) {

@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const questsService = require('../services/questsService');
 const telegramUsersService = require('../services/telegramUsersService');
+const socialLinkMeta = require('../social_link_meta');
 
 // Liens YouTube/X approuvés (visibles dans l'onglet Quêtes)
 router.get('/approved-links', async (req, res) => {
@@ -15,7 +16,14 @@ router.get('/approved-links', async (req, res) => {
             const already_clicked = userId
                 ? await telegramUsersService.hasUserClickedLink(userId, item.id)
                 : false;
-            return { ...item, already_clicked };
+            const m = socialLinkMeta.get(item.id) || {};
+            return {
+                ...item,
+                already_clicked,
+                label: m.title || item.label,
+                desc: m.desc || item.desc,
+                icon: m.icon || item.icon,
+            };
         }));
         res.json({ approved_links, points_per_click: telegramUsersService.POINTS_PER_LINK_CLICK });
     } catch (err) {

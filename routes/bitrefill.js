@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const bitrefill = require('../services/bitrefill');
+const giftDelivery = require('../services/giftDelivery');
 
 const BR_MARKUP = parseFloat(process.env.BITREFILL_GIFTCARD_MARKUP || '5') / 100;
 const USD_XOF = parseFloat(process.env.USD_XOF_RATE || process.env.BITREFILL_USD_XOF || '610');
@@ -56,6 +57,50 @@ const _catCache = {};
 const CAT_TTL = 60 * 60 * 1000;
 
 router.get('/status', (req, res) => res.json({ ok: true, configured: bitrefill.configured }));
+
+// ── Webhook Bitrefill : facture terminée (complete / denied / payment_error) ──
+// Bitrefill NE SIGNE PAS ses webhooks : il poste l'objet facture, sans en-tête de
+// signature ni secret partagé. Deux garde-fous compensent cette absence :
+//   1. un jeton secret dans le CHEMIN (BITREFILL_WEBHOOK_SECRET), pour que l'URL ne
+//      soit pas devinable et que le bruit soit rejeté avant tout traitement ;
+//   2. surtout : le corps de la requête n'est JAMAIS cru. On n'en extrait que l'ID de
+//      facture, puis giftDelivery rappelle l'API Bitrefill avec notre clé pour lire
+//      l'état réel. Forger un webhook ne permet donc pas d'injecter une fausse carte.
+// On répond 200 dès que le cas est traité ou définitivement sans objet, et 503 quand
+// un réessai de Bitrefill est souhaitable (code pas encore émis, API indisponible).
+const WEBHOOK_SECRET = String(process.env.BITREFILL_WEBHOOK_SECRET || '').trim();
+
+router.post('/webhook/:token', async (req, res) => {
+    if (!WEBHOOK_SECRET || req.params.token !== WEBHOOK_SECRET) {
+        console.warn('[Bitrefill webhook] jeton invalide depuis ' + (req.ip || '?'));
+        return res.status(404).json({ error: 'not found' });
+    }
+    const body = req.body || {};
+    const inv = body.invoice || body.data || body;
+    const invoiceId = inv && (inv.id || inv.invoice_id);
+    const status = (inv && inv.status) || '?';
+    if (!invoiceId) {
+        console.warn('[Bitrefill webhook] charge utile sans id de facture');
+        return res.status(200).json({ ok: true, ignored: 'pas d_id de facture' });
+    }
+    console.log('[Bitrefill webhook] facture ' + invoiceId + ' status=' + status);
+
+    // Seule une facture réglée peut donner une carte. Les autres états sont
+    // journalisés pour l'admin, sans traitement automatique.
+    if (status && !['complete', 'completed', 'paid'].includes(String(status).toLowerCase())) {
+        return res.status(200).json({ ok: true, noted: status });
+    }
+
+    try {
+        const r = await giftDelivery.completeFromInvoice(invoiceId);
+        if (r.ok) return res.status(200).json({ ok: true, orderId: r.orderId, already: !!r.already });
+        if (r.retry) return res.status(503).json({ ok: false, reason: r.reason });   // Bitrefill réessaiera
+        return res.status(200).json({ ok: false, reason: r.reason });                 // sans objet, ne pas réessayer
+    } catch (e) {
+        console.error('[Bitrefill webhook]', e.message);
+        return res.status(503).json({ ok: false, error: 'erreur interne' });
+    }
+});
 
 router.get('/balance', async (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: 'admin requis' });

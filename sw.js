@@ -3,7 +3,7 @@
  * Stratégie : cache-first pour les assets statiques, network-first pour les API.
  * Fallback offline pour la page principale.
  */
-var CACHE_NAME = 'bipbip-v47';
+var CACHE_NAME = 'bipbip-v51';
 
 var PRECACHE_URLS = [
     '/',

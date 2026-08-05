@@ -132,25 +132,39 @@ async function updateOrderProof(orderId, proofPath, status = 'proof_sent', payme
     return getOrderById(orderId);
 }
 
+// Statuts finaux : la commande a deja ete livree (credit/forfait recu par le client).
+const DELIVERED_STATUSES = ['credit_delivered', 'forfait_delivered'];
+
 async function setOrderValidated(orderId) {
-    const { error } = await supabase
+    // garde : ne valide QUE une commande encore en attente. Renvoie null si la commande
+    // est deja validee/livree/rejetee => l'appelant ne relance PAS le post-traitement
+    // (anti-double-livraison : le flux depot et le flux preuve peuvent viser la meme commande).
+    const { data, error } = await supabase
         .from('orders')
         .update({ status: 'validated', validated_at: new Date().toISOString() })
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .in('status', ['pending', 'proof_sent'])
+        .select('id');
     if (error) throw error;
+    if (!data || data.length === 0) return null;
     return getOrderById(orderId);
 }
 
 async function setOrderRejected(orderId, reason) {
-    const { error } = await supabase
+    // garde : on ne rejette JAMAIS une commande deja livree (sinon le client perd sa
+    // commande alors que le credit est parti et que le wallet a ete debite).
+    const { data, error } = await supabase
         .from('orders')
         .update({
             status: 'rejected',
             rejected_at: new Date().toISOString(),
             reject_reason: reason || 'Non spécifié'
         })
-        .eq('id', orderId);
+        .eq('id', orderId)
+        .not('status', 'in', '(' + DELIVERED_STATUSES.join(',') + ')')
+        .select('id');
     if (error) throw error;
+    if (!data || data.length === 0) return null;
     return getOrderById(orderId);
 }
 

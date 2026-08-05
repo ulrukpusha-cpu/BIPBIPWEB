@@ -44,8 +44,23 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const orderStorage = require('./storage');
 const blacklist = require('./blacklist');   // liste rouge anti-arnaque
 const marketQuota = require('./market_quota');   // quota articles Market (packs payés)
+const socialLinkMeta = require('./social_link_meta');   // titre/desc personnalisés des liens
+const supportChat = require('./services/supportChat');   // inbox support unifiee (widget Aide + bot Telegram)
+// Conversation support "active" par admin : apres un clic sur "Repondre", tout
+// message simple qu'il tape part au client, sans geste Telegram particulier.
+const supActiveConv = new Map();   // chatId admin -> { convId, until }
+const SUP_ACTIVE_MS = 30 * 60 * 1000;
+function supGetActive(chatId) {
+    const a = supActiveConv.get(String(chatId));
+    if (!a || a.until < Date.now()) { supActiveConv.delete(String(chatId)); return null; }
+    return a;
+}
+function supSetActive(chatId, convId) {
+    supActiveConv.set(String(chatId), { convId, until: Date.now() + SUP_ACTIVE_MS });
+}
+function supClearActive(chatId) { supActiveConv.delete(String(chatId)); }
 const { authTelegram, requireAuth, isRegisteredUser } = require('./middleware/auth');
-const { apiLimiter, paymentLimiter } = require('./middleware/rateLimit');
+const { apiLimiter, paymentLimiter, createLimiter } = require('./middleware/rateLimit');
 const momoRoutes = require('./routes/momo');
 const actualitesRoutes = require('./routes/actualites');
 const actualitesService = require('./services/actualitesService');
@@ -188,13 +203,87 @@ function sanitizeNudges(arr) {
     }).filter(function (n) { return n.title || n.body; });
 }
 
+// ─── Verrous de service (rupture de fonds) ───────────────────────────────
+// Quand un compte operateur (ou le wallet Reloadly) est a sec, on VERROUILLE le
+// service concerne : la page se ferme cote client ET la commande est refusee
+// cote serveur. Objectif : ne plus encaisser ce qu'on ne peut pas livrer.
+const SERVICE_IDS = ['MTN', 'Orange', 'Moov', 'INTL', 'GIFT'];
+const SERVICE_LABELS = {
+    MTN: 'MTN', Orange: 'Orange', Moov: 'Moov',
+    INTL: 'Recharge internationale', GIFT: 'Cartes cadeaux',
+};
+
+function sanitizeServiceLocks(raw) {
+    const out = {};
+    for (const id of SERVICE_IDS) {
+        const v = raw && raw[id];
+        out[id] = {
+            locked: !!(v && v.locked),
+            reason: String((v && v.reason) || '').slice(0, 200),
+            at: (v && Number(v.at)) || 0,
+        };
+    }
+    return out;
+}
+
+/** A quel service appartient une commande ? null = non concerne (promos, LED…). */
+function serviceOfOrder(operator) {
+    const op = String(operator || '').trim();
+    if (op === 'MTN' || op === 'Orange' || op === 'Moov') return op;
+    if (op === 'RECHARGE_INTL') return 'INTL';
+    if (op === 'CARTE_CADEAU') return 'GIFT';
+    return null;
+}
+
+/** Verrouille / deverrouille un service et persiste. */
+function setServiceLock(serviceId, locked, reason) {
+    const cfg = readAppConfig();
+    const locks = sanitizeServiceLocks(cfg.serviceLocks);
+    if (!locks[serviceId]) return null;
+    locks[serviceId] = {
+        locked: !!locked,
+        reason: String(reason || (locked ? 'Fonds insuffisants' : '')).slice(0, 200),
+        at: Date.now(),
+    };
+    cfg.serviceLocks = locks;
+    writeAppConfig(cfg);
+    console.log('[VERROU] ' + serviceId + ' -> ' + (locked ? 'VERROUILLE' : 'ouvert'));
+    return locks[serviceId];
+}
+
+/** Message + clavier du menu /verrou (reutilise apres chaque bascule). */
+function serviceLocksMenu() {
+    const locks = sanitizeServiceLocks(readAppConfig().serviceLocks);
+    let text = '\uD83D\uDD12 <b>Verrous de service</b>\n'
+        + '<i>Un service verrouille refuse les commandes (appli, site ET bot) : plus rien n\'est encaisse.</i>\n\n';
+    const rows = [];
+    for (const id of SERVICE_IDS) {
+        const l = locks[id];
+        text += (l.locked ? '\uD83D\uDD34' : '\uD83D\uDFE2') + ' <b>' + SERVICE_LABELS[id] + '</b> — '
+            + (l.locked ? ('VERROUILLE' + (l.reason ? ' (' + l.reason.replace(/[<>&]/g, '') + ')' : '')) : 'ouvert') + '\n';
+        rows.push([{
+            text: (l.locked ? '\uD83D\uDD13 Ouvrir ' : '\uD83D\uDD12 Verrouiller ') + SERVICE_LABELS[id],
+            callback_data: 'lock_' + (l.locked ? 'off_' : 'on_') + id,
+        }]);
+    }
+    return { text, reply_markup: { inline_keyboard: rows } };
+}
+
+function getServiceLock(serviceId) {
+    if (!serviceId) return null;
+    const locks = sanitizeServiceLocks((readAppConfig() || {}).serviceLocks);
+    const l = locks[serviceId];
+    return (l && l.locked) ? l : null;
+}
+
 function readAppConfig() {
     const defaults = {
         ledScrollSeconds: parseInt(process.env.LED_SCROLL_SECONDS, 10) || 60,
         pubBanners: DEFAULT_PUB_BANNERS,
         giftCards: [],
         notifNudges: DEFAULT_NUDGES,
-        ciReloadlyBackup: false
+        ciReloadlyBackup: false,
+        serviceLocks: sanitizeServiceLocks(null)
     };
     try {
         if (fs.existsSync(APP_CONFIG_PATH)) {
@@ -211,7 +300,8 @@ function readAppConfig() {
             const themeForce = (typeof raw.themeForce === 'string') ? raw.themeForce : '';
             const notifNudges = (Array.isArray(raw.notifNudges) && raw.notifNudges.length) ? sanitizeNudges(raw.notifNudges) : DEFAULT_NUDGES;
             const ciReloadlyBackup = !!raw.ciReloadlyBackup;
-            return { ledScrollSeconds: led, pubBanners, giftCards, maintenance, themeForce, notifNudges, ciReloadlyBackup };
+            const serviceLocks = sanitizeServiceLocks(raw.serviceLocks);
+            return { ledScrollSeconds: led, pubBanners, giftCards, maintenance, themeForce, notifNudges, ciReloadlyBackup, serviceLocks };
         }
     } catch (e) { /* ignore */ }
     return { ...defaults };
@@ -551,6 +641,22 @@ async function deliverCIRecharge(order) {
     return await executeUssdTransfer(order);
 }
 
+// Route la livraison selon l'opérateur : recharge internationale -> Reloadly (airtime),
+// tout le reste (Orange/MTN/Moov) -> USSD local. Évite que RECHARGE_INTL (numéro à indicatif
+// étranger, ex +216) parte à tort vers l'USSD local ("préfixe inconnu") au lieu de Reloadly.
+async function dispatchDelivery(order) {
+    if (order && order.operator === 'RECHARGE_INTL') {
+        try {
+            const air = await giftDelivery.deliverAirtime(order);
+            return { success: !!(air && air.ok && !air.manual), airtime: air };
+        } catch (e) {
+            console.error('[dispatchDelivery airtime]', e.message);
+            return { success: false, error: e.message };
+        }
+    }
+    return await deliverCIRecharge(order);
+}
+
 // Crédite +3 slots d'articles Market après un pack payé (PACK_ARTICLES validé).
 async function creditArticlePack(order) {
     if (!order || order.operator !== 'PACK_ARTICLES') return false;
@@ -580,7 +686,66 @@ function toLetextoPhone(phone) {
     return d.length >= 8 ? '225' + d : '';
 }
 
+// ── Routage des notifications client : SMS (LeTexto) ou WhatsApp ──
+// Tant que le compte LeTexto n'est pas approuvé (dossier non déposé), SMS_ENABLED=false :
+// tout part vers l'agent WhatsApp. Basculer SMS_ENABLED=true dans .env une fois le compte
+// validé — aucun autre changement de code nécessaire, les 7 appels passent tous ici.
+// Limite du canal WhatsApp : le bridge ne peut écrire qu'aux clients ayant DÉJÀ écrit au
+// bot (contacts.json). Les autres sont injoignables : on le logge, on n'invente rien.
+const SMS_ENABLED = String(process.env.SMS_ENABLED || 'true').toLowerCase() === 'true';
+const WA_BRIDGE_URL = (process.env.WA_BRIDGE_URL || 'http://127.0.0.1:3020').replace(/\/+$/, '');
+const WA_CONTACTS_FILE = process.env.WA_CONTACTS_FILE
+    || '/root/var/www/bipbip-whatsapp-bot/data/contacts.json';
+
+let _waContacts = null, _waContactsMtime = 0;
+function waFindChatId(phone) {
+    try {
+        const st = fs.statSync(WA_CONTACTS_FILE);
+        if (!_waContacts || st.mtimeMs !== _waContactsMtime) {
+            _waContacts = JSON.parse(fs.readFileSync(WA_CONTACTS_FILE, 'utf8')) || {};
+            _waContactsMtime = st.mtimeMs;
+        }
+    } catch (e) { return null; }
+    let d = String(phone || '').replace(/\D/g, '');
+    if (d.startsWith('225')) d = d.slice(3);
+    // contacts.json indexe tantôt avec le 0 initial, tantôt sans : on teste les deux.
+    for (const v of new Set([d, d.replace(/^0/, ''), '0' + d.replace(/^0/, '')])) {
+        if (_waContacts[v] && _waContacts[v].chatId) return _waContacts[v].chatId;
+    }
+    return null;
+}
+
+async function sendWhatsApp(chatId, message) {
+    const fetch = (await import('node-fetch')).default;
+    const r = await fetch(`${WA_BRIDGE_URL}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, message }),
+    });
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok && data.success === true, data };
+}
+
 async function sendSms(phone, message) {
+    if (!SMS_ENABLED) {
+        const chatId = waFindChatId(phone);
+        if (!chatId) {
+            console.log(`[SMS→WA] ${phone} : SMS désactivé et aucun contact WhatsApp connu — message NON envoyé`);
+            return { ok: false, blocked: true, error: 'SMS désactivé, client injoignable sur WhatsApp' };
+        }
+        try {
+            const res = await sendWhatsApp(chatId, message);
+            console.log(`[SMS→WA] ${phone} -> ${res.ok ? 'OK ' + (res.data.messageId || '') : 'ECHEC ' + JSON.stringify(res.data).slice(0, 150)}`);
+            return res;
+        } catch (e) {
+            console.error(`[SMS→WA] ${phone} erreur bridge :`, e.message);
+            return { ok: false, error: e.message };
+        }
+    }
+    return sendSmsViaLetexto(phone, message);
+}
+
+async function sendSmsViaLetexto(phone, message) {
     const to = toLetextoPhone(phone);
     if (!to) return { ok: false, error: 'numéro invalide' };
     if (!LETEXTO_TOKEN) {
@@ -633,7 +798,8 @@ async function executeUssdTransfer(order) {
                     operator,
                     recipient: phone,
                     type: bundleMeta.bundleType,
-                    bundleId: bundleMeta.bundleId
+                    bundleId: bundleMeta.bundleId,
+                    orderId: order.id
                 })
             });
             const result = await res.json();
@@ -654,7 +820,8 @@ async function executeUssdTransfer(order) {
             body: JSON.stringify({
                 operator,
                 recipient: phone,
-                amount: order.amount
+                amount: order.amount,
+                orderId: order.id
             })
         });
         const result = await res.json();
@@ -923,6 +1090,7 @@ app.get('/api/config', (req, res) => {
         tonConnectManifestUrl: `${base}/tonconnect-manifest.json`,
         googleClientId: GOOGLE_CLIENT_ID || null,
         maintenance: appConfig.maintenance || { enabled: false },
+        serviceLocks: sanitizeServiceLocks(appConfig.serviceLocks),
         themeForce: appConfig.themeForce || '',
         notifNudges: appConfig.notifNudges || [],
         ciReloadlyBackup: !!appConfig.ciReloadlyBackup,
@@ -1238,6 +1406,23 @@ app.put('/api/admin/config', (req, res) => {
             ' (was ' + wasEnabled + ') ua=' + (req.headers['user-agent'] || '?').slice(0,40) +
             ' xff=' + (req.headers['x-forwarded-for'] || req.ip || '?'));
     }
+    if (body.serviceLocks != null) {
+        // FUSION, pas remplacement : l'admin peut n'envoyer qu'un seul service.
+        // Un sanitize direct remettrait les autres a "ouvert" sans prevenir.
+        const merged = sanitizeServiceLocks(current.serviceLocks);
+        for (const id of SERVICE_IDS) {
+            const v = body.serviceLocks[id];
+            if (v == null) continue;
+            merged[id] = {
+                locked: !!v.locked,
+                reason: String(v.reason || (v.locked ? 'Fonds insuffisants' : '')).slice(0, 200),
+                at: Date.now(),
+            };
+        }
+        current.serviceLocks = merged;
+        const on = SERVICE_IDS.filter(id => merged[id].locked);
+        console.log('[VERROU] PUT serviceLocks verrouilles=' + (on.join(',') || 'aucun'));
+    }
     if (body.themeForce != null) {
         current.themeForce = String(body.themeForce || '').slice(0, 40);
         console.log('[THEME] PUT themeForce=' + (current.themeForce || '(auto)'));
@@ -1254,6 +1439,7 @@ app.put('/api/admin/config', (req, res) => {
             ledScrollSeconds: current.ledScrollSeconds,
             pubBanners: current.pubBanners,
             maintenance: current.maintenance || { enabled: false },
+            serviceLocks: sanitizeServiceLocks(current.serviceLocks),
             themeForce: current.themeForce || ''
         }
     });
@@ -1522,6 +1708,21 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
             return res.status(403).json({ error: "Ce num\u00e9ro ne peut pas \u00eatre servi pour le moment. Contactez le support si vous pensez qu'il s'agit d'une erreur." });
         }
 
+        // Service a sec (fonds operateur / wallet Reloadly) : on refuse AVANT
+        // d'encaisser. Cote appli la page est deja verrouillee, mais le bot
+        // Telegram de commande passe par ici aussi — c'est la vraie barriere.
+        const svcId = serviceOfOrder(operator);
+        const svcLock = getServiceLock(svcId);
+        if (svcLock) {
+            console.warn('[VERROU] commande refusee, service ' + svcId + ' verrouille');
+            return res.status(503).json({
+                error: (SERVICE_LABELS[svcId] || svcId) + ' est momentanement indisponible'
+                    + (svcLock.reason ? ' (' + svcLock.reason + ')' : '')
+                    + '. Reessaie dans un moment, aucun paiement n\'a ete pris.',
+                serviceLocked: svcId,
+            });
+        }
+
         let bundleNotes = null;
         const opNorm = String(operator).trim();
         if (bundleType && bundleId && (opNorm === 'MTN' || opNorm === 'Orange' || opNorm === 'Moov')) {
@@ -1590,7 +1791,13 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
                 operatorId: Number(req.body.operatorId),
                 senderEUR: req.body.senderEUR != null ? Number(req.body.senderEUR) : null,
                 iso: req.body.iso || null,
-                number: String(req.body.number || phone || '').replace(/\D/g, '')
+                number: String(req.body.number || phone || '').replace(/\D/g, ''),
+                // CONTRAT DE LIVRAISON (neutre fournisseur) : montant promis au client dans SA
+                // devise. operatorId/senderEUR sont des valeurs Reloadly ; elles ne permettent pas
+                // de rejouer la livraison ailleurs (ni à la main) si Reloadly est en panne.
+                localAmount: req.body.localAmount != null ? Number(req.body.localAmount) : null,
+                recipientCurrency: req.body.recipientCurrency || null,
+                operatorName: req.body.operatorName || null
             }); } catch (e) { console.error('[Airtime saveParams]', e.message); }
         }
         
@@ -1647,9 +1854,41 @@ app.get('/api/orders/user/:userId', async (req, res) => {
     res.json({ orders: userOrders });
 });
 
-app.get('/api/orders/:id/giftcard', async (req, res) => {
+// Code de carte cadeau — RÉSERVÉ AU PROPRIÉTAIRE DE LA COMMANDE.
+// Un code de carte cadeau est de l'argent au porteur : le premier qui l'utilise l'a.
+// Cette route était ouverte : quiconque connaissait un id de commande récupérait le
+// code, or ces ids circulent (messages Telegram admin, logs, URLs). On exige donc que
+// le demandeur soit le propriétaire de la commande, ou un admin.
+// Limiteur dédié en plus : empêche le balayage d'ids depuis une même origine.
+const giftcardLimiter = createLimiter(60 * 1000, 20, 'Trop de consultations de cartes.');
+app.get('/api/orders/:id/giftcard', giftcardLimiter, async (req, res) => {
     const g = await giftDelivery.getGift(req.params.id);
     if (!g) return res.status(404).json({ error: 'introuvable' });
+
+    const order = await orderStorage.getOrderById(req.params.id);
+    const ownerId = order && order.userId ? String(order.userId) : null;
+    // Identité du demandeur : on accepte la MÊME preuve que celle utilisée pour créer
+    // la commande (POST /api/orders retient `req.userId || bodyUserId`), sinon les
+    // clients légitimes seraient refusés. Portée réelle de la protection : il ne suffit
+    // plus de connaître l'id de commande, il faut aussi celui du propriétaire.
+    // Ce n'est pas une preuve cryptographique — seule une session vérifiée le serait.
+    const claimed = req.headers['x-user-id'] || req.query.userId || null;
+    const asker = req.userId ? String(req.userId) : (claimed ? String(claimed) : null);
+
+    if (!isAdminRequest(req)) {
+        if (ownerId) {
+            if (!asker || asker !== ownerId) {
+                console.warn(`[giftcard] accès refusé sur ${req.params.id} (demandeur=${asker || 'anonyme'}, propriétaire=${ownerId})`);
+                return res.status(403).json({ error: 'Non autorisé', code: 'NOT_OWNER' });
+            }
+        } else {
+            // Commandes anciennes sans userId (3 sur 143 au moment de l'ajout) : on ne
+            // peut prouver aucune appartenance. On laisse passer pour ne pas priver ces
+            // clients de leur carte déjà payée, mais on journalise chaque accès.
+            console.warn(`[giftcard] commande ${req.params.id} sans propriétaire — accès non vérifiable (demandeur=${asker || 'anonyme'})`);
+        }
+    }
+
     res.json({ status: g.status, card: g.card || null });
 });
 
@@ -1666,7 +1905,15 @@ app.post('/api/orders/:id/proof', upload.single('proof'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'Aucun fichier uploadé' });
         }
-        
+
+        // La commande est déjà réglée (validée par rapprochement de dépôt, livrée, ou rejetée).
+        // On n'envoie PAS la carte admin avec les boutons Valider/Rejeter : c'est ce second
+        // bouton, sur une commande déjà livrée, qui provoquait la double livraison.
+        if (FINAL_ORDER_STATUSES.includes(String(order.status))) {
+            console.log(`[Proof] ${orderId} déjà traitée (${order.status}) — preuve ignorée, pas de notif admin`);
+            return res.json({ success: true, already: true, status: order.status, message: 'Commande déjà traitée' });
+        }
+
         const proofPath = `/uploads/${req.file.filename}`;
         const paymentMethod = normalizePaymentMethod(req.body && req.body.paymentMethod);
         await orderStorage.updateOrderProof(orderId, proofPath, 'proof_sent', paymentMethod);
@@ -1712,7 +1959,13 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
         if (!image) {
             return res.status(400).json({ error: 'Image manquante' });
         }
-        
+
+        // Idem /proof : commande déjà réglée => pas de seconde carte admin (anti-double-livraison).
+        if (FINAL_ORDER_STATUSES.includes(String(order.status))) {
+            console.log(`[Proof] ${orderId} déjà traitée (${order.status}) — preuve ignorée, pas de notif admin`);
+            return res.json({ success: true, already: true, status: order.status, message: 'Commande déjà traitée' });
+        }
+
         // Décoder le base64 et sauvegarder
         const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
         const filename = `${Date.now()}-${orderId}.png`;
@@ -1758,17 +2011,41 @@ function isAdminRequest(req) {
     return false;
 }
 
+// Statuts finaux : plus rien à valider / rejeter sur ces commandes.
+const FINAL_ORDER_STATUSES = ['validated', 'credit_delivered', 'forfait_delivered', 'rejected'];
+
+// La commande a-t-elle DÉJÀ été livrée ? Deux cas :
+//  - livraison USSD (crédit/forfait CI) → statut credit_delivered / forfait_delivered
+//  - livraison Reloadly (RECHARGE_INTL / CARTE_CADEAU) → le statut reste "validated",
+//    la preuve de livraison est dans notes.reloadly.status === 'delivered'
+function isOrderDelivered(order) {
+    if (!order) return false;
+    const st = String(order.status || '');
+    if (st === 'credit_delivered' || st === 'forfait_delivered') return true;
+    try {
+        const notes = typeof order.notes === 'string' ? JSON.parse(order.notes) : order.notes;
+        if (notes && notes.reloadly && notes.reloadly.status === 'delivered') return true;
+    } catch (e) { /* notes non-JSON (ex. id annonce) : ignorer */ }
+    return false;
+}
+
 // Admin (espace app) : gestion des liens sponsorisés
 app.get('/api/admin/social-links', async (req, res) => {
     if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
     try {
         const users = await telegramUsersService.listUsersWithSocialLink(100);
-        const links = (users || []).map(u => ({
-            id: String(u.telegram_id),
-            name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || String(u.telegram_id),
-            link: u.social_link || '',
-            approved: !!u.social_link_approved,
-        }));
+        const links = (users || []).map(u => {
+            const m = socialLinkMeta.get(String(u.telegram_id)) || {};
+            return {
+                id: String(u.telegram_id),
+                name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || String(u.telegram_id),
+                link: u.social_link || '',
+                approved: !!u.social_link_approved,
+                title: m.title || '',
+                desc: m.desc || '',
+                icon: m.icon || '',
+            };
+        });
         res.json({ links });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1790,6 +2067,12 @@ app.delete('/api/admin/social-links/:id', async (req, res) => {
     if (r && r.error) return res.status(400).json({ error: r.error });
     res.json({ ok: true });
 });
+app.post('/api/admin/social-links/:id/meta', (req, res) => {
+    if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorisé' });
+    const b = req.body || {};
+    const saved = socialLinkMeta.set(req.params.id, { title: b.title, desc: b.desc, icon: b.icon });
+    res.json({ ok: true, meta: saved });
+});
 
 // Admin: Valider une commande (X-Admin-Key OU Telegram admin)
 app.post('/api/admin/orders/:id/validate', async (req, res) => {
@@ -1805,6 +2088,16 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
         return res.status(500).json({ error: 'Erreur serveur' });
     }
     if (!order) {
+        // setOrderValidated renvoie null si la commande n'était plus en attente.
+        // Deux cas à distinguer : commande inexistante vs commande DÉJÀ traitée.
+        // On répond 200 dans le second cas : les deux appelants (rapprochement de dépôt
+        // et agent validateur) considèrent ainsi la commande comme réglée, sans relancer
+        // le post-traitement — c'est le point d'entrée de la double livraison.
+        const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+        if (existing && FINAL_ORDER_STATUSES.includes(String(existing.status))) {
+            console.log(`[Validate] ${orderId} déjà traitée (${existing.status}) — post-traitement ignoré`);
+            return res.json({ success: true, already: true, status: existing.status, message: 'Commande déjà traitée' });
+        }
         return res.status(404).json({ error: 'Commande introuvable' });
     }
 
@@ -1878,7 +2171,7 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
                     if (order.userId) await sendTelegramMessage(order.userId, '⚠️ Recharge internationale en cours de traitement.');
                 }
             } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
-                const ussdResult = await deliverCIRecharge(order);
+                const ussdResult = await dispatchDelivery(order);
                 // Detecter type de livraison : forfait (bundle) ou credit normal
                 const isBundle = !!getOrderBundleMeta(order);
                 const deliveryType = isBundle ? 'forfait' : 'credit';
@@ -1964,7 +2257,15 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
     try {
         const orderId = req.params.id;
         const order = await orderStorage.setOrderValidated(orderId);
-        if (!order) return res.status(404).json({ error: 'Commande introuvable' });
+        if (!order) {
+            // null = commande absente OU déjà traitée (garde anti-double-livraison)
+            const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+            if (existing && FINAL_ORDER_STATUSES.includes(String(existing.status))) {
+                console.log(`[Validate] ${orderId} déjà traitée (${existing.status}) — livraison ignorée`);
+                return res.json({ success: true, already: true, status: existing.status, message: 'Commande déjà traitée' });
+            }
+            return res.status(404).json({ error: 'Commande introuvable' });
+        }
         if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
             if (order.userId) {
                 const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
@@ -1974,7 +2275,7 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
                     '✅ <b>Promo Likes/Vues validée !</b>\n\nVotre lien est maintenant visible dans l\'espace Quêtes. Chaque clic vous rapporte des points !');
             }
         } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
-            const ussdResult = await deliverCIRecharge(order);
+            const ussdResult = await dispatchDelivery(order);
             if (order.userId) {
                 const txt = ussdResult.success
                     ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -2007,6 +2308,10 @@ app.post('/api/admin/orders/:id/reject-by-telegram', async (req, res) => {
         const orderId = req.params.id;
         const { reason } = req.body || {};
         const orderBefore = await orderStorage.getOrderById(orderId);
+        if (isOrderDelivered(orderBefore)) {
+            console.warn(`[Reject] REFUSÉ : ${orderId} est déjà livrée (${orderBefore.status})`);
+            return res.status(409).json({ error: 'Commande déjà livrée — rejet impossible', delivered: true });
+        }
         const order = await orderStorage.setOrderRejected(orderId, reason);
         if (!order) return res.status(404).json({ error: 'Commande introuvable' });
         if (orderBefore && orderBefore.operator === 'ANNONCE_LED' && orderBefore.notes) {
@@ -2030,6 +2335,11 @@ app.post('/api/admin/orders/:id/reject', async (req, res) => {
     try {
         const orderId = req.params.id;
         const { reason } = req.body;
+        const orderBefore = await orderStorage.getOrderById(orderId);
+        if (isOrderDelivered(orderBefore)) {
+            console.warn(`[Reject] REFUSÉ : ${orderId} est déjà livrée (${orderBefore.status})`);
+            return res.status(409).json({ error: 'Commande déjà livrée — rejet impossible', delivered: true });
+        }
         const order = await orderStorage.setOrderRejected(orderId, reason);
 
         if (!order) {
@@ -2091,6 +2401,7 @@ app.use('/api/cabine', cabineRoutes); // Bipbip Cabine (commerciaux Kbine)
 app.use('/api/reloadly', reloadlyRoutes); // Reloadly -> app grand public BIPBIP-mobile
 app.use('/api/bitrefill', require('./routes/bitrefill')); // Bitrefill -> complement Reloadly
 app.use('/api/push', pushRoutes); // Tokens FCM (notifications push)
+app.use('/api/support', require('./routes/support')); // Chat support (widget Aide + pont bot Telegram)
 app.use('/api/telegram/webhook-cabine', cabineBotRoutes); // Bot Telegram Cabine dédié
 app.get('/api/led/messages', (req, res) => {
     ledService.getActiveMessages()
@@ -2730,6 +3041,91 @@ async function handleTelegramUpdateAdmin(body) {
                 await sendTelegramMessage(chatId, '⛔ Accès réservé aux admins (bot Supabase).', {}, botToken);
                 return;
             }
+
+            // ─── SUPPORT : fin du mode conversation ───
+            if (cmd === '/fin' || cmd === '/stop') {
+                const act = supGetActive(chatId);
+                supClearActive(chatId);
+                await sendTelegramMessage(chatId,
+                    act ? '✅ Conversation fermee. Tes prochains messages ne partiront plus au client.'
+                        : 'Aucune conversation support active.',
+                    {}, botToken);
+                return;
+            }
+
+            // ─── SUPPORT : mode "conversation active" ───
+            // Apres un clic sur le bouton "Repondre", tout texte simple part au
+            // client. C'est le chemin principal : aucun geste Telegram requis
+            // (le "repondre au message" n'est pas propose sur tous les clients).
+            const supAct = supGetActive(chatId);
+            if (supAct && rawText && !rawText.startsWith('/')) {
+                const conv = supportChat.get(supAct.convId);
+                if (!conv) {
+                    supClearActive(chatId);
+                    await sendTelegramMessage(chatId, '⚠️ Cette conversation n\'existe plus.', {}, botToken);
+                    return;
+                }
+                supportChat.addMessage(conv.id, 'admin', rawText, { author: (msg.from && msg.from.first_name) || 'Support' });
+                supSetActive(chatId, conv.id);   // prolonge tant qu'il ecrit
+                await sendTelegramMessage(chatId,
+                    '✅ Envoye a <b>' + String(conv.name || 'client').replace(/[<>&]/g, '') + '</b>'
+                    + ' (' + (conv.channel === 'telegram' ? 'Telegram' : 'appli') + ').\n'
+                    + '<i>Continue d\'ecrire, tes messages partent chez lui. /fin pour arreter.</i>',
+                    { reply_markup: { inline_keyboard: [[{ text: '✅ Terminer', callback_data: 'sup_end' }]] } },
+                    botToken);
+                return;
+            }
+
+            // ─── SUPPORT : repli — repondre au message d'alerte (si le client
+            // Telegram propose le geste). Accepte l'ancien marqueur #SUP et le
+            // nouveau SUP: (sans diese, qui devenait un hashtag cliquable).
+            const supSrc = msg.reply_to_message ? (msg.reply_to_message.text || msg.reply_to_message.caption || '') : '';
+            const supMatch = supSrc && supSrc.match(/#?SUP:([a-z]+:[^\s]+)/i);
+            if (supMatch && rawText && !rawText.startsWith('/')) {
+                const convId = supMatch[1];
+                const conv = supportChat.get(convId);
+                if (!conv) {
+                    await sendTelegramMessage(chatId, '⚠️ Conversation support introuvable (trop ancienne ?).', {}, botToken);
+                    return;
+                }
+                supportChat.addMessage(convId, 'admin', rawText, { author: (msg.from && msg.from.first_name) || 'Support' });
+                const via = conv.channel === 'telegram' ? 'Telegram' : 'appli';
+                await sendTelegramMessage(chatId,
+                    '✅ Envoyé à <b>' + String(conv.name || 'client').replace(/[<>&]/g, '') + '</b> (' + via + ').\n'
+                    + '🤖 L\'assistant IA se tait sur cette conversation pendant ' + supportChat.HANDOFF_MINUTES + ' min.',
+                    {}, botToken);
+                return;
+            }
+
+            if (cmd === '/verrou' || cmd === '/verrous' || cmd === '/lock') {
+                const menu = serviceLocksMenu();
+                await sendTelegramMessage(chatId, menu.text, { reply_markup: menu.reply_markup }, botToken);
+                return;
+            }
+
+            if (cmd === '/support' || cmd === '/sup') {
+                const convs = supportChat.list({ limit: 12 });
+                if (!convs.length) {
+                    await sendTelegramMessage(chatId, '💭 Aucune conversation support pour le moment.', {}, botToken);
+                    return;
+                }
+                const icon = { waiting: '🙋', human: '👤', bot: '🤖', closed: '✅' };
+                for (const c of convs) {
+                    const when = new Date(c.lastAt).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    const out = (icon[c.status] || '•') + ' <b>' + String(c.name || 'Client').replace(/[<>&]/g, '') + '</b>'
+                        + (c.channel === 'telegram' ? ' · Telegram' : ' · Appli')
+                        + (c.adminUnread ? ' · <b>' + c.adminUnread + ' non lu(s)</b>' : '')
+                        + '\n<i>' + String(c.preview || '').replace(/[<>&]/g, '').slice(0, 100) + '</i>\n'
+                        + '<code>' + when + '</code>';
+                    await sendTelegramMessage(chatId, out, {
+                        reply_markup: { inline_keyboard: [[
+                            { text: '💬 Répondre', callback_data: 'sup_rep_' + c.id },
+                            { text: '✅ Clore', callback_data: 'sup_cls_' + c.id },
+                        ]] }
+                    }, botToken);
+                }
+                return;
+            }
             if (cmd === '/start') {
                 await sendTelegramMessage(chatId,
                     '👋 <b>Bot Admin Supabase</b>\n\n' +
@@ -2742,7 +3138,10 @@ async function handleTelegramUpdateAdmin(body) {
                     '/newcabine CODE Nom — créer une cabine\n' +
                     '/gencabine Nom — code auto (expire 1 mois)\n' +
                     '/versements — Versements Wave en attente\n' +
-                    '/blacklist [list|add|remove] — Liste rouge (anti-arnaque)',
+                    '/solde — Solde Reloadly (airtime + cartes cadeaux)\n' +
+                    '/blacklist [list|add|remove] — Liste rouge (anti-arnaque)\n' +
+                    '/verrou — Verrouiller un service à sec (Orange/MTN/Moov/intl.)\n' +
+                    '/support — Conversations clients',
                     {}, botToken);
                 return;
             }
@@ -2921,6 +3320,37 @@ async function handleTelegramUpdateAdmin(body) {
                 }
                 return;
             }
+            if (cmd === '/solde' || cmd === '/balance' || cmd === '/reloadly') {
+                const reloadlySvc = require('./services/reloadly');
+                if (!reloadlySvc.configured) {
+                    await sendTelegramMessage(chatId, '⚠️ Reloadly n\'est pas configuré (identifiants manquants).', {}, botToken);
+                    return;
+                }
+                const eurXof = parseFloat(process.env.EUR_XOF_RATE || '585');
+                const [a, g] = await Promise.allSettled([
+                    reloadlySvc.airtime.balance(),
+                    reloadlySvc.giftcards.balance()
+                ]);
+                const line = (label, r) => {
+                    if (r.status !== 'fulfilled') return `${label} : ⚠️ ${(r.reason && r.reason.message) || 'indisponible'}`;
+                    const b = r.value || {};
+                    const amt = Number(b.balance);
+                    const cur = b.currencyCode || '';
+                    const seuil = b.lowBalanceThreshold != null ? Number(b.lowBalanceThreshold) : null;
+                    const low = isFinite(amt) && seuil != null && amt < seuil;
+                    const xof = (isFinite(amt) && String(cur).toUpperCase() === 'EUR')
+                        ? ` (~${Math.round(amt * eurXof).toLocaleString('fr-FR')} F)` : '';
+                    return `${label} : <b>${isFinite(amt) ? amt.toFixed(2) : '?'} ${cur}</b>${xof}`
+                        + (low ? `\n   🔴 sous le seuil bas (${seuil} ${cur}) — à recharger` : ' ✅');
+                };
+                await sendTelegramMessage(chatId,
+                    '💶 <b>Solde Reloadly</b> (' + (reloadlySvc.ENV || '?') + ')\n\n'
+                    + '📱 ' + line('Airtime', a) + '\n\n'
+                    + '🎁 ' + line('Cartes cadeaux', g)
+                    + '\n\n<i>Taux d\'affichage : 1 EUR ≈ ' + eurXof + ' F</i>',
+                    {}, botToken);
+                return;
+            }
             if (cmd === '/versements') {
                 const deps = await cabineService.adminListDeposits('en_attente');
                 if (!deps.length) {
@@ -3049,6 +3479,74 @@ async function handleTelegramUpdateAdmin(body) {
                 await answerTelegramCallback(callbackId, 'Non autorisé', botToken);
                 return;
             }
+            // ─── VERROUS de service (rupture de fonds) ───
+            if (data.startsWith('lock_on_') || data.startsWith('lock_off_')) {
+                const on = data.startsWith('lock_on_');
+                const id = data.slice(on ? 'lock_on_'.length : 'lock_off_'.length);
+                if (!SERVICE_IDS.includes(id)) {
+                    await answerTelegramCallback(callbackId, 'Service inconnu', botToken);
+                    return;
+                }
+                setServiceLock(id, on, on ? 'Fonds insuffisants' : '');
+                await answerTelegramCallback(callbackId,
+                    (SERVICE_LABELS[id] || id) + (on ? ' verrouille' : ' rouvert'), botToken);
+                const menu = serviceLocksMenu();
+                await sendTelegramMessage(chatId,
+                    (on ? '\uD83D\uDD12 <b>' + SERVICE_LABELS[id] + ' verrouille</b> — les clients ne peuvent plus commander.'
+                        : '\uD83D\uDD13 <b>' + SERVICE_LABELS[id] + ' rouvert</b> — les commandes repassent.')
+                    + '\n\n' + menu.text,
+                    { reply_markup: menu.reply_markup }, botToken);
+                return;
+            }
+            // Raccourci depuis l'alerte de solde bas : coupe INTL + cartes cadeaux
+            if (data === 'lock_reloadly') {
+                setServiceLock('INTL', true, 'Solde Reloadly insuffisant');
+                setServiceLock('GIFT', true, 'Solde Reloadly insuffisant');
+                await answerTelegramCallback(callbackId, 'Services verrouilles', botToken);
+                await sendTelegramMessage(chatId,
+                    '\uD83D\uDD12 <b>Recharge internationale et cartes cadeaux verrouillees.</b>\n'
+                    + 'Plus aucune commande ne sera encaissee sur ces services.\n\n'
+                    + '<i>Recharge le wallet Reloadly, puis /verrou pour rouvrir.</i>', {}, botToken);
+                return;
+            }
+
+            // ─── SUPPORT : boutons du chat client ───
+            if (data.startsWith('sup_rep_')) {
+                const convId = data.slice('sup_rep_'.length);
+                const conv = supportChat.get(convId);
+                if (!conv) {
+                    await answerTelegramCallback(callbackId, 'Conversation introuvable', botToken);
+                    return;
+                }
+                supSetActive(chatId, convId);
+                supportChat.markAdminRead(convId);
+                const last = (conv.messages || []).slice(-6)
+                    .map(m => (m.from === 'client' ? '👤 ' : m.from === 'admin' ? '↩️ ' : '🤖 ')
+                        + String(m.text || '').replace(/[<>&]/g, '').slice(0, 160)).join('\n');
+                await answerTelegramCallback(callbackId, 'Ecris ton message', botToken);
+                await sendTelegramMessage(chatId,
+                    '💬 Tu parles maintenant a <b>' + String(conv.name || 'client').replace(/[<>&]/g, '') + '</b>'
+                    + ' (' + (conv.channel === 'telegram' ? 'Telegram' : 'appli') + ').\n\n'
+                    + (last ? '<b>Derniers echanges</b>\n<i>' + last + '</i>\n\n' : '')
+                    + '✍️ <b>Ecris simplement ton message ici</b>, il partira chez lui.\n'
+                    + '<i>/fin quand tu as termine.</i>',
+                    { reply_markup: { inline_keyboard: [[{ text: '✅ Terminer', callback_data: 'sup_end' }]] } },
+                    botToken);
+                return;
+            }
+            if (data === 'sup_end') {
+                supClearActive(chatId);
+                await answerTelegramCallback(callbackId, 'Conversation fermee', botToken);
+                await sendTelegramMessage(chatId, '✅ Termine. Tes prochains messages ne partiront plus au client.', {}, botToken);
+                return;
+            }
+            if (data.startsWith('sup_cls_')) {
+                const convId = data.slice('sup_cls_'.length);
+                supportChat.setStatus(convId, 'closed');
+                supClearActive(chatId);
+                await answerTelegramCallback(callbackId, 'Dossier clos', botToken);
+                return;
+            }
             if (data.startsWith('approve_act_')) {
                 const id = data.replace('approve_act_', '').trim();
                 const updated = await actualitesService.approveActualite(id);
@@ -3159,7 +3657,7 @@ async function handleTelegramUpdateAdmin(body) {
                             if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).', {}, botToken);
                         }
                     } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
-                        const ussdResult = await deliverCIRecharge(order);
+                        const ussdResult = await dispatchDelivery(order);
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -3178,13 +3676,27 @@ async function handleTelegramUpdateAdmin(body) {
                     }
                     await removeOrderButtonsFromAllAdmins(orderId, botToken);
                 } else {
-                    await answerTelegramCallback(callbackId, 'Commande introuvable', botToken);
+                    // null = commande absente OU déjà traitée (garde anti-double-livraison)
+                    const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+                    if (existing) {
+                        console.log(`[Validate] ${orderId} déjà traitée (${existing.status}) — clic admin ignoré`);
+                        await answerTelegramCallback(callbackId, 'Déjà traitée (' + existing.status + ')', botToken);
+                        await removeOrderButtonsFromAllAdmins(orderId, botToken);
+                    } else {
+                        await answerTelegramCallback(callbackId, 'Commande introuvable', botToken);
+                    }
                 }
                 return;
             }
             if (data.startsWith('reject_') && !data.startsWith('reject_act_') && !data.startsWith('reject_ann_')) {
                 const orderId = data.replace('reject_', '');
                 const orderBefore = await orderStorage.getOrderById(orderId);
+                if (isOrderDelivered(orderBefore)) {
+                    console.warn(`[Reject] REFUSÉ : ${orderId} est déjà livrée (${orderBefore.status})`);
+                    await answerTelegramCallback(callbackId, 'Déjà livrée — rejet impossible', botToken);
+                    await removeOrderButtonsFromAllAdmins(orderId, botToken);
+                    return;
+                }
                 const order = await orderStorage.setOrderRejected(orderId);
                 if (order) {
                     if (orderBefore && orderBefore.operator === 'ANNONCE_LED' && orderBefore.notes) await annoncesService.refuseAnnonce(orderBefore.notes);
@@ -3558,7 +4070,7 @@ async function handleTelegramUpdate(body) {
                             if (chatId) await sendTelegramMessage(chatId, '🔗 Lien approuvé → visible dans Quêtes (clic = points).');
                         }
                     } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
-                        const ussdResult = await deliverCIRecharge(order);
+                        const ussdResult = await dispatchDelivery(order);
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -3579,11 +4091,25 @@ async function handleTelegramUpdate(body) {
                     }
                     await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
                 } else {
-                    await answerTelegramCallback(callbackId, 'Commande introuvable');
+                    // null = commande absente OU déjà traitée (garde anti-double-livraison)
+                    const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+                    if (existing) {
+                        console.log(`[Validate] ${orderId} déjà traitée (${existing.status}) — clic admin ignoré`);
+                        await answerTelegramCallback(callbackId, 'Déjà traitée (' + existing.status + ')');
+                        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+                    } else {
+                        await answerTelegramCallback(callbackId, 'Commande introuvable');
+                    }
                 }
             } else if (data.startsWith('reject_') && !data.startsWith('reject_act_') && !data.startsWith('reject_ann_')) {
                 const orderId = data.replace('reject_', '');
                 const orderBefore = await orderStorage.getOrderById(orderId);
+                if (isOrderDelivered(orderBefore)) {
+                    console.warn(`[Reject] REFUSÉ : ${orderId} est déjà livrée (${orderBefore.status})`);
+                    await answerTelegramCallback(callbackId, 'Déjà livrée — rejet impossible', botToken);
+                    await removeOrderButtonsFromAllAdmins(orderId, botToken);
+                    return;
+                }
                 const order = await orderStorage.setOrderRejected(orderId);
                 if (order) {
                     if (orderBefore && orderBefore.operator === 'ANNONCE_LED' && orderBefore.notes) {
@@ -3651,6 +4177,15 @@ async function handleTelegramUpdate(body) {
 // avec les commandes avant validation (l'OCR d'un screenshot est falsifiable ;
 // un dépôt réellement reçu ne l'est pas).
 // Sources : APK écouteur de notifs Wave (POST /api/deposits + secret), poller Djamo.
+// Applications autorisées à créer un dépôt (voir le filtrage dans POST /api/deposits).
+// Les noms exacts se relèvent sur le téléphone : adb shell pm list packages | grep -iE 'wave|djamo'
+// puis se surchargent ici sans toucher au code : DEPOSITS_ALLOWED_PACKAGES=a,b,c
+const DEPOSITS_ALLOWED_PACKAGES = (process.env.DEPOSITS_ALLOWED_PACKAGES
+    || 'com.wave.personal,com.djamo.app')
+    .split(',').map(s => s.trim()).filter(Boolean);
+// Tant que ce drapeau est à 0, on observe sans refuser (voir le commentaire du filtre).
+const DEPOSITS_PACKAGE_ENFORCE = process.env.DEPOSITS_PACKAGE_ENFORCE === '1';
+
 const DEPOSITS_FILE = path.join(__dirname, 'deposits.json');
 const DEPOSITS_SECRET = (process.env.DEPOSITS_SECRET || '').trim();
 let deposits = [];
@@ -3708,6 +4243,33 @@ app.post('/api/deposits', (req, res) => {
     if (body.debug === true) {
         console.log(`[deposits][debug] ${body.package || '?'} : ${String(body.rawText || '').slice(0, 300)}`);
         return res.json({ ok: true, debug: true });
+    }
+
+    // ─── Filtrage par application source ────────────────────────────────────
+    // L'APK lecteur écoute TOUTES les notifications du téléphone, Telegram compris
+    // (vu en prod : package=org.telegram.messenger). Or le bot admin envoie des
+    // messages contenant montants et numéros : un texte imitant le format Wave
+    // pourrait créer un faux dépôt, et un faux dépôt déclenche l'auto-validation
+    // d'une commande — donc du crédit livré sans encaissement.
+    //
+    // Deux temps, pour ne jamais bloquer un vrai dépôt :
+    //   - par défaut on OBSERVE : on journalise le paquet émetteur sans rien refuser
+    //     (on ignore encore si l'APK envoie `package` sur les envois normaux) ;
+    //   - une fois qu'un vrai dépôt Wave a montré son paquet, mettre
+    //     DEPOSITS_PACKAGE_ENFORCE=1 pour refuser tout paquet hors liste blanche.
+    // Un envoi SANS champ `package` n'est jamais refusé : c'est le comportement
+    // historique, le durcir à l'aveugle couperait l'encaissement.
+    const pkg = String(body.package || '').trim();
+    if (!pkg) {
+        console.log(`[deposits][pkg] AUCUN package transmis (source=${body.source || '?'}, montant=${body.amount})`);
+    } else if (!DEPOSITS_ALLOWED_PACKAGES.includes(pkg)) {
+        if (DEPOSITS_PACKAGE_ENFORCE) {
+            console.warn(`[deposits][pkg] REFUSÉ : ${pkg} hors liste blanche (montant=${body.amount}) — dépôt non créé`);
+            return res.status(403).json({ error: 'Application source non autorisée' });
+        }
+        console.warn(`[deposits][pkg] HORS LISTE BLANCHE : ${pkg} (montant=${body.amount}) — accepté car mode observation`);
+    } else {
+        console.log(`[deposits][pkg] OK ${pkg}`);
     }
 
     const amount = parseInt(String(body.amount == null ? '' : body.amount).replace(/[^\d]/g, ''), 10);
@@ -3847,7 +4409,41 @@ app.post('/api/deposits/:id/consume', (req, res) => {
 });
 
 // ── Relances SMS automatiques (dépôt sans preuve à 5 min ; livraison en retard à 15 min) ──
-const smsDelayReminded = new Set();
+// ── Relance "livraison en retard" : mémoire PERSISTANTE ──
+// Ce Set était en mémoire seule : à chaque redémarrage il repartait vide et le serveur
+// re-relançait TOUTES les commandes coincées en 'validated', certaines vieilles de
+// plusieurs semaines (un client recevait "patientez 15 min" pour une commande de 18 jours).
+// Deux garde-fous : on persiste le Set sur disque, et on borne l'âge des commandes
+// relancées — au-delà, la livraison ne partira jamais, relancer n'a aucun sens.
+const SMS_REMINDED_FILE = path.join(__dirname, 'sms_reminded.json');
+const DELAY_SMS_MAX_AGE_MS = Math.max(1, parseInt(process.env.ORDER_DELAY_SMS_MAX_AGE_H || '6', 10)) * 60 * 60 * 1000;
+let smsDelayReminded = new Set();
+try {
+    if (fs.existsSync(SMS_REMINDED_FILE)) {
+        smsDelayReminded = new Set(JSON.parse(fs.readFileSync(SMS_REMINDED_FILE, 'utf8')) || []);
+    }
+} catch (e) { console.error('[SMS retard] load:', e.message); }
+let _smsRemSaveTimer = null;
+function saveSmsReminded() {
+    if (_smsRemSaveTimer) return;
+    _smsRemSaveTimer = setTimeout(() => {
+        _smsRemSaveTimer = null;
+        // On ne garde que les 500 derniers ids : au-delà, la borne d'âge suffit.
+        try { fs.writeFileSync(SMS_REMINDED_FILE, JSON.stringify([...smsDelayReminded].slice(-500)), 'utf8'); }
+        catch (e) { console.error('[SMS retard] save:', e.message); }
+    }, 1000);
+}
+
+// ── Annulation auto des doublons (double-clic client) ──
+// Délai avant annulation : laisse au client le temps d'envoyer sa preuve sur la bonne
+// commande. Fenêtre « jumelle » : deux commandes identiques créées à plus de 10 min
+// d'écart sont probablement deux vraies commandes, pas un double-clic. Âge max : au-delà,
+// c'est de l'historique, on n'y touche pas automatiquement.
+const DUP_MIN_AGE_MS = Math.max(1, parseInt(process.env.ORDER_DUP_CANCEL_MIN || '20', 10)) * 60 * 1000;
+const DUP_TWIN_WINDOW_MS = Math.max(1, parseInt(process.env.ORDER_DUP_TWIN_WINDOW_MIN || '10', 10)) * 60 * 1000;
+const DUP_MAX_AGE_MS = Math.max(1, parseInt(process.env.ORDER_DUP_MAX_AGE_H || '24', 10)) * 60 * 60 * 1000;
+const dupCancelled = new Set();
+
 setInterval(async () => {
     const now = Date.now();
 
@@ -3896,12 +4492,67 @@ setInterval(async () => {
         for (const o of validated) {
             if (o.status !== 'validated') continue;          // livrée => credit_delivered / forfait_delivered
             if (!o.phone || !o.validatedAt || smsDelayReminded.has(o.id)) continue;
-            if (now - new Date(o.validatedAt).getTime() < 15 * 60 * 1000) continue;
+            const validatedAge = now - new Date(o.validatedAt).getTime();
+            if (validatedAge < 15 * 60 * 1000) continue;
+            if (validatedAge > DELAY_SMS_MAX_AGE_MS) {          // trop vieille : ne sera jamais livrée
+                smsDelayReminded.add(o.id); saveSmsReminded();   // marquée pour ne plus jamais la reprendre
+                continue;
+            }
             await sendSms(o.phone,
                 `BIPBIP RECHARGE: Votre recharge de ${o.amount}F est en cours, un retard reseau est possible. Merci de patienter encore 15 min. Sans reception, contactez-nous.`);
             smsDelayReminded.add(o.id);
+            saveSmsReminded();
         }
     } catch (e) { console.error('[SMS retard]', e.message || e); }
+
+    // Scénario 4 : DOUBLONS (double-clic client) → annulation auto après 20 min.
+    //   Signature du double-clic : même client, même opérateur, même montant total, créées
+    //   à quelques secondes/minutes d'écart. La jumelle « la plus avancée » (celle qui porte
+    //   une preuve, sinon la plus récente) est CONSERVÉE ; les autres sont annulées.
+    //   Garde-fous : jamais de commande avec preuve (le client a payé), jamais au-delà de
+    //   DUP_MAX_AGE_H (on ne réveille pas l'historique), et setOrderRejected refuse déjà
+    //   toute commande livrée. Le client n'est PAS notifié : sa vraie commande reste active,
+    //   un « commande rejetée » ne ferait que l'inquiéter.
+    try {
+        const pendings = await orderStorage.getOrdersByStatus('pending');
+        for (const o of pendings || []) {
+            if (o.proof || !o.userId || dupCancelled.has(o.id)) continue;
+            const age = now - new Date(o.createdAt).getTime();
+            if (age < DUP_MIN_AGE_MS || age > DUP_MAX_AGE_MS) continue;
+
+            const siblings = await orderStorage.getOrdersByUserId(o.userId).catch(() => []);
+            const twin = (siblings || []).find(t =>
+                t.id !== o.id &&
+                t.phone === o.phone &&
+                t.operator === o.operator &&
+                Number(t.amountTotal || t.amount || 0) === Number(o.amountTotal || o.amount || 0) &&
+                Math.abs(new Date(t.createdAt).getTime() - new Date(o.createdAt).getTime()) <= DUP_TWIN_WINDOW_MS &&
+                (t.proof || new Date(t.createdAt).getTime() > new Date(o.createdAt).getTime())
+            );
+            if (!twin) continue;
+
+            const reason = `Doublon automatique — commande identique ${twin.id} (même numéro, `
+                + `même montant, créée à ${Math.round(Math.abs(new Date(twin.createdAt).getTime() - new Date(o.createdAt).getTime()) / 1000)}s d'écart). `
+                + `Aucun paiement supplémentaire attendu.`;
+            const cancelled = await orderStorage.setOrderRejected(o.id, reason).catch(e => {
+                console.error('[Doublon] setOrderRejected', o.id, e.message || e); return null;
+            });
+            if (!cancelled) continue;
+
+            dupCancelled.add(o.id);
+            console.log(`[Doublon] ${o.id} annulée auto (jumelle ${twin.id}, ${o.phone}, ${o.amountTotal || o.amount}F)`);
+            try { await removeOrderButtonsFromAllAdmins(o.id, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN); } catch (e) { /* noop */ }
+            try {
+                await sendTelegramToAllAdmins(
+                    '🧹 <b>Doublon annulé automatiquement</b>\n'
+                    + 'Commande <code>' + o.id + '</code> (' + (o.operator || '?') + ' ' + (o.amount || '?') + 'F, ' + (o.phone || '?') + ')\n'
+                    + 'Conservée : <code>' + twin.id + '</code>' + (twin.proof ? ' (avec preuve)' : '') + '\n'
+                    + 'Sans preuve après 20 min. Client non notifié.',
+                    {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+                );
+            } catch (e) { /* noop */ }
+        }
+    } catch (e) { console.error('[Doublon auto-annul]', e.message || e); }
 }, 60 * 1000);
 
 // Gestion d'erreurs globale (ne pas exposer les détails en production)
@@ -3912,6 +4563,105 @@ app.use((err, req, res, next) => {
 });
 
 // ==================== START SERVER ====================
+// ─── Réconciliation USSD : le gateway confirme une vente réussie APRÈS son timeout ───
+// Repasse une commande non-livrée en "livrée" (idempotent : rien si déjà livrée).
+// Corrige le cas "le crédit passe mais la commande reste échouée" (réponse USSD tardive).
+app.post('/api/ussd/late-success', async (req, res) => {
+    try {
+        const { orderId, deliveryType, secret } = req.body || {};
+        if (!secret || secret !== (process.env.USSD_CALLBACK_SECRET || '__none__')) {
+            return res.status(401).json({ error: 'Non autorise' });
+        }
+        if (!orderId) return res.status(400).json({ error: 'orderId requis' });
+        const order = await orderStorage.getOrderById(orderId);
+        if (!order) return res.status(404).json({ error: 'Commande introuvable' });
+        if (order.status === 'credit_delivered' || order.status === 'forfait_delivered') {
+            return res.json({ ok: true, already: true });   // deja livree -> pas de double SMS/points
+        }
+        const dtype = deliveryType === 'forfait' ? 'forfait' : 'credit';
+        await orderStorage.setOrderDelivered(orderId, dtype);
+        console.log('[LATE-RECONCILE] Commande ' + orderId + ' repassee LIVREE (' + dtype + ') via resultat tardif gateway');
+        const label = dtype === 'forfait' ? 'forfait' : 'recharge';
+        try { if (order.phone) await sendSms(order.phone, 'BIPBIP RECHARGE\nVotre ' + label + ' ' + order.operator + ' de ' + order.amount + 'F sur ' + order.phone + ' a bien ete effectuee. Merci ! Commande ' + orderId + '.'); } catch (e) {}
+        try { if (order.userId) await sendTelegramMessage(order.userId, '\u2705 <b>' + (dtype === 'forfait' ? 'Forfait recu' : 'Credit d\'unite recu') + ' !</b>\n\n\uD83D\uDCF2 ' + order.operator + ' - ' + order.amount + ' FCFA\n\uD83D\uDCDE ' + order.phone + '\n\n(confirmation recue avec un leger delai reseau)'); } catch (e) {}
+        try { await sendTelegramToAllAdmins('\u2705 <b>Vente reconciliee</b>\nCommande <code>' + orderId + '</code> (' + order.operator + ' ' + order.amount + 'F) livree \u2014 resultat USSD arrive apres le timeout gateway.', {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN); } catch (e) {}
+        return res.json({ ok: true, reconciled: true });
+    } catch (e) {
+        console.error('[LATE-RECONCILE]', e.message || e);
+        return res.status(500).json({ error: 'erreur interne' });
+    }
+});
+
+// ── Surveillance du solde Reloadly ──────────────────────────────────────────
+// Le wallet Reloadly paie les recharges internationales ET les cartes cadeaux.
+// À sec, deliverAirtime() lève "Insufficient funds" : la commande est encaissée
+// mais jamais livrée, et l'échec n'est visible que dans les logs. On alerte donc
+// les admins AVANT la panne, dès le passage sous le seuil bas du compte.
+const RELOADLY_CHECK_MS = Math.max(5, parseInt(process.env.RELOADLY_BALANCE_CHECK_MIN || '30', 10)) * 60 * 1000;
+const RELOADLY_REALERT_MS = Math.max(1, parseInt(process.env.RELOADLY_BALANCE_REALERT_H || '6', 10)) * 60 * 60 * 1000;
+let _reloadlyLowSince = null;    // null = solde OK (alerte réarmée)
+let _reloadlyLastAlert = 0;
+
+async function checkReloadlyBalance() {
+    let reloadlySvc;
+    try { reloadlySvc = require('./services/reloadly'); } catch (e) { return; }
+    if (!reloadlySvc.configured) return;
+    try {
+        const b = await reloadlySvc.airtime.balance();
+        const amount = Number(b && b.balance);
+        const cur = (b && b.currencyCode) || 'EUR';
+        if (!isFinite(amount)) return;
+        // Seuil : override .env sinon le seuil bas défini sur le compte Reloadly
+        const envSeuil = parseFloat(process.env.RELOADLY_LOW_BALANCE || '');
+        const seuil = isFinite(envSeuil) ? envSeuil
+            : (b.lowBalanceThreshold != null ? Number(b.lowBalanceThreshold) : 20);
+
+        if (amount >= seuil) {
+            if (_reloadlyLowSince) {   // remontée au-dessus du seuil -> on réarme et on le dit
+                console.log(`[Reloadly balance] OK : ${amount.toFixed(2)} ${cur} (seuil ${seuil})`);
+                try {
+                    await sendTelegramToAllAdmins(
+                        `✅ <b>Solde Reloadly rechargé</b>\n${amount.toFixed(2)} ${cur} — au-dessus du seuil (${seuil} ${cur}).`,
+                        {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+                } catch (e) { /* noop */ }
+            }
+            _reloadlyLowSince = null;
+            return;
+        }
+
+        // Sous le seuil : alerte à la première détection, puis au plus 1 rappel / RELOADLY_REALERT_H
+        const now = Date.now();
+        const first = !_reloadlyLowSince;
+        if (first) _reloadlyLowSince = now;
+        if (!first && (now - _reloadlyLastAlert) < RELOADLY_REALERT_MS) return;
+        _reloadlyLastAlert = now;
+
+        const eurXof = parseFloat(process.env.EUR_XOF_RATE || '585');
+        const xof = String(cur).toUpperCase() === 'EUR'
+            ? ` (~${Math.round(amount * eurXof).toLocaleString('fr-FR')} F)` : '';
+        console.warn(`[Reloadly balance] BAS : ${amount.toFixed(2)} ${cur} < seuil ${seuil}`);
+        await sendTelegramToAllAdmins(
+            `🔴 <b>Solde Reloadly bas</b>\n\n`
+            + `Solde : <b>${amount.toFixed(2)} ${cur}</b>${xof}\n`
+            + `Seuil : ${seuil} ${cur}\n\n`
+            + `⚠️ Les recharges internationales et les cartes cadeaux vont échouer `
+            + `(commandes encaissées mais non livrées). Recharge le wallet.\n\n`
+            + `<i>/solde pour revérifier · /verrou pour gérer les verrous</i>`,
+            {
+                reply_markup: {
+                    inline_keyboard: [[{
+                        text: '🔒 Fermer intl. + cartes cadeaux',
+                        callback_data: 'lock_reloadly',
+                    }]],
+                },
+            }, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+    } catch (e) {
+        console.error('[Reloadly balance]', e.message || e);
+    }
+}
+setInterval(() => { checkReloadlyBalance().catch(() => {}); }, RELOADLY_CHECK_MS);
+setTimeout(() => { checkReloadlyBalance().catch(() => {}); }, 60 * 1000);   // 1er contrôle 1 min après le boot
+
 app.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════╗
@@ -3926,3 +4676,108 @@ app.listen(PORT, () => {
 ╚═══════════════════════════════════════════════════╝
     `);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Veille : plus aucun dépôt reçu depuis trop longtemps
+// ─────────────────────────────────────────────────────────────────────────────
+// Le lecteur de notifications tourne sur un téléphone Android. Il peut être tué par
+// le constructeur (vécu : MIUI, camopt_kill_event), perdre la liaison de l'écouteur
+// après une mise à jour de l'APK, ou simplement être éteint. Dans tous ces cas le
+// serveur ne voit RIEN : pas d'erreur, juste un silence — et on le découvre au
+// premier client qui réclame son crédit. Cette sonde transforme le silence en alerte.
+//
+// Le silence est compté en HEURES ACTIVES et non en heures calendaires : les nuits
+// créent naturellement des trous de 15 à 24 h (mesuré sur 124 dépôts, juillet 2026),
+// un seuil brut alerterait donc tous les matins. En heures actives, la médiane
+// observée est de 2 h et le maximum de 15 h.
+//
+// Réglages (.env, tous optionnels) :
+//   DEPOSITS_ALERT=0                    désactive la veille
+//   DEPOSITS_ALERT_ACTIVE_HOURS=12      heures actives de silence avant alerte
+//   DEPOSITS_ALERT_REPEAT_HOURS=12      délai mini entre deux rappels
+//   DEPOSITS_ALERT_DAY_START=8          début de la plage active (heure locale CI)
+//   DEPOSITS_ALERT_DAY_END=22           fin de la plage active
+const DEPOSITS_ALERT_ENABLED = process.env.DEPOSITS_ALERT !== '0';
+const DEPOSITS_ALERT_ACTIVE_HOURS = Math.max(1, Number(process.env.DEPOSITS_ALERT_ACTIVE_HOURS || 12));
+const DEPOSITS_ALERT_REPEAT_MS = Math.max(1, Number(process.env.DEPOSITS_ALERT_REPEAT_HOURS || 12)) * 3600000;
+const DEPOSITS_ALERT_DAY_START = Number(process.env.DEPOSITS_ALERT_DAY_START || 8);
+const DEPOSITS_ALERT_DAY_END = Number(process.env.DEPOSITS_ALERT_DAY_END || 22);
+const DEPOSITS_ALERT_CHECK_MS = 15 * 60 * 1000;
+
+let _depAlertSentAt = 0;     // dernier envoi : évite un rappel toutes les 15 min
+let _depAlertOpen = false;   // alerte en cours : permet d'annoncer le retour à la normale
+
+// La Côte d'Ivoire est à UTC+0 : l'heure UTC est l'heure locale.
+function _depHeuresActives(t0, t1) {
+    let n = 0;
+    for (let t = t0; t < t1; t += 3600000) {
+        const h = new Date(t).getUTCHours();
+        if (h >= DEPOSITS_ALERT_DAY_START && h < DEPOSITS_ALERT_DAY_END) n++;
+    }
+    return n;
+}
+
+function _depDernierRecu() {
+    let max = 0;
+    for (const d of deposits) {
+        const t = d && d.receivedAt ? d.receivedAt : 0;
+        if (t > max) max = t;
+    }
+    return max;
+}
+
+function _depDuree(ms) {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return h > 0 ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+async function checkDepositsSilence() {
+    if (!DEPOSITS_ALERT_ENABLED) return;
+    const lastAt = _depDernierRecu();
+    if (!lastAt) return;   // aucun historique : rien à comparer
+    const now = Date.now();
+    const actives = _depHeuresActives(lastAt, now);
+
+    if (actives >= DEPOSITS_ALERT_ACTIVE_HOURS) {
+        if (now - _depAlertSentAt < DEPOSITS_ALERT_REPEAT_MS) return;
+        _depAlertSentAt = now;
+        _depAlertOpen = true;
+        const quand = new Date(lastAt).toISOString().replace('T', ' ').slice(0, 16);
+        console.warn(`[deposits][veille] ALERTE : ${actives} h actives sans dépôt (dernier ${quand} UTC)`);
+        try {
+            await sendTelegramToAllAdmins(
+                '⚠️ <b>Aucun dépôt depuis ' + actives + ' h ouvrées</b>\n' +
+                'Dernier dépôt : ' + quand + ' (il y a ' + _depDuree(now - lastAt) + ')\n\n' +
+                'Le lecteur de notifications ne transmet peut-être plus. À vérifier sur le téléphone :\n' +
+                '• notification permanente « Lecteur de paiements actif » présente\n' +
+                '• dans l\'appli, ligne « Écouteur relié le … » récente\n' +
+                '• Wave / Djamo toujours connectés et le téléphone allumé',
+                {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+            );
+        } catch (e) { console.error('[deposits][veille] envoi KO:', e.message); }
+        return;
+    }
+
+    if (_depAlertOpen) {
+        _depAlertOpen = false;
+        _depAlertSentAt = 0;
+        console.log('[deposits][veille] retour à la normale');
+        try {
+            await sendTelegramToAllAdmins(
+                '✅ <b>Dépôts de nouveau reçus</b>\n' +
+                'Dernier dépôt il y a ' + _depDuree(now - lastAt) + '.',
+                {}, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN
+            );
+        } catch (e) { /* noop */ }
+    }
+}
+
+if (DEPOSITS_ALERT_ENABLED) {
+    // Premier contrôle 5 min après le démarrage : un simple redémarrage ne doit pas
+    // déclencher une alerte dans la seconde.
+    setTimeout(() => { checkDepositsSilence().catch(() => {}); }, 5 * 60 * 1000);
+    setInterval(() => { checkDepositsSilence().catch(() => {}); }, DEPOSITS_ALERT_CHECK_MS);
+    console.log(`[deposits][veille] active : alerte au-delà de ${DEPOSITS_ALERT_ACTIVE_HOURS} h sans dépôt ` +
+        `entre ${DEPOSITS_ALERT_DAY_START}h et ${DEPOSITS_ALERT_DAY_END}h`);
+}

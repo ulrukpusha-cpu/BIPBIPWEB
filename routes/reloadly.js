@@ -202,11 +202,35 @@ router.get('/giftcards/catalog', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// Normalise un solde Reloadly : ajoute l'équivalent XOF (au taux de tarification)
+// et le drapeau "low" (sous le seuil bas du compte) pour l'affichage bot/dashboard.
+function normalizeBalance(b) {
+  if (!b || typeof b !== 'object') return { error: String(b || 'indisponible') };
+  const amount = Number(b.balance);
+  const threshold = b.lowBalanceThreshold != null ? Number(b.lowBalanceThreshold) : null;
+  const isEur = String(b.currencyCode || '').toUpperCase() === 'EUR';
+  return {
+    balance: isFinite(amount) ? amount : null,
+    currencyCode: b.currencyCode || null,
+    lowBalanceThreshold: threshold,
+    low: (isFinite(amount) && threshold != null) ? amount < threshold : false,
+    xof: (isFinite(amount) && isEur) ? Math.round(amount * EUR_XOF) : null,
+    updatedAt: b.updatedAt || null
+  };
+}
+
 router.get('/balance', async (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: 'admin requis' });
   try {
     const [a, g] = await Promise.allSettled([reloadly.airtime.balance(), reloadly.giftcards.balance()]);
-    res.json({ airtime: a.value || a.reason?.message, giftcards: g.value || g.reason?.message });
+    const airtimeRaw = a.status === 'fulfilled' ? a.value : { error: a.reason && a.reason.message };
+    const giftRaw = g.status === 'fulfilled' ? g.value : { error: g.reason && g.reason.message };
+    res.json({
+      env: reloadly.ENV,
+      eurXof: EUR_XOF,
+      airtime: a.status === 'fulfilled' ? normalizeBalance(airtimeRaw) : { error: (a.reason && a.reason.message) || 'indisponible' },
+      giftcards: g.status === 'fulfilled' ? normalizeBalance(giftRaw) : { error: (g.reason && g.reason.message) || 'indisponible' }
+    });
   } catch (e) { fail(res, e); }
 });
 

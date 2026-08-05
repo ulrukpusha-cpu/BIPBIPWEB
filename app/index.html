@@ -962,6 +962,195 @@
     display: grid; place-items: center; color: var(--bb-accent);
   }
 
+  /* ─── Widget chat support (espace Aide) ───
+     100% construit sur les variables --bb-* : suit donc automatiquement
+     tous les thèmes (jour/nuit, fête nationale, météo…) sans code dédié. */
+  .sup-entry {
+    display: flex; align-items: center; gap: 12px; width: calc(100% - 32px);
+    margin: 0 16px 12px; padding: 14px;
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--bb-accent) 16%, var(--bb-card-bg)),
+      var(--bb-card-bg));
+    border: 1px solid color-mix(in srgb, var(--bb-accent) 40%, transparent);
+    border-radius: 14px; cursor: pointer; text-align: left;
+    font-family: inherit; position: relative;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+  .sup-entry:active { transform: scale(0.985); }
+  .sup-entry__ico {
+    width: 40px; height: 40px; border-radius: 11px; flex: 0 0 auto;
+    background: var(--bb-accent); color: var(--bb-accent-text, #fff);
+    display: grid; place-items: center;
+  }
+  .sup-entry__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .sup-entry__txt b { font-size: 14px; font-weight: 800; color: var(--bb-text); }
+  .sup-entry__txt small { font-size: 11px; color: var(--bb-muted); line-height: 1.35; }
+  .sup-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bb-good, #22c55e);
+    display: inline-block; margin-right: 5px; vertical-align: middle;
+  }
+  .sup-badge[hidden] { display: none; }   /* sinon display:grid écrase [hidden] */
+  /* ─── Verrou de service (rupture de fonds) ───
+     Reprend l'icône de maintenance déjà utilisée par le mode maintenance global. */
+  .operator-row.is-locked { opacity: 0.5; position: relative; }
+  .operator-row.is-locked .chevron { display: none; }
+  .svc-lock-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+    background: color-mix(in srgb, #ef4444 16%, transparent);
+    color: #f87171; border: 1px solid color-mix(in srgb, #ef4444 40%, transparent);
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;
+    vertical-align: middle;
+  }
+  .svc-lock-overlay {
+    position: fixed; inset: 0; z-index: 340;
+    display: none; align-items: center; justify-content: center;
+    padding: 24px; background: rgba(2, 6, 23, 0.82);
+    backdrop-filter: blur(3px);
+  }
+  .svc-lock-overlay.is-on { display: flex; }
+  .svc-lock-card {
+    width: 100%; max-width: 340px; text-align: center;
+    background: var(--bb-card-bg); border: 1px solid var(--bb-tile-border);
+    border-radius: 18px; padding: 24px 20px;
+  }
+  .svc-lock-card img { width: 46%; max-width: 150px; height: auto; margin-bottom: 12px; }
+  .svc-lock-card h3 {
+    margin: 0 0 8px; font-size: 16px; font-weight: 900;
+    text-transform: uppercase; letter-spacing: 0.4px; color: var(--bb-text);
+  }
+  .svc-lock-card p { margin: 6px 0; font-size: 13px; color: var(--bb-muted); line-height: 1.5; }
+  .svc-lock-card .svc-lock-why {
+    margin-top: 10px; padding: 8px 12px; border-radius: 10px;
+    background: color-mix(in srgb, var(--bb-warn) 12%, transparent);
+    color: var(--bb-warn); font-size: 12px; font-weight: 700;
+  }
+  .svc-lock-card button {
+    margin-top: 16px; width: 100%; padding: 12px; border-radius: 12px; border: none;
+    background: var(--bb-accent); color: var(--bb-accent-text, #fff);
+    font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer;
+  }
+
+  .sup-badge {
+    position: absolute; top: 10px; right: 12px;
+    min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px;
+    background: #ef4444; color: #fff; font-size: 11px; font-weight: 800;
+    display: grid; place-items: center;
+  }
+
+  /* Panneau de conversation */
+  .sup-panel {
+    position: fixed; inset: 0; z-index: 320;
+    display: none; flex-direction: column;
+    background: var(--bb-bg, #0B1220);
+    color: var(--bb-text);
+  }
+  .sup-panel.is-open { display: flex; }
+  @media (min-width: 720px) {
+    .sup-panel.is-open {
+      inset: auto 24px 24px auto;
+      width: 380px; height: min(620px, 78vh);
+      border-radius: 18px; overflow: hidden;
+      border: 1px solid var(--bb-tile-border);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+    }
+  }
+  .sup-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: max(12px, env(safe-area-inset-top)) 14px 12px;
+    background: color-mix(in srgb, var(--bb-accent) 14%, var(--bb-card-bg));
+    border-bottom: 1px solid var(--bb-tile-border);
+    flex: 0 0 auto;
+  }
+  .sup-head__ava {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--bb-accent); color: var(--bb-accent-text, #fff);
+    display: grid; place-items: center; flex: 0 0 auto;
+  }
+  .sup-head__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .sup-head__txt b { font-size: 14px; font-weight: 800; color: var(--bb-text); }
+  .sup-head__txt small { font-size: 11px; color: var(--bb-muted); }
+  .sup-head__close {
+    width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto;
+    background: transparent; border: 1px solid var(--bb-tile-border);
+    color: var(--bb-text); display: grid; place-items: center; cursor: pointer;
+  }
+  .sup-body {
+    flex: 1; overflow-y: auto; padding: 14px;
+    display: flex; flex-direction: column; gap: 9px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sup-msg {
+    max-width: 82%; padding: 9px 12px; border-radius: 14px;
+    font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+  }
+  .sup-msg--client {
+    align-self: flex-end;
+    background: var(--bb-accent); color: var(--bb-accent-text, #fff);
+    border-bottom-right-radius: 5px;
+  }
+  .sup-msg--bot, .sup-msg--admin {
+    align-self: flex-start;
+    background: var(--bb-card-bg); color: var(--bb-text);
+    border: 1px solid var(--bb-tile-border);
+    border-bottom-left-radius: 5px;
+  }
+  .sup-msg--admin { border-color: color-mix(in srgb, var(--bb-good, #22c55e) 55%, transparent); }
+  .sup-msg__who {
+    display: block; font-size: 10px; font-weight: 800; margin-bottom: 3px;
+    color: var(--bb-good, #22c55e); text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .sup-note {
+    align-self: center; text-align: center;
+    font-size: 11px; color: var(--bb-muted);
+    padding: 6px 12px; max-width: 90%;
+  }
+  .sup-typing { align-self: flex-start; display: flex; gap: 4px; padding: 10px 13px; }
+  .sup-typing i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--bb-muted);
+    animation: supBlink 1.2s infinite;
+  }
+  .sup-typing i:nth-child(2) { animation-delay: 0.2s; }
+  .sup-typing i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes supBlink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+  .sup-quick {
+    display: flex; gap: 7px; padding: 0 14px 10px;
+    overflow-x: auto; flex: 0 0 auto; scrollbar-width: none;
+  }
+  .sup-quick::-webkit-scrollbar { display: none; }
+  .sup-quick button {
+    flex: 0 0 auto; padding: 7px 12px; border-radius: 999px;
+    background: var(--bb-card-bg); border: 1px solid var(--bb-tile-border);
+    color: var(--bb-text); font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer; white-space: nowrap;
+  }
+  .sup-quick button.is-human {
+    border-color: color-mix(in srgb, var(--bb-accent) 55%, transparent);
+    color: var(--bb-accent); font-weight: 800;
+  }
+  .sup-form {
+    display: flex; gap: 8px; align-items: center; flex: 0 0 auto;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--bb-tile-border);
+    background: var(--bb-card-bg);
+  }
+  .sup-form input {
+    flex: 1; min-width: 0; padding: 11px 14px; border-radius: 999px;
+    background: color-mix(in srgb, var(--bb-text) 7%, transparent);
+    border: 1px solid var(--bb-tile-border);
+    color: var(--bb-text); font-size: 13px; font-family: inherit;
+  }
+  .sup-form input::placeholder { color: var(--bb-muted); }
+  .sup-form input:focus { outline: none; border-color: var(--bb-accent); }
+  .sup-form button {
+    width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; border: none;
+    background: var(--bb-accent); color: var(--bb-accent-text, #fff);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .sup-form button:disabled { opacity: 0.45; cursor: default; }
+
+
   /* ─── screen-market (parents) ─── */
   .market-intro, .cat-intro {
     margin: -4px 16px 12px;
@@ -2187,7 +2376,7 @@
           <div class="info"><span class="name">Moov Africa</span><span class="prefix">Préfixes : 01, 02</span></div>
           <span class="chevron">→</span>
         </div>
-        <div class="operator-row operator-row--intl" onclick="navigateTo('recharge-intl')">
+        <div class="operator-row operator-row--intl" onclick="if (isServiceLocked('INTL')) { showServiceLock('INTL'); } else { navigateTo('recharge-intl'); }">
           <span class="badge" style="background:linear-gradient(135deg,#0ea5e9,#6366f1)">🌍</span>
           <div class="info"><span class="name">Recharge internationale</span><span class="prefix">Plus de 150 pays · crédit mobile</span></div>
           <span class="chevron">→</span>
@@ -2487,6 +2676,17 @@
         <button class="back-btn" onclick="navigateTo('home')" aria-label="Retour"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <h2 data-i18n="screen.help">Aide</h2>
       </div>
+
+      <!-- Chat support en direct : IA d'abord, conseiller humain a la demande -->
+      <button class="sup-entry" type="button" onclick="supOpen()">
+        <span class="sup-entry__ico"><iconify-icon icon="solar:chat-round-dots-bold" width="22"></iconify-icon></span>
+        <span class="sup-entry__txt">
+          <b>Chat en direct</b>
+          <small><span class="sup-dot"></span>Réponse immédiate — un conseiller prend le relais si besoin</small>
+        </span>
+        <span class="sup-badge" id="supEntryBadge" hidden>0</span>
+      </button>
+
       <div class="faq-list">
         <details class="faq-item"><summary data-i18n="help.q1">Comment recharger un numéro ?</summary><p data-i18n="help.a1">Sur l'accueil, cliquez sur "Acheter", choisissez l'opérateur (MTN, Orange ou Moov), sélectionnez un montant, saisissez le numéro à recharger, puis confirmez avec Djamo, MoMo ou Crypto.</p></details>
         <details class="faq-item"><summary data-i18n="help.q2">Quels modes de paiement acceptez-vous ?</summary><p data-i18n="help.a2">Djamo (virement instantané, 0% de frais), MTN MoMo (demande envoyée à votre téléphone) et Crypto TON/USDT (wallet on-chain, confirmation en 30s).</p></details>
@@ -2792,6 +2992,40 @@
         </button>
       </div>
 
+      <!-- Verrous de service : couper un service à sec (fonds insuffisants) -->
+      <div class="profil-section" style="border-color:color-mix(in srgb,#ef4444 30%, transparent)">
+        <h3><iconify-icon icon="solar:lock-keyhole-bold" width="16" style="color:#ef4444"></iconify-icon>Verrous de service</h3>
+        <p class="hint">Quand un compte opérateur ou le wallet Reloadly est à sec, ferme le service : la page se verrouille chez le client <b>et</b> le serveur refuse la commande (appli, site et bot Telegram). Plus rien n'est encaissé.</p>
+        <div id="svcLocksList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+        <button class="profil-btn-secondary" type="button" onclick="loadServiceLocks()" style="width:100%">
+          <iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon>
+          Recharger l'état des services
+        </button>
+      </div>
+
+      <!-- Support client : toutes les conversations (widget appli + bot Telegram) -->
+      <div class="profil-section" style="border-color:color-mix(in srgb,#22c55e 30%, transparent)">
+        <h3><iconify-icon icon="solar:chat-round-dots-bold" width="16" style="color:#22c55e"></iconify-icon>Support client<span id="supAdminUnread" style="margin-left:8px;font-size:11px;font-weight:800;color:#ef4444"></span></h3>
+        <p class="hint">Toutes les conversations, appli et Telegram confondues. Réponds ici ou directement depuis le bot admin Telegram : dans les deux cas l'assistant IA se tait le temps que tu parles.</p>
+        <div id="supAdminList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+        <div id="supAdminThread" style="display:none">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <button class="profil-btn-secondary" type="button" onclick="supAdminBack()" style="padding:6px 10px">&larr; Retour</button>
+            <b id="supAdminWho" style="font-size:13px;color:var(--bb-text)"></b>
+          </div>
+          <div id="supAdminMsgs" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;padding:10px;background:var(--bb-card-bg);border:1px solid var(--bb-tile-border);border-radius:12px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input id="supAdminReply" type="text" placeholder="Ta réponse au client&hellip;" style="flex:1;min-width:0;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--bb-text) 7%,transparent);border:1px solid var(--bb-tile-border);color:var(--bb-text);font-size:13px;font-family:inherit">
+            <button class="profil-btn-secondary" type="button" onclick="supAdminSend()" style="padding:10px 14px">Envoyer</button>
+          </div>
+          <button class="profil-btn-secondary" type="button" onclick="supAdminRelease()" style="width:100%;margin-top:8px">Rendre la main à l'assistant IA</button>
+        </div>
+        <button class="profil-btn-secondary" type="button" onclick="loadAdminSupport()" style="width:100%">
+          <iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon>
+          Recharger les conversations
+        </button>
+      </div>
+
       <!-- Liens sponsorisés -->
       <div class="profil-section" style="border-color:color-mix(in srgb,#f59e0b 30%, transparent)">
         <h3><iconify-icon icon="solar:link-bold" width="16" style="color:#f59e0b"></iconify-icon>Liens sponsorisés</h3>
@@ -2800,6 +3034,17 @@
         <button class="profil-btn-secondary" type="button" onclick="loadAdminSocialLinks()" style="width:100%">
           <iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon>
           Recharger les liens
+        </button>
+      </div>
+
+      <!-- Solde Reloadly (airtime international + cartes cadeaux) -->
+      <div class="profil-section" style="border-color:color-mix(in srgb,#06b6d4 30%, transparent)">
+        <h3><iconify-icon icon="solar:wallet-money-bold" width="16" style="color:#06b6d4"></iconify-icon>Solde Reloadly</h3>
+        <p class="hint">Wallet qui paie les recharges internationales et les cartes cadeaux. Si le solde tombe sous le seuil, les livraisons échouent.</p>
+        <div id="adminReloadlyBalance" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+        <button class="profil-btn-secondary" type="button" onclick="loadReloadlyBalance()" style="width:100%">
+          <iconify-icon icon="solar:refresh-linear" width="14"></iconify-icon>
+          Actualiser le solde
         </button>
       </div>
 
@@ -3173,6 +3418,45 @@
 
 <!-- Picker -->
 <div class="bb-picker" id="picker" aria-label="Thème saisonnier"></div>
+
+<!-- ───────── Verrou de service (fonds insuffisants) ───────── -->
+<div class="svc-lock-overlay" id="svcLockOverlay" aria-hidden="true" role="dialog">
+  <div class="svc-lock-card">
+    <img src="/assets/maintenance.svg" alt="">
+    <h3 id="svcLockTitle">Service indisponible</h3>
+    <p>Ce service est momentanément fermé, le temps de le réapprovisionner.</p>
+    <p><b>Aucun paiement n'est prélevé.</b> Réessaie dans un moment.</p>
+    <div class="svc-lock-why" id="svcLockWhy" hidden></div>
+    <button type="button" onclick="closeServiceLock()">J'ai compris</button>
+  </div>
+</div>
+
+<!-- ───────── Panneau chat support ───────── -->
+<div class="sup-panel" id="supPanel" aria-hidden="true" role="dialog" aria-label="Chat support BIPBIP">
+  <div class="sup-head">
+    <div class="sup-head__ava"><iconify-icon icon="solar:chat-round-dots-bold" width="19"></iconify-icon></div>
+    <div class="sup-head__txt">
+      <b>Support BIPBIP</b>
+      <small id="supStatusTxt">Assistant en ligne &middot; 24/7</small>
+    </div>
+    <button class="sup-head__close" type="button" onclick="supClose()" aria-label="Fermer">
+      <iconify-icon icon="solar:close-circle-linear" width="19"></iconify-icon>
+    </button>
+  </div>
+  <div class="sup-body" id="supBody"></div>
+  <div class="sup-quick">
+    <button type="button" onclick="supQuick('Où en est ma commande ?')">Ma commande</button>
+    <button type="button" onclick="supQuick('Combien coûtent les frais ?')">Les frais</button>
+    <button type="button" onclick="supQuick('Comment payer ma recharge ?')">Payer</button>
+    <button type="button" class="is-human" onclick="supAskHuman()">Parler à un conseiller</button>
+  </div>
+  <form class="sup-form" onsubmit="return supSend(event)" autocomplete="off">
+    <input id="supText" type="text" placeholder="Écris ton message&hellip;" maxlength="2000">
+    <button type="submit" id="supSendBtn" aria-label="Envoyer">
+      <iconify-icon icon="solar:plain-2-bold" width="18"></iconify-icon>
+    </button>
+  </form>
+</div>
 
 <script src="/shared/theme/theme-engine.js" data-no-auto></script>
 <script>
@@ -4538,6 +4822,295 @@
     if (!confirm('Convertir ' + pts + ' points → ' + Math.floor(pts / 1000) + ' BBR ?')) return;
     alert('Conversion enregistrée. Les BBR seront transférés sur ton wallet TON dans 24h.');
   };
+
+  // ═══════════════════════════════════════════════════════════
+  // Widget chat support (espace Aide) — canal "web" de l'inbox unifiée.
+  // Le même fil est visible côté admin (console + bot Telegram) : quand un
+  // conseiller reprend la main, ses messages arrivent ici par le polling.
+  // ═══════════════════════════════════════════════════════════
+  var supState = { open: false, since: 0, timer: null, sending: false, status: 'bot', greeted: false };
+
+  function supIdentity() {
+    try {
+      var u = (typeof getCurrentUser === 'function' ? getCurrentUser() : null) || {};
+      return {
+        userId: u.tgId || u.id || ('br_' + (localStorage.getItem('bb_browser_id') || 'anon')),
+        name: u.name || u.username || u.handle || 'Client',
+        username: u.username || u.handle || null
+      };
+    } catch (e) {
+      return { userId: 'br_anon', name: 'Client', username: null };
+    }
+  }
+
+  function supApi(path, opts) {
+    var o = opts || {};
+    o.headers = Object.assign({ 'Content-Type': 'application/json' },
+      (typeof apiHeaders === 'function' ? apiHeaders() : {}), o.headers || {});
+    // Même base que le reste de l'app : indispensable dans l'APK, qui embarque
+    // le front et doit taper le VPS en absolu.
+    var base = (window.BipbipAPI && window.BipbipAPI.base) || '';
+    return fetch(base + '/api/support' + path, o).then(function (r) { return r.json(); });
+  }
+
+  function supEl(id) { return document.getElementById(id); }
+
+  function supRenderMsg(m) {
+    var body = supEl('supBody');
+    if (!body) return;
+    if (document.getElementById('sup-m-' + m.id)) return;   // déjà affiché
+    var d = document.createElement('div');
+    d.id = 'sup-m-' + m.id;
+    d.className = 'sup-msg sup-msg--' + (m.from === 'client' ? 'client' : m.from === 'admin' ? 'admin' : 'bot');
+    if (m.from === 'admin') {
+      var who = document.createElement('span');
+      who.className = 'sup-msg__who';
+      who.textContent = (m.author || 'Conseiller BIPBIP');
+      d.appendChild(who);
+      d.appendChild(document.createTextNode(m.text));
+    } else {
+      d.textContent = m.text;
+    }
+    body.appendChild(d);
+    if (m.at && m.at > supState.since) supState.since = m.at;
+    supScroll();
+  }
+
+  function supNote(text) {
+    var body = supEl('supBody');
+    if (!body) return;
+    var d = document.createElement('div');
+    d.className = 'sup-note';
+    d.textContent = text;
+    body.appendChild(d);
+    supScroll();
+  }
+
+  function supScroll() {
+    var body = supEl('supBody');
+    if (body) setTimeout(function () { body.scrollTop = body.scrollHeight; }, 30);
+  }
+
+  function supTyping(on) {
+    var body = supEl('supBody');
+    if (!body) return;
+    var t = supEl('supTyping');
+    if (on && !t) {
+      var d = document.createElement('div');
+      d.id = 'supTyping'; d.className = 'sup-typing';
+      d.innerHTML = '<i></i><i></i><i></i>';
+      body.appendChild(d); supScroll();
+    } else if (!on && t) { t.remove(); }
+  }
+
+  function supSetStatus(status, humanActive) {
+    supState.status = status || 'bot';
+    var el = supEl('supStatusTxt');
+    if (!el) return;
+    if (humanActive) el.textContent = 'Un conseiller vous répond';
+    else if (status === 'waiting') el.textContent = 'Conseiller prévenu, patientez…';
+    else el.textContent = 'Assistant en ligne · 24/7';
+  }
+
+  function supOpen() {
+    var p = supEl('supPanel');
+    if (!p) return;
+    p.classList.add('is-open');
+    p.setAttribute('aria-hidden', 'false');
+    supState.open = true;
+    document.body.style.overflow = 'hidden';
+    var id = supIdentity();
+    supApi('/hello', { method: 'POST', body: JSON.stringify(id) }).then(function (d) {
+      var body = supEl('supBody');
+      if (body) body.innerHTML = '';
+      supState.since = 0;
+      (d.messages || []).forEach(supRenderMsg);
+      supSetStatus(d.status, d.humanActive);
+      if (!(d.messages || []).length) {
+        supNote('Pose ta question : suivi de commande, frais, paiement, carte cadeau…');
+        supRenderMsg({
+          id: 'welcome', from: 'bot', at: 0,
+          text: 'Bonjour ' + (id.name && id.name !== 'Client' ? id.name : '') + ' 👋\nJe suis l\'assistant BIPBIP. Dis-moi ton souci, et si besoin je passe la main à un conseiller.'
+        });
+      }
+      supBadge(0);
+      supApi('/read', { method: 'POST', body: JSON.stringify({ userId: id.userId }) }).catch(function () {});
+    }).catch(function () {
+      supNote('Connexion au support impossible. Réessaie dans un instant.');
+    });
+    supStartPolling();
+    setTimeout(function () { var i = supEl('supText'); if (i) i.focus(); }, 250);
+  }
+
+  function supClose() {
+    var p = supEl('supPanel');
+    if (p) { p.classList.remove('is-open'); p.setAttribute('aria-hidden', 'true'); }
+    supState.open = false;
+    document.body.style.overflow = '';
+    supStopPolling();
+  }
+
+  function supStartPolling() {
+    supStopPolling();
+    supState.timer = setInterval(supPoll, 4000);
+  }
+  function supStopPolling() {
+    if (supState.timer) { clearInterval(supState.timer); supState.timer = null; }
+  }
+
+  function supPoll() {
+    if (!supState.open) return;
+    var id = supIdentity();
+    supApi('/thread?userId=' + encodeURIComponent(id.userId) + '&since=' + supState.since)
+      .then(function (d) {
+        var fresh = (d.messages || []).filter(function (m) { return m.from !== 'client'; });
+        fresh.forEach(supRenderMsg);
+        supSetStatus(d.status, d.humanActive);
+        if (fresh.length) {
+          supApi('/read', { method: 'POST', body: JSON.stringify({ userId: id.userId }) }).catch(function () {});
+        }
+      }).catch(function () {});
+  }
+
+  function supSend(ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var input = supEl('supText');
+    var btn = supEl('supSendBtn');
+    if (!input || supState.sending) return false;
+    var text = (input.value || '').trim();
+    if (!text) return false;
+    input.value = '';
+    supState.sending = true;
+    if (btn) btn.disabled = true;
+
+    var id = supIdentity();
+    supRenderMsg({ id: 'local-' + Date.now(), from: 'client', text: text, at: 0 });
+    supTyping(true);
+
+    supApi('/message', {
+      method: 'POST',
+      body: JSON.stringify({ userId: id.userId, name: id.name, username: id.username, text: text })
+    }).then(function (d) {
+      supTyping(false);
+      supSetStatus(d.status, d.humanActive);
+      if (!d.reply && d.humanActive) {
+        supNote('Un conseiller suit cette conversation, il va te répondre ici.');
+      }
+      // La réponse est déjà dans l'inbox : c'est le polling qui l'affiche, avec
+      // son vrai id. La rendre aussi ici créerait une bulle en double.
+      supPoll();
+    }).catch(function () {
+      supTyping(false);
+      supNote('Message non envoyé. Vérifie ta connexion.');
+    }).then(function () {
+      supState.sending = false;
+      if (btn) btn.disabled = false;
+      if (input) input.focus();
+    });
+    return false;
+  }
+
+  function supQuick(text) {
+    var i = supEl('supText');
+    if (i) { i.value = text; supSend(); }
+  }
+
+  function supAskHuman() {
+    var id = supIdentity();
+    supRenderMsg({ id: 'local-h-' + Date.now(), from: 'client', text: 'Je veux parler à un conseiller.', at: 0 });
+    supApi('/human', { method: 'POST', body: JSON.stringify(id) }).then(function () {
+      supSetStatus('waiting', false);
+      supPoll();   // l'accusé de réception vient de l'inbox (pas de doublon)
+    }).catch(function () { supNote('Impossible de joindre le support pour l\'instant.'); });
+  }
+
+  function supBadge(n) {
+    var b = supEl('supEntryBadge');
+    if (!b) return;
+    if (n > 0) { b.textContent = n > 9 ? '9+' : String(n); b.hidden = false; }
+    else b.hidden = true;
+  }
+
+  // Appelé à l'ouverture de l'écran Aide : récupère les messages non lus.
+  function supOnHelpOpen() {
+    var id = supIdentity();
+    supApi('/thread?userId=' + encodeURIComponent(id.userId) + '&since=0')
+      .then(function (d) { supBadge(d.unread || 0); })
+      .catch(function () {});
+  }
+
+  // Fermeture au bouton retour Android (APK) quand le panneau est ouvert.
+  window.addEventListener('popstate', function () { if (supState.open) supClose(); });
+
+
+  // ═══════════════════════════════════════════════════════════
+  // Verrous de service : quand un compte opérateur (ou le wallet Reloadly)
+  // est à sec, l'admin ferme le service. Le serveur refuse aussi la commande
+  // (POST /api/orders) — ceci n'est que la couche visible.
+  // ═══════════════════════════════════════════════════════════
+  var svcLocks = {};
+  var SVC_LABELS = {
+    MTN: 'MTN', Orange: 'Orange', Moov: 'Moov',
+    INTL: 'La recharge internationale', GIFT: 'Les cartes cadeaux'
+  };
+
+  function isServiceLocked(id) {
+    var l = svcLocks[id];
+    return !!(l && l.locked);
+  }
+
+  function showServiceLock(id) {
+    var l = svcLocks[id] || {};
+    var t = document.getElementById('svcLockTitle');
+    if (t) t.textContent = (SVC_LABELS[id] || id) + ' — indisponible';
+    var why = document.getElementById('svcLockWhy');
+    if (why) {
+      if (l.reason) { why.textContent = l.reason; why.hidden = false; }
+      else why.hidden = true;
+    }
+    var ov = document.getElementById('svcLockOverlay');
+    if (ov) { ov.classList.add('is-on'); ov.setAttribute('aria-hidden', 'false'); }
+  }
+
+  function closeServiceLock() {
+    var ov = document.getElementById('svcLockOverlay');
+    if (ov) { ov.classList.remove('is-on'); ov.setAttribute('aria-hidden', 'true'); }
+  }
+
+  // Grise les lignes opérateur verrouillées sur l'écran de choix.
+  function applyServiceLocksUI(locks) {
+    if (locks && typeof locks === 'object') svcLocks = locks;
+    try { localStorage.setItem('bb_service_locks', JSON.stringify(svcLocks)); } catch (e) {}
+    document.querySelectorAll('.operator-row').forEach(function (row) {
+      var id = row.getAttribute('data-op') || (row.classList.contains('operator-row--intl') ? 'INTL' : '');
+      if (!id) return;
+      var locked = isServiceLocked(id);
+      row.classList.toggle('is-locked', locked);
+      var name = row.querySelector('.info .name');
+      if (!name) return;
+      var tag = name.querySelector('.svc-lock-tag');
+      if (locked && !tag) {
+        tag = document.createElement('span');
+        tag.className = 'svc-lock-tag';
+        tag.textContent = 'Indisponible';
+        name.appendChild(tag);
+      } else if (!locked && tag) {
+        tag.remove();
+      }
+    });
+  }
+
+  window.isServiceLocked = isServiceLocked;
+  window.showServiceLock = showServiceLock;
+  window.closeServiceLock = closeServiceLock;
+  window.applyServiceLocksUI = applyServiceLocksUI;
+
+  // Dernier état connu appliqué au démarrage (pas de "flash" ouvert au boot).
+  try {
+    var cachedLocks = JSON.parse(localStorage.getItem('bb_service_locks') || 'null');
+    if (cachedLocks) svcLocks = cachedLocks;
+  } catch (e) {}
+
   function navigateTo(screenId) {
     const target = document.getElementById("screen-" + screenId);
     if (!target) { console.warn("[nav] no screen:", screenId); return; }
@@ -4550,6 +5123,12 @@
     if (location.hash !== hash) history.replaceState(null, "", hash);
     window.scrollTo({ top: 0, behavior: "smooth" });
     // Hooks par écran
+    if (screenId === "buy" && typeof applyServiceLocksUI === "function") {
+      applyServiceLocksUI();   // grise les opérateurs à sec
+    }
+    if (screenId === "help" && typeof supOnHelpOpen === "function") {
+      supOnHelpOpen();   // badge des messages non lus du support
+    }
     if (screenId === "admin" && typeof loadAdminScreen === "function") {
       loadAdminScreen();
     }
@@ -4581,6 +5160,8 @@
   // ───────────────────────────────────────────────
   const order = { op: null, amount: 0, phone: "", payment: null, orderId: null };
   function selectOperator(op) {
+    // Service à sec : on n'ouvre même pas le tunnel de commande.
+    if (isServiceLocked(op)) { showServiceLock(op); return; }
     order.op = op;
     document.getElementById("amountSummaryOp").textContent = op + " Mobile Money";
     // Show bundles block pour les 3 opérateurs (MTN, Orange, Moov)
@@ -5212,7 +5793,11 @@
     var payload = Object.assign({
       operator: 'RECHARGE_INTL', amount: price, amountTotal: price,
       phone: '+' + intlState.number, giftCard: label,
-      operatorId: q.operatorId, senderEUR: it.senderEUR, iso: intlState.iso, number: intlState.number
+      operatorId: q.operatorId, senderEUR: it.senderEUR, iso: intlState.iso, number: intlState.number,
+      // Contrat de livraison en termes NEUTRES (indépendant du fournisseur) : ce que le
+      // client a vu et payé. senderEUR/operatorId sont propres à Reloadly ; localAmount
+      // est ce qu'il faut livrer, quel que soit le fournisseur qui exécute le top-up.
+      localAmount: it.localAmount, recipientCurrency: it.recipientCurrency, operatorName: q.name
     }, userPayloadFields());
     appToast('Création de la commande…');
     try {
@@ -6449,6 +7034,13 @@
 
     // 5b) Liens sponsorisés
     if (typeof loadAdminSocialLinks === 'function') loadAdminSocialLinks();
+    // 5c) Support client
+    if (typeof loadAdminSupport === 'function') loadAdminSupport();
+    // 5d) Verrous de service
+    if (typeof loadServiceLocks === 'function') loadServiceLocks();
+
+    // 5c) Solde Reloadly (wallet des recharges inter / cartes cadeaux)
+    if (typeof loadReloadlyBalance === 'function') loadReloadlyBalance();
 
     // 6) Commandes (par défaut "en attente")
     loadAdminOrders('pending');
@@ -6747,18 +7339,210 @@
         var actionBtn = l.approved
           ? '<button type="button" onclick="adminUnapproveLink(\'' + l.id + '\')" style="background:transparent;border:1px solid #f59e0b;color:#f59e0b;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer">Retirer</button>'
           : '<button type="button" onclick="adminApproveLink(\'' + l.id + '\')" style="background:transparent;border:1px solid #22c55e;color:#22c55e;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer">Approuver</button>';
+        var _inp = 'width:100%;margin:0 0 6px;padding:7px;border:1px solid var(--bb-tile-border);border-radius:8px;font-size:12px;background:var(--bb-card-bg);color:var(--bb-text);box-sizing:border-box';
         return '<div style="border:1px solid var(--bb-tile-border);border-radius:10px;padding:10px">' +
           '<div style="font-weight:700;font-size:13px;color:var(--bb-text)">' + escapeHtmlSafe(l.name) + (l.approved ? ' \u00b7 <span style="color:#22c55e">\u2705 visible</span>' : ' \u00b7 <span style="color:var(--bb-muted)">en attente</span>') + '</div>' +
           '<div style="font-size:11px;color:var(--bb-muted);word-break:break-all;margin:4px 0 8px">' + escapeHtmlSafe((l.link || '').slice(0, 90)) + '</div>' +
-          '<div style="display:flex;gap:8px">' + actionBtn + btnDelete('adminDeleteLink(\'' + l.id + '\')') + '</div>' +
+          '<input id="lkt_' + l.id + '" placeholder="Titre affiché (ex. Rejoins Binance)" value="' + escapeHtmlSafe(l.title || '') + '" style="' + _inp + '">' +
+          '<input id="lkd_' + l.id + '" placeholder="Description courte" value="' + escapeHtmlSafe(l.desc || '') + '" style="' + _inp + '">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+            '<button type="button" onclick="adminSaveLinkMeta(\'' + l.id + '\')" style="background:var(--bb-accent);border:0;color:#fff;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">Enregistrer</button>' +
+            actionBtn + btnDelete('adminDeleteLink(\'' + l.id + '\')') +
+          '</div>' +
         '</div>';
       }).join('');
     } catch (e) { list.innerHTML = emptyMsg('Erreur : ' + (e.message || e)); }
   }
   window.loadAdminSocialLinks = loadAdminSocialLinks;
+
+  // ─── Console support admin : inbox unifiee (widget appli + bot Telegram) ───
+  var supAdminCur = null, supAdminTimer = null;
+
+  async function loadAdminSupport() {
+    var list = document.getElementById('supAdminList');
+    if (!list) return;
+    list.innerHTML = '<p class="hint">Chargement\u2026</p>';
+    try {
+      var d = await adminFetch('/api/support/admin/conversations');
+      var convs = d.conversations || [];
+      var badge = document.getElementById('supAdminUnread');
+      if (badge) badge.textContent = d.unread ? (d.unread + ' non lu(s)') : '';
+      if (!convs.length) { list.innerHTML = '<p class="hint">Aucune conversation pour le moment.</p>'; return; }
+      var icon = { waiting: '\uD83D\uDE4B', human: '\uD83D\uDC64', bot: '\uD83E\uDD16', closed: '\u2705' };
+      list.innerHTML = '';
+      convs.forEach(function (c) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'profil-btn-secondary';
+        row.style.cssText = 'width:100%;text-align:left;display:flex;flex-direction:column;gap:3px;padding:10px 12px;align-items:flex-start';
+        if (c.status === 'waiting') row.style.borderColor = '#ef4444';
+        var when = new Date(c.lastAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        var head = document.createElement('span');
+        head.style.cssText = 'font-weight:800;font-size:13px;color:var(--bb-text)';
+        head.textContent = (icon[c.status] || '\u2022') + ' ' + (c.name || 'Client')
+          + (c.channel === 'telegram' ? ' \u00B7 Telegram' : ' \u00B7 Appli')
+          + (c.adminUnread ? ' \u00B7 ' + c.adminUnread + ' non lu(s)' : '');
+        var prev = document.createElement('span');
+        prev.style.cssText = 'font-size:11px;color:var(--bb-muted);line-height:1.35';
+        prev.textContent = (c.preview || '') + '  \u2014  ' + when;
+        row.appendChild(head); row.appendChild(prev);
+        row.onclick = function () { supAdminOpen(c.id); };
+        list.appendChild(row);
+      });
+    } catch (e) {
+      list.innerHTML = '<p class="hint">Erreur : ' + e.message + '</p>';
+    }
+  }
+
+  async function supAdminOpen(id) {
+    supAdminCur = id;
+    document.getElementById('supAdminList').style.display = 'none';
+    document.getElementById('supAdminThread').style.display = 'block';
+    await supAdminRefresh();
+    if (supAdminTimer) clearInterval(supAdminTimer);
+    supAdminTimer = setInterval(supAdminRefresh, 5000);   // suit le client en direct
+  }
+
+  async function supAdminRefresh() {
+    if (!supAdminCur) return;
+    try {
+      var d = await adminFetch('/api/support/admin/conversations/' + encodeURIComponent(supAdminCur));
+      var who = document.getElementById('supAdminWho');
+      if (who) {
+        who.textContent = (d.name || 'Client')
+          + (d.username ? ' ' + d.username : '')
+          + (d.channel === 'telegram' ? ' \u00B7 Telegram' : ' \u00B7 Appli')
+          + (d.humanActive ? ' \u00B7 tu as la main' : '');
+      }
+      var box = document.getElementById('supAdminMsgs');
+      if (!box) return;
+      box.innerHTML = '';
+      (d.messages || []).forEach(function (m) {
+        var b = document.createElement('div');
+        var mine = (m.from !== 'client');
+        b.style.cssText = 'max-width:85%;padding:7px 10px;border-radius:11px;font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word;'
+          + (mine ? 'align-self:flex-end;background:var(--bb-accent);color:var(--bb-accent-text,#fff);'
+                  : 'align-self:flex-start;background:color-mix(in srgb,var(--bb-text) 8%,transparent);color:var(--bb-text);');
+        b.textContent = (m.from === 'bot' ? '\uD83E\uDD16 ' : m.from === 'admin' ? '\u21A9 ' : '') + m.text;
+        box.appendChild(b);
+      });
+      box.scrollTop = box.scrollHeight;
+    } catch (e) { /* refresh best-effort */ }
+  }
+
+  async function supAdminSend() {
+    var input = document.getElementById('supAdminReply');
+    if (!input || !supAdminCur) return;
+    var text = (input.value || '').trim();
+    if (!text) return;
+    input.value = '';
+    try {
+      await adminFetch('/api/support/admin/conversations/' + encodeURIComponent(supAdminCur) + '/reply', {
+        method: 'POST', body: { text: text }
+      });
+      await supAdminRefresh();
+    } catch (e) {
+      appToast('Envoi impossible : ' + e.message, 'error');
+      input.value = text;
+    }
+  }
+
+  async function supAdminRelease() {
+    if (!supAdminCur) return;
+    try {
+      await adminFetch('/api/support/admin/conversations/' + encodeURIComponent(supAdminCur) + '/release', { method: 'POST' });
+      appToast('L\'assistant IA reprend cette conversation.', 'success');
+      await supAdminRefresh();
+    } catch (e) { appToast('Erreur : ' + e.message, 'error'); }
+  }
+
+  function supAdminBack() {
+    supAdminCur = null;
+    if (supAdminTimer) { clearInterval(supAdminTimer); supAdminTimer = null; }
+    document.getElementById('supAdminThread').style.display = 'none';
+    document.getElementById('supAdminList').style.display = 'flex';
+    loadAdminSupport();
+  }
+
+  window.loadAdminSupport = loadAdminSupport;
+
+  // ─── Verrous de service (rupture de fonds) ───
+  var SVC_ADMIN = [
+    { id: 'MTN', label: 'MTN' },
+    { id: 'Orange', label: 'Orange' },
+    { id: 'Moov', label: 'Moov' },
+    { id: 'INTL', label: 'Recharge internationale' },
+    { id: 'GIFT', label: 'Cartes cadeaux' }
+  ];
+
+  async function loadServiceLocks() {
+    var box = document.getElementById('svcLocksList');
+    if (!box) return;
+    box.innerHTML = '<p class="hint">Chargement\u2026</p>';
+    try {
+      var r = await fetch(apiBase() + '/api/config?_=' + Date.now(), { cache: 'no-store' });
+      var cfg = await r.json();
+      var locks = cfg.serviceLocks || {};
+      if (typeof applyServiceLocksUI === 'function') applyServiceLocksUI(locks);
+      box.innerHTML = '';
+      SVC_ADMIN.forEach(function (svc) {
+        var l = locks[svc.id] || { locked: false };
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;'
+          + 'background:var(--bb-card-bg);border:1px solid ' + (l.locked ? '#ef4444' : 'var(--bb-tile-border)')
+          + ';border-radius:12px';
+        var txt = document.createElement('div');
+        txt.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:2px';
+        var nm = document.createElement('b');
+        nm.style.cssText = 'font-size:13px;color:var(--bb-text)';
+        nm.textContent = (l.locked ? '\uD83D\uDD34 ' : '\uD83D\uDFE2 ') + svc.label;
+        var st = document.createElement('small');
+        st.style.cssText = 'font-size:11px;color:var(--bb-muted)';
+        st.textContent = l.locked ? ('Verrouillé' + (l.reason ? ' — ' + l.reason : '')) : 'Ouvert aux commandes';
+        txt.appendChild(nm); txt.appendChild(st);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'profil-btn-secondary';
+        btn.style.cssText = 'padding:8px 12px;flex:0 0 auto;font-size:12px';
+        btn.textContent = l.locked ? '\uD83D\uDD13 Ouvrir' : '\uD83D\uDD12 Fermer';
+        btn.onclick = function () { toggleServiceLock(svc.id, !l.locked, svc.label); };
+        row.appendChild(txt); row.appendChild(btn);
+        box.appendChild(row);
+      });
+    } catch (e) {
+      box.innerHTML = '<p class="hint">Erreur : ' + e.message + '</p>';
+    }
+  }
+
+  async function toggleServiceLock(id, lock, label) {
+    var reason = '';
+    if (lock) {
+      reason = prompt('Motif pour ' + label + ' (visible par le client) :', 'Fonds insuffisants');
+      if (reason === null) return;   // annulé
+    }
+    try {
+      var payload = {};
+      payload[id] = { locked: !!lock, reason: reason || '' };
+      await adminFetch('/api/admin/config', { method: 'PUT', body: { serviceLocks: payload } });
+      appToast(label + (lock ? ' verrouillé \u2713' : ' rouvert \u2713'), 'success');
+      loadServiceLocks();
+    } catch (e) {
+      appToast('Erreur : ' + e.message, 'error');
+    }
+  }
+
+  window.loadServiceLocks = loadServiceLocks;
+  window.toggleServiceLock = toggleServiceLock;
+
+  window.supAdminOpen = supAdminOpen;
+  window.supAdminSend = supAdminSend;
+  window.supAdminBack = supAdminBack;
+  window.supAdminRelease = supAdminRelease;
+
   window.adminApproveLink = async function (id) { try { await adminFetch('/api/admin/social-links/' + id + '/approve', { method: 'POST' }); appToast('Lien approuv\u00e9 \u2713', 'success'); loadAdminSocialLinks(); } catch (e) { appToast('Erreur : ' + e.message, 'error'); } };
   window.adminUnapproveLink = async function (id) { try { await adminFetch('/api/admin/social-links/' + id + '/unapprove', { method: 'POST' }); appToast('Lien retir\u00e9 \u2713', 'success'); loadAdminSocialLinks(); } catch (e) { appToast('Erreur : ' + e.message, 'error'); } };
   window.adminDeleteLink = async function (id) { try { await adminFetch('/api/admin/social-links/' + id, { method: 'DELETE' }); appToast('Lien supprim\u00e9 \u2713', 'success'); loadAdminSocialLinks(); } catch (e) { appToast('Erreur : ' + e.message, 'error'); } };
+  window.adminSaveLinkMeta = async function (id) { var t = (document.getElementById('lkt_' + id) || {}).value || ''; var d = (document.getElementById('lkd_' + id) || {}).value || ''; try { await adminFetch('/api/admin/social-links/' + id + '/meta', { method: 'POST', body: { title: t, desc: d } }); appToast('Titre/description enregistr\u00e9s \u2713', 'success'); loadAdminSocialLinks(); } catch (e) { appToast('Erreur : ' + e.message, 'error'); } };
 
   async function loadAdminQuests() {
     try {
@@ -6846,6 +7630,38 @@
         '</div>';
       }).join('');
     } catch (e) { /* admin error toasted */ }
+  };
+  window.loadReloadlyBalance = async function () {
+    var box = document.getElementById('adminReloadlyBalance');
+    if (!box) return;
+    box.innerHTML = '<div style="font-size:12px;color:var(--bb-muted)">Chargement…</div>';
+    try {
+      var d = await adminFetch('/api/reloadly/balance');
+      var card = function (icon, label, b) {
+        if (!b || b.error) {
+          return '<div style="padding:10px 12px;border:1px solid var(--bb-tile-border);border-radius:10px;background:var(--bb-tile-bg)">' +
+            '<div style="font-size:13px;font-weight:700;color:var(--bb-text)">' + icon + ' ' + label + '</div>' +
+            '<div style="font-size:12px;color:#ef4444;margin-top:4px">⚠️ ' + escapeHtmlSafe((b && b.error) || 'indisponible') + '</div></div>';
+        }
+        var amt = (b.balance != null) ? Number(b.balance).toFixed(2) : '?';
+        var color = b.low ? '#ef4444' : '#22c55e';
+        return '<div style="padding:10px 12px;border:1px solid ' + (b.low ? '#ef4444' : 'var(--bb-tile-border)') + ';border-radius:10px;background:var(--bb-tile-bg)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">' +
+            '<span style="font-size:13px;font-weight:700;color:var(--bb-text)">' + icon + ' ' + label + '</span>' +
+            '<span style="font-size:16px;font-weight:800;color:' + color + '">' + amt + ' ' + escapeHtmlSafe(b.currencyCode || '') + '</span>' +
+          '</div>' +
+          (b.xof != null ? '<div style="font-size:11px;color:var(--bb-muted);margin-top:2px">≈ ' + Number(b.xof).toLocaleString('fr-FR') + ' F CFA</div>' : '') +
+          (b.low
+            ? '<div style="font-size:11px;color:#ef4444;margin-top:4px;font-weight:600">🔴 Sous le seuil bas (' + escapeHtmlSafe(String(b.lowBalanceThreshold)) + ' ' + escapeHtmlSafe(b.currencyCode || '') + ') — recharge le wallet, les livraisons vont échouer.</div>'
+            : '<div style="font-size:11px;color:#22c55e;margin-top:4px">✅ Au-dessus du seuil</div>') +
+        '</div>';
+      };
+      box.innerHTML = card('📱', 'Airtime (recharges inter)', d.airtime) +
+        card('🎁', 'Cartes cadeaux', d.giftcards) +
+        '<div style="font-size:10px;color:var(--bb-muted);text-align:right">env ' + escapeHtmlSafe(d.env || '?') + ' · 1 EUR ≈ ' + escapeHtmlSafe(String(d.eurXof || '')) + ' F</div>';
+    } catch (e) {
+      box.innerHTML = '<div style="font-size:12px;color:#ef4444">Erreur : ' + escapeHtmlSafe(e.message || String(e)) + '</div>';
+    }
   };
   window.adminValidateOrder = async function (id) {
     try {
@@ -7111,6 +7927,10 @@
     if (!cfg || typeof cfg !== 'object') throw new Error('config invalide');
     // ── THÈME piloté par le serveur (admin) → s'applique à TOUS les téléphones ──
     applyServerTheme(cfg);
+    // ── Verrous de service (rupture de fonds) ──
+    if (cfg.serviceLocks && typeof applyServiceLocksUI === 'function') {
+      applyServiceLocksUI(cfg.serviceLocks);
+    }
     if (!Object.prototype.hasOwnProperty.call(cfg, 'maintenance') || cfg.maintenance == null) {
       // Réponse valide mais SANS info maintenance → on garde le cache existant, on ne touche à rien.
       throw new Error('config sans maintenance');

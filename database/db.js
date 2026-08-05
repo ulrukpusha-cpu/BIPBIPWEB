@@ -99,18 +99,23 @@ async function updateOrderProof(orderId, proofPath, status = 'proof_sent', payme
 }
 
 async function setOrderValidated(orderId) {
-    await pool.execute(
-        "UPDATE orders SET status = 'validated', validated_at = NOW() WHERE id = ?",
+    // garde : ne valide QUE une commande encore en attente (anti-double-livraison).
+    // Renvoie null si rien n'a bouge => l'appelant ne relance PAS le post-traitement.
+    const [r] = await pool.execute(
+        "UPDATE orders SET status = 'validated', validated_at = NOW() WHERE id = ? AND status IN ('pending', 'proof_sent')",
         [orderId]
     );
+    if (!r || r.affectedRows === 0) return null;
     return getOrderById(orderId);
 }
 
 async function setOrderRejected(orderId, reason) {
-    await pool.execute(
-        'UPDATE orders SET status = \'rejected\', rejected_at = NOW(), reject_reason = ? WHERE id = ?',
+    // garde : on ne rejette JAMAIS une commande deja livree.
+    const [r] = await pool.execute(
+        "UPDATE orders SET status = 'rejected', rejected_at = NOW(), reject_reason = ? WHERE id = ? AND status NOT IN ('credit_delivered', 'forfait_delivered')",
         [reason || 'Non spécifié', orderId]
     );
+    if (!r || r.affectedRows === 0) return null;
     return getOrderById(orderId);
 }
 

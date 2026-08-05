@@ -151,7 +151,16 @@
     for (var i = 0; i < gifts.length; i++) {
       var o = gifts[i], el = $('ocode-' + (o.id || '')); if (!el) continue;
       try {
-        var r = await fetch(BB.apiBase() + '/api/orders/' + encodeURIComponent(o.id) + '/giftcard', { cache: 'no-store' });
+        // Le code de carte est réservé au propriétaire de la commande : on transmet
+        // l'identité du client, sinon le serveur répond 403.
+        var gh = { 'Accept': 'application/json' };
+        try { if (BB.apiHeaders) gh = Object.assign(gh, BB.apiHeaders()); } catch (e) {}
+        try {
+          if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+            gh['X-Telegram-Init-Data'] = window.Telegram.WebApp.initData;
+          }
+        } catch (e) {}
+        var r = await fetch(BB.apiBase() + '/api/orders/' + encodeURIComponent(o.id) + '/giftcard', { cache: 'no-store', headers: gh });
         if (!r.ok) continue;
         var d = await r.json();
         if (d && d.card && d.card.code) {
@@ -220,7 +229,9 @@
     await BBPay.startOrder({
       operator: 'RECHARGE_INTL', amount: price, amountTotal: price,
       phone: '+' + intl.number, type: 'airtime_intl', label: label,
-      payload: { giftCard: label, operatorId: q.operatorId, senderEUR: it.senderEUR, iso: intl.iso, number: intl.number },
+      // localAmount/recipientCurrency = contrat de livraison neutre (cf. app/index.html)
+      payload: { giftCard: label, operatorId: q.operatorId, senderEUR: it.senderEUR, iso: intl.iso, number: intl.number,
+                 localAmount: it.localAmount, recipientCurrency: it.recipientCurrency, operatorName: q.name },
       onDone: function () { renderOrders(); }
     });
   }

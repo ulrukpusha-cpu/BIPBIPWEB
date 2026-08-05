@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const reloadly = require('./reloadly');
+const bitrefill = require('./bitrefill');
 let getSupabase = null;
 try { ({ getSupabase } = require('../database/supabase-client')); } catch (e) { getSupabase = null; }
 const STORE = path.join(__dirname, '..', 'gift-orders.json');
@@ -66,7 +67,7 @@ async function deliver(order) {
     countryCode: countryCode || 'US',
     quantity: 1,
     unitPrice: Number(g.faceValue),
-    customIdentifier: 'BIP-' + orderId,
+    customIdentifier: 'BIP-' + orderId + '-' + Date.now(),  // unique -> retry possible après un FAILED (anti-double via g.status)
     senderName: process.env.RELOADLY_SENDER_NAME || 'Bipbip Recharge',
     recipientEmail: process.env.RELOADLY_RECIPIENT_EMAIL || 'cartes@bipbiprecharge.ci'
   });
@@ -116,6 +117,72 @@ async function deliverAirtime(order) {
   return { ok: true, raw: res };
 }
 
+// Extrait le code de carte d'une réponse GET /invoices/:id de Bitrefill.
+// Sortie unique : soit un objet carte exploitable, soit null (pas encore émise).
+function extractCardFromInvoice(st) {
+  const sd = (st && st.data) || st || {};
+  const items = sd.items || sd.orders || (sd.order && [sd.order]) || [];
+  const it = items[0] || {};
+  const code = it.value || it.code || it.pinCode
+    || (it.delivery && (it.delivery.code || it.delivery.link))
+    || (it.redemptionInfo && it.redemptionInfo.code);
+  if (!code) return null;
+  return {
+    code: String(code),
+    pin: it.pinCode || '',
+    info: it.redemptionInfo ? JSON.stringify(it.redemptionInfo).slice(0, 300) : 'Bitrefill'
+  };
+}
+
+// Retrouve la commande BIPBIP correspondant à une facture Bitrefill.
+function findOrderIdByInvoice(invoiceId) {
+  if (!invoiceId) return null;
+  const d = load();
+  for (const orderId of Object.keys(d)) {
+    if (d[orderId] && String(d[orderId].invoiceId) === String(invoiceId)) return orderId;
+  }
+  return null;
+}
+
+// Finalise une livraison à partir d'un identifiant de facture — appelé par le webhook.
+//
+// SÉCURITÉ : Bitrefill ne signe pas ses webhooks (confirmé dans leur documentation :
+// ils postent l'objet facture, sans en-tête de signature ni secret partagé). On ne
+// fait donc AUCUNE confiance au corps de la requête : on n'en retient que l'ID de
+// facture, puis on rappelle l'API Bitrefill avec NOTRE clé pour obtenir l'état réel.
+// Conséquence : un tiers qui devinerait l'URL ne peut que provoquer une revérification,
+// jamais injecter une fausse livraison de carte.
+//
+// Idempotent : une commande déjà livrée est laissée telle quelle (Bitrefill réessaie
+// les webhooks en échec, les doublons sont donc attendus).
+async function completeFromInvoice(invoiceId) {
+  const orderId = findOrderIdByInvoice(invoiceId);
+  if (!orderId) return { ok: false, reason: 'facture inconnue' };
+
+  const d = load();
+  const g = d[orderId] || (await dbRead(orderId));
+  if (!g) return { ok: false, reason: 'commande introuvable' };
+  if (g.status === 'delivered' && g.card && g.card.code) {
+    return { ok: true, already: true, orderId };
+  }
+
+  let card = null;
+  try {
+    card = extractCardFromInvoice(await bitrefill.getInvoice(invoiceId));
+  } catch (e) {
+    console.error('[Bitrefill webhook] lecture facture ' + invoiceId + ' : ' + e.message);
+    return { ok: false, reason: 'API Bitrefill indisponible', retry: true };
+  }
+  if (!card) return { ok: false, reason: 'code pas encore émis', retry: true, orderId };
+
+  g.card = card;
+  g.status = 'delivered';
+  g.deliveredAt = Date.now();
+  const d2 = load(); d2[orderId] = g; save(d2); await dbMirror(orderId, g);
+  console.log('[Bitrefill webhook] carte livrée pour la commande ' + orderId + ' (facture ' + invoiceId + ')');
+  return { ok: true, orderId, delivered: true };
+}
+
 // Carte cadeau Bitrefill — achat via invoice payée par solde, puis récupération du code.
 // DÉFENSIF : toute erreur (solde insuffisant, format inattendu) -> { manual:true } => livraison manuelle admin.
 async function deliverBitrefill(order, g) {
@@ -124,7 +191,6 @@ async function deliverBitrefill(order, g) {
   if (!g || !g.bitrefillProductId) return { ok: false, manual: true };
   if (g.status === 'delivered' && g.card) return { ok: true, already: true, card: g.card };
   try {
-    const bitrefill = require('./bitrefill');
     const inv = await bitrefill.invoice({
       products: [{ product_id: g.bitrefillProductId, package_id: g.bitrefillPackageId, quantity: 1 }],
       payment_method: 'balance'
@@ -137,12 +203,8 @@ async function deliverBitrefill(order, g) {
     let card = null;
     for (let i = 0; i < 8 && invId; i++) {
       try {
-        const st = await bitrefill.getInvoice(invId);
-        const sd = (st && st.data) || st || {};
-        const items = sd.items || sd.orders || (sd.order && [sd.order]) || [];
-        const it = items[0] || {};
-        const code = it.value || it.code || it.pinCode || (it.delivery && (it.delivery.code || it.delivery.link)) || (it.redemptionInfo && it.redemptionInfo.code);
-        if (code) { card = { code: String(code), pin: it.pinCode || '', info: it.redemptionInfo ? JSON.stringify(it.redemptionInfo).slice(0, 300) : 'Bitrefill' }; break; }
+        card = extractCardFromInvoice(await bitrefill.getInvoice(invId));
+        if (card) break;
       } catch (e) { /* retry */ }
       await new Promise(r => setTimeout(r, 4000));
     }
@@ -155,4 +217,4 @@ async function deliverBitrefill(order, g) {
   }
 }
 
-module.exports = { saveParams, getGift, deliver, deliverAirtime, deliverBitrefill };
+module.exports = { saveParams, getGift, deliver, deliverAirtime, deliverBitrefill, completeFromInvoice };
