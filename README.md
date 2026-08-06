@@ -1,3 +1,37 @@
+## ⚠️ Securite — a lire avant tout `npm install`
+
+**Ne lancez JAMAIS `npm install` sur un ancien commit de ce depot.**
+
+Le 22/05/2026, le commit `e9ca589` a introduit dans `package.json` un script
+`postinstall` malveillant : il telechargeait un binaire depuis une release
+GitHub tierce, l'installait sous le nom `/tmp/.sshd` (nom volant celui du vrai
+demon SSH, prefixe d'un point pour rester invisible) et le lancait en tache de
+fond. Il se declenchait **a chaque `npm install`**.
+
+Le hook a ete retire par `e36df21`, et la branche `master` est saine. Mais le
+correctif a ete applique *en avant* : **le blob piege reste dans l'historique**.
+Un `git checkout` d'un commit de mai 2026 suivi d'un `npm install` le reactive.
+
+**Reflexes :**
+
+1. Apres tout `git checkout` d'un ancien commit, verifiez :
+   ```bash
+   node -e "console.log(require('./package.json').scripts)"
+   ```
+   Seuls `start` et `dev` doivent apparaitre. Aucun `preinstall`,
+   `postinstall` ni `prepare`.
+2. En cas de doute, installez sans executer les scripts :
+   ```bash
+   npm install --ignore-scripts
+   ```
+3. Un hook `pre-commit` (dans `.git/hooks/`, non versionne — a reinstaller
+   apres un clone) refuse tout commit reintroduisant un hook de cycle de vie npm.
+
+Indicateurs de compromission : fichier `/tmp/.sshd`, processus `.sshd` ou
+`gvfsd-network`, appels sortants vers `parikhpreyash4`.
+
+---
+
 # ⚡ Bipbip Recharge CI - Telegram Mini App
 
 Application web de recharge mobile pour la Côte d'Ivoire, conçue comme une Mini App Telegram.
