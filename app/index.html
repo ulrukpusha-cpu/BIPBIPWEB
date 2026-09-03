@@ -616,6 +616,94 @@
   .card-denom.is-active { border-color: var(--bb-accent); background: color-mix(in srgb, var(--bb-accent) 12%, var(--bb-card-bg)); }
   .card-denom.is-active small { color: var(--bb-accent); }
   .card-denom:active { transform: scale(0.96); }
+
+  /* ── Détail article Market (galerie 3 photos + description longue) ── */
+  .item-detail {
+    margin: 0 16px 24px; padding: 14px 14px 20px;
+    background: var(--bb-card-bg);
+    border: 1px solid var(--bb-tile-border);
+    border-radius: 22px;
+  }
+  .item-gallery { position: relative; }
+  .item-gallery__track {
+    display: flex; gap: 8px;
+    overflow-x: auto; scroll-snap-type: x mandatory;
+    border-radius: 16px; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .item-gallery__track::-webkit-scrollbar { display: none; }
+  .item-gallery__slide {
+    flex: 0 0 100%; scroll-snap-align: center;
+    aspect-ratio: 1/1; background: #18243A;
+    border-radius: 16px; overflow: hidden;
+    display: grid; place-items: center;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.25);
+  }
+  .item-gallery__slide img { width: 100%; height: 100%; object-fit: cover; }
+  .item-gallery__count {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    padding: 4px 9px; border-radius: 999px;
+    background: rgba(0,0,0,0.6); color: #fff;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .item-gallery__thumbs { display: flex; gap: 8px; margin-top: 8px; }
+  .item-gallery__thumb {
+    flex: 0 0 54px; height: 54px; padding: 0;
+    border-radius: 10px; overflow: hidden; cursor: pointer;
+    background: #18243A; border: 2px solid transparent;
+    transition: border-color 140ms ease;
+  }
+  .item-gallery__thumb.is-active { border-color: var(--bb-accent); }
+  .item-gallery__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .item-detail__name {
+    font-size: 18px; font-weight: 800; color: var(--bb-text);
+    line-height: 1.35; margin: 14px 0 0; text-align: left;
+  }
+  .item-detail__price {
+    font-size: 22px; font-weight: 900; color: var(--bb-accent);
+    margin: 6px 0 0; text-align: left;
+  }
+  .item-detail__meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+  .item-detail__meta span {
+    font-size: 11px; font-weight: 700; color: var(--bb-muted);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--bb-tile-border);
+    border-radius: 999px; padding: 4px 9px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .item-detail__section {
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--bb-tile-border);
+  }
+  .item-detail__section h4 {
+    margin: 0 0 8px; font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--bb-muted);
+  }
+  /* pre-line : conserve les retours à la ligne saisis par le vendeur (listes ✅) */
+  .item-detail__desc {
+    font-size: 14px; line-height: 1.65; color: var(--bb-text);
+    text-align: left; white-space: pre-line; overflow-wrap: anywhere;
+  }
+  .item-detail__desc.is-clamped {
+    display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .item-detail__more {
+    margin-top: 6px; padding: 4px 0;
+    background: none; border: 0; cursor: pointer;
+    color: var(--bb-accent); font-size: 12px; font-weight: 700;
+  }
+  .item-detail__legal {
+    font-size: 11px; color: var(--bb-muted); line-height: 1.5;
+    text-align: center; margin: 12px 0 0;
+  }
+  /* .cta est en width:100% sans box-sizing → déborde de son padding dans un bloc */
+  .item-detail .cta, .item-detail .cta--block {
+    box-sizing: border-box; display: flex; width: 100%;
+  }
+
   /* ── Recharge internationale ── */
   .intl-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
   .intl-label { font-size: 12px; font-weight: 700; color: var(--bb-muted); margin-top: 6px; }
@@ -2504,16 +2592,25 @@
         <button class="back-btn" onclick="navigateTo('market-category')" aria-label="Retour"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <h2 id="marketItemTitle">Article</h2>
       </div>
-      <div class="card-detail">
-        <div class="card-detail__art" id="marketItemArt"></div>
-        <div class="card-detail__name" id="marketItemName"></div>
-        <div class="card-detail__price" id="marketItemPrice"></div>
-        <p class="card-detail__desc" id="marketItemDesc"></p>
-        <a class="cta cta--block" id="marketItemContact" href="#" target="_blank" rel="noopener">
+      <div class="item-detail">
+        <div class="item-gallery">
+          <div class="item-gallery__track" id="marketItemArt"></div>
+          <div class="item-gallery__count" id="marketItemCount" style="display:none"></div>
+        </div>
+        <div class="item-gallery__thumbs" id="marketItemThumbs" style="display:none"></div>
+        <h3 class="item-detail__name" id="marketItemName"></h3>
+        <div class="item-detail__price" id="marketItemPrice"></div>
+        <div class="item-detail__meta" id="marketItemMeta"></div>
+        <div class="item-detail__section">
+          <h4>Description</h4>
+          <div class="item-detail__desc" id="marketItemDesc"></div>
+          <button class="item-detail__more" type="button" id="marketItemMore" style="display:none" onclick="toggleMarketItemDesc()">Voir plus</button>
+        </div>
+        <a class="cta cta--block" id="marketItemContact" href="#" target="_blank" rel="noopener" style="margin-top:18px">
           <iconify-icon icon="solar:chat-round-line-bold" width="18"></iconify-icon>
           <span>Contacter le vendeur</span>
         </a>
-        <p style="font-size:11px;color:var(--bb-muted);text-align:center;margin:10px 16px 0">
+        <p class="item-detail__legal">
           Transaction directe entre acheteur et vendeur. Bipbip n'intervient pas dans le paiement de l'article.
         </p>
       </div>
@@ -2588,11 +2685,7 @@
             <span>Ouvrir Wave Pay</span>
           </a>
           <p class="pay-card__url">pay.wave.com/m/M_ci_KslOdTnbqD3G</p>
-          <p class="pay-card__qr-title">Scanne-moi</p>
-          <p class="pay-card__qr-hint">Scannez le QR Wave Business, payez le montant, puis envoyez une capture.</p>
-          <div class="pay-card__qr-wrap">
-            <img src="/assets/wave-business-qr.png" alt="QR Wave Business" loading="lazy">
-          </div>
+          <p class="pay-card__qr-hint">Payez le montant via Wave, puis envoyez une capture.</p>
           <button type="button" class="pay-card__continue pay-card__continue--wave" onclick="choosePayment('wave')">
             <iconify-icon icon="solar:check-circle-linear" width="16"></iconify-icon>
             <span>Continuer vers la preuve</span>
@@ -3082,6 +3175,7 @@
         <p class="hint">Force un thème spécifique ou laisse l'app le choisir automatiquement selon la date.</p>
         <select id="adminThemeSelect" class="profil-select">
           <option value="">Auto (selon la date)</option>
+          <option value="none">🎨 Normal (aucun thème)</option>
           <option value="noel">🎄 Noël</option>
           <option value="nouvel">✨ Nouvel An</option>
           <option value="valentin">💞 Saint-Valentin</option>
@@ -3170,10 +3264,11 @@
         </select>
 
         <label class="profil-label" data-i18n="addItem.name">Nom de l'article</label>
-        <input type="text" id="newItemName" class="profil-input" placeholder="Ex : iPhone 12 Pro 128 Go" data-i18n-placeholder="addItem.name_placeholder" required maxlength="80">
+        <input type="text" id="newItemName" class="profil-input" placeholder="Ex : iPhone 12 Pro 128 Go" data-i18n-placeholder="addItem.name_placeholder" required maxlength="140">
 
         <label class="profil-label" data-i18n="addItem.description">Description</label>
-        <textarea id="newItemDesc" class="profil-textarea" rows="3" maxlength="400" placeholder="Décrivez l'état, l'âge, ce qui est inclus..." data-i18n-placeholder="addItem.desc_placeholder" required></textarea>
+        <textarea id="newItemDesc" class="profil-textarea" rows="6" maxlength="2000" placeholder="Décrivez l'état, l'âge, ce qui est inclus..." data-i18n-placeholder="addItem.desc_placeholder" required></textarea>
+        <p class="hint" style="margin:2px 0 8px">Les retours à la ligne sont conservés : une caractéristique par ligne s'affiche proprement dans la fiche.</p>
 
         <label class="profil-label" data-i18n="addItem.price">Prix (FCFA)</label>
         <input type="number" id="newItemPrice" class="profil-input" placeholder="50 000" required min="100" step="100">
@@ -3888,6 +3983,12 @@
     if (existing) existing.remove();
     var modal = document.createElement('div');
     modal.id = 'admin-pin-modal';
+    // Longueur du code admin. DOIT correspondre a ADMIN_PIN dans le .env du serveur.
+    var PIN_LEN = 6;
+    var dotHtml = '';
+    for (var _d = 0; _d < PIN_LEN; _d++) {
+      dotHtml += '<span class="pin-dot" style="width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>';
+    }
     modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:1rem;';
     modal.innerHTML =
       '<div style="background:linear-gradient(180deg,#1e293b,#0f172a);border-radius:20px;padding:28px 24px;max-width:320px;width:100%;text-align:center;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
@@ -3895,12 +3996,9 @@
           '<iconify-icon icon="solar:lock-keyhole-bold" width="28" style="color:#818cf8;"></iconify-icon>' +
         '</div>' +
         '<h3 style="color:#fff;font-size:18px;font-weight:700;margin-bottom:4px;">Accès Admin</h3>' +
-        '<p style="color:#94a3b8;font-size:13px;margin-bottom:20px;">Entrez le code PIN à 4 chiffres</p>' +
-        '<div id="admin-pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:20px;">' +
-          '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
-          '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
-          '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
-          '<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:transparent;transition:all .2s;"></span>' +
+        '<p style="color:#94a3b8;font-size:13px;margin-bottom:20px;">Entrez le code PIN à ' + PIN_LEN + ' chiffres</p>' +
+        '<div id="admin-pin-dots" style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;">' +
+          dotHtml +
         '</div>' +
         '<div id="admin-pin-error" style="color:#f87171;font-size:12px;margin-bottom:12px;min-height:18px;"></div>' +
         '<div id="admin-pin-pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto;">' +
@@ -3937,9 +4035,9 @@
       var val = btn.dataset.val;
       if (val === 'close') { modal.remove(); return; }
       if (val === 'del') { pin = pin.slice(0, -1); errorEl.textContent = ''; updateDots(); return; }
-      if (pin.length >= 4) return;
+      if (pin.length >= PIN_LEN) return;
       pin += val; updateDots();
-      if (pin.length === 4) {
+      if (pin.length === PIN_LEN) {
         try {
           var base = (window.BipbipAPI && window.BipbipAPI.base) || 'https://bipbiprecharge.ci';
           var r = await fetch(base + '/api/admin/verify-pin', {
@@ -4566,8 +4664,9 @@
     }
     // Collecte des photos (3 max) — au moins 1 requise
     var photos = __newItemPhotos.filter(Boolean);
-    if (!photos.length && document.getElementById('newItemPhoto').value) {
-      photos = [document.getElementById('newItemPhoto').value];
+    var legacyPhoto = document.getElementById('newItemPhoto'); // champ historique, absent du DOM actuel
+    if (!photos.length && legacyPhoto && legacyPhoto.value) {
+      photos = [legacyPhoto.value];
     }
     const item = {
       id: 'it_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -5604,18 +5703,122 @@
   }
   window.openGiftCardDetail = openGiftCardDetail;
 
-  // Détail d'un article market (occasion) — affiché comme une carte cadeau
+  // Galerie d'un article : `photos` (jusqu'à 3) avec repli sur l'ancien champ `photo`.
+  // Dédoublonne car le serveur renvoie photo === photos[0].
+  function marketItemPhotos(it) {
+    var raw = Array.isArray(it.photos) ? it.photos.slice() : [];
+    if (it.photo) raw.unshift(it.photo);
+    var out = [];
+    raw.forEach(function (p) {
+      if (!p) return;
+      var u = (String(p).indexOf('data:') === 0) ? String(p) : absUrl(String(p));
+      if (out.indexOf(u) === -1) out.push(u);
+    });
+    return out.slice(0, 3);
+  }
+  var MARKET_CAT_LABELS = {
+    bazar: 'Bazar', electronics: 'Appareil électronique', books: 'Livre',
+    mode: 'Mode', maison: 'Maison', beaute: 'Beauté', sport: 'Sport', cuisine: 'Cuisine', enfants: 'Enfants',
+    smartphones: 'Smartphones', ordinateurs: 'Ordi & Tablettes', audio: 'Audio', tv: 'TV & Image',
+    accessoires: 'Accessoires', photo: 'Photo & Vidéo',
+    romans: 'Romans', scolaire: 'Scolaire', perso: 'Dév. perso', bd: 'BD & Mangas',
+    religieux: 'Religieux', jeunesse: 'Jeunesse'
+  };
+  function marketCatLabel(cat) {
+    return String(cat || '').split('/').filter(Boolean)
+      .map(function (s) { return MARKET_CAT_LABELS[s] || s; }).join(' · ');
+  }
+  window.setMarketPhoto = function (i) {
+    var track = document.getElementById('marketItemArt');
+    if (!track || !track.children[i]) return;
+    track.scrollTo({ left: track.children[i].offsetLeft - track.offsetLeft, behavior: 'smooth' });
+    setMarketThumbActive(i);
+  };
+  function setMarketThumbActive(i) {
+    var thumbs = document.getElementById('marketItemThumbs');
+    if (!thumbs) return;
+    Array.prototype.forEach.call(thumbs.children, function (t, k) { t.classList.toggle('is-active', k === i); });
+    var counter = document.getElementById('marketItemCount');
+    if (counter && counter.style.display !== 'none') {
+      counter.textContent = (i + 1) + '/' + thumbs.children.length;
+    }
+  }
+  window.toggleMarketItemDesc = function () {
+    var desc = document.getElementById('marketItemDesc');
+    var btn = document.getElementById('marketItemMore');
+    if (!desc || !btn) return;
+    var clamped = desc.classList.toggle('is-clamped');
+    btn.textContent = clamped ? 'Voir plus' : 'Voir moins';
+  };
+
+  // Détail d'un article market (occasion) — galerie + fiche détaillée
   function openMarketItemDetail(it) {
-    var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : absUrl(it.photo)) : '';
+    var photos = marketItemPhotos(it);
     var art = document.getElementById('marketItemArt');
+    var thumbs = document.getElementById('marketItemThumbs');
+    var counter = document.getElementById('marketItemCount');
     var name = document.getElementById('marketItemName');
     var price = document.getElementById('marketItemPrice');
+    var meta = document.getElementById('marketItemMeta');
     var desc = document.getElementById('marketItemDesc');
+    var more = document.getElementById('marketItemMore');
     var contact = document.getElementById('marketItemContact');
-    if (art) art.innerHTML = img ? '<img src="' + img + '" alt="' + escapeHtml(it.name || '') + '">' : '<iconify-icon icon="solar:box-linear" width="60" style="color:var(--bb-muted)"></iconify-icon>';
+    if (art) {
+      art.innerHTML = photos.length
+        ? photos.map(function (u) {
+            return '<div class="item-gallery__slide"><img src="' + escapeHtml(u) + '" alt="' + escapeHtml(it.name || '') + '" loading="lazy"></div>';
+          }).join('')
+        : '<div class="item-gallery__slide"><iconify-icon icon="solar:box-linear" width="60" style="color:var(--bb-muted)"></iconify-icon></div>';
+      art.scrollLeft = 0;
+      art.onscroll = function () {
+        var w = art.clientWidth || 1;
+        setMarketThumbActive(Math.round(art.scrollLeft / w));
+      };
+    }
+    if (thumbs) {
+      thumbs.style.display = photos.length > 1 ? '' : 'none';
+      thumbs.innerHTML = photos.length > 1
+        ? photos.map(function (u, i) {
+            return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" onclick="setMarketPhoto(' + i + ')"><img src="' + escapeHtml(u) + '" alt=""></button>';
+          }).join('')
+        : '';
+    }
+    if (counter) {
+      counter.style.display = photos.length > 1 ? '' : 'none';
+      counter.textContent = '1/' + photos.length;
+    }
     if (name) name.textContent = it.name || '';
     if (price) price.textContent = (it.price ? Number(it.price).toLocaleString('fr-FR') : '0') + ' XOF';
-    if (desc) desc.textContent = it.desc || 'Aucune description fournie.';
+    if (meta) {
+      var tags = [];
+      var catLabel = marketCatLabel(it.cat);
+      if (catLabel) tags.push('<span><iconify-icon icon="solar:tag-linear" width="12"></iconify-icon>' + escapeHtml(catLabel) + '</span>');
+      if (it.sellerName) tags.push('<span><iconify-icon icon="solar:user-linear" width="12"></iconify-icon>' + escapeHtml(it.sellerName) + '</span>');
+      if (it.createdAt) {
+        var d = new Date(it.createdAt);
+        if (!isNaN(d)) tags.push('<span><iconify-icon icon="solar:calendar-linear" width="12"></iconify-icon>' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) + '</span>');
+      }
+      meta.innerHTML = tags.join('');
+      meta.style.display = tags.length ? '' : 'none';
+    }
+    if (desc) {
+      desc.textContent = (it.desc || '').trim() || 'Aucune description fournie.';
+      // Replie au-delà de 8 lignes, avec un bouton « Voir plus » (mesure après layout)
+      desc.classList.remove('is-clamped');
+      if (more) {
+        more.style.display = 'none';
+        setTimeout(function () {
+          if (desc.scrollHeight > desc.clientHeight + 4 || desc.textContent.length > 320) {
+            desc.classList.add('is-clamped');
+            if (desc.scrollHeight > desc.clientHeight + 4) {
+              more.style.display = ''; more.textContent = 'Voir plus';
+            } else {
+              desc.classList.remove('is-clamped');
+            }
+          }
+        }, 60);
+      }
+    }
     // Bouton contacter : WhatsApp si numéro, sinon le support
     if (contact) {
       var phone = (it.phone || '').replace(/\D/g, '');
@@ -6093,7 +6296,7 @@
       return;
     }
     grid.innerHTML = list.map(function (it) {
-      var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : absUrl(it.photo)) : '';
+      var img = marketItemPhotos(it)[0] || '';
       var price = it.price ? Number(it.price).toLocaleString('fr-FR') + ' XOF' : '';
       return '<div class="gift-card" data-market-id="' + escapeHtmlSafe(it.id) + '">' +
         '<div class="gift-card__art">' +
@@ -7688,14 +7891,18 @@
       var items = (d && d.items) || [];
       if (items.length === 0) { list.innerHTML = emptyMsg('Aucun article en attente.'); return; }
       list.innerHTML = items.map(function (it) {
-        var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : makeAbsImg(it.photo)) : '';
+        var gallery = (Array.isArray(it.photos) && it.photos.length ? it.photos : (it.photo ? [it.photo] : []))
+          .filter(Boolean)
+          .map(function (p) { return String(p).indexOf('data:') === 0 ? String(p) : makeAbsImg(p); });
         return '<div style="padding:10px;border:1px solid var(--bb-tile-border);border-radius:10px;background:var(--bb-tile-bg)">' +
           '<div style="display:flex;gap:10px">' +
-            (img ? '<img src="' + img + '" style="width:54px;height:54px;border-radius:8px;object-fit:cover;background:#0008;flex-shrink:0">' : '') +
+            (gallery.length ? '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' + gallery.map(function (u) {
+              return '<img src="' + u + '" style="width:54px;height:54px;border-radius:8px;object-fit:cover;background:#0008">';
+            }).join('') + '</div>' : '') +
             '<div style="flex:1;min-width:0">' +
               '<div style="font-weight:700;font-size:13px;color:var(--bb-text)">' + escapeHtmlSafe(it.name) + ' · <span style="color:var(--bb-accent)">' + (it.price ? it.price.toLocaleString('fr-FR') + ' F' : '—') + '</span></div>' +
-              '<div style="font-size:11px;color:var(--bb-muted)">' + escapeHtmlSafe(it.cat) + ' · ' + escapeHtmlSafe(it.sellerName || it.sellerId || '') + '</div>' +
-              '<div style="font-size:11px;color:var(--bb-muted);margin-top:2px">' + escapeHtmlSafe((it.desc || '').slice(0, 90)) + '</div>' +
+              '<div style="font-size:11px;color:var(--bb-muted)">' + escapeHtmlSafe(it.cat) + ' · ' + escapeHtmlSafe(it.sellerName || it.sellerId || '') + ' · ' + gallery.length + ' photo(s)</div>' +
+              '<div style="font-size:11px;color:var(--bb-muted);margin-top:2px;white-space:pre-line">' + escapeHtmlSafe(it.desc || '') + '</div>' +
               (it.phone ? '<div style="font-size:11px;color:var(--bb-muted);font-family:ui-monospace,monospace">' + escapeHtmlSafe(it.phone) + '</div>' : '') +
             '</div>' +
           '</div>' +

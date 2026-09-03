@@ -76,16 +76,19 @@ const DEFAULT_FEEDS = {
         'https://www.france24.com/fr/afrique/rss',
         'https://www.bbc.com/afrique/index.xml',
         'https://www.jeuneafrique.com/feed/',
+        'https://www.africanews.com/feed/rss',
         // Côte d'Ivoire (best effort — ignorés si indisponibles)
-        'https://www.7info.ci/feed/',
-        'https://www.linfodrome.com/feed',
-        'https://www.ivoirematin.com/rss/actualites.xml',
-        'https://www.apanews.net/feed/',
+        'https://www.7info.ci/rss',
+        'https://www.ivoirematin.com/feed',
+        'https://aip.ci/feed',
+        // Retirés le 2026-08-17 (morts) : linfodrome (XML invalide en amont),
+        // apanews (403 permanent). Vérifiés un par un avec rss-parser.
     ],
     finance: [
         'https://www.coindesk.com/arc/outboundfeeds/rss/',
         'https://cointelegraph.com/rss',
-        'https://www.sikafinance.com/rss',
+        'https://www.financialafrik.com/feed/',
+        // Retiré le 2026-08-17 : sikafinance (404, aucune variante d'URL valide).
     ],
     tech: [
         'https://www.numerama.com/feed/',
@@ -246,7 +249,7 @@ function getGroqKey() {
     return process.env.GROQBIP || process.env.GROQ_API_KEY || null;
 }
 const GROQ_KEY = getGroqKey();
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
 const EN_FEED_HINTS = ['coindesk', 'cointelegraph', 'theverge', 'arstechnica', 'wired.com', 'nasa.gov', 'newscientist', 'pitchfork', 'nme.com', 'billboard', 'rollingstone'];
 
 function isEnglishFeed(url) {
@@ -271,7 +274,16 @@ function shouldTranslateFeed(feed) {
     }
     return false;
 }
+// Une seule reprise : le mode json_object echoue parfois (json_validate_failed)
+// sur certains contenus, alors que le meme appel repasse au second essai.
 async function translateToFrench(title, summary, content) {
+    const first = await translateOnce(title, summary, content);
+    if (first !== 'retry') return first;
+    const second = await translateOnce(title, summary, content);
+    return second === 'retry' ? null : second;
+}
+
+async function translateOnce(title, summary, content) {
     if (!GROQ_KEY) return null;
     const body = {
         model: GROQ_MODEL,
@@ -294,6 +306,7 @@ async function translateToFrench(title, summary, content) {
         clearTimeout(to);
         if (!r.ok) {
             let why = r.status; try { const e = await r.json(); why = (e.error && e.error.code) || r.status; } catch (_) {}
+            if (why === 'json_validate_failed') return 'retry';
             console.error('[fetchNewsRss] Groq traduction KO (' + why + ') — article gardé en anglais');
             return null;
         }

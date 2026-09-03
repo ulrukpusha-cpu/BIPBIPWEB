@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin — Bipbip Cabine</title>
 <style>
@@ -44,7 +45,8 @@
 <!-- Gate -->
 <div id="gate" class="gate">
   <h2 style="margin-top:0">Connexion admin</h2>
-  <p class="muted">Saisis la clé admin (ADMIN_SECRET_KEY).</p>
+  <p class="muted">Saisis la clé admin cabine (CABINE_ADMIN_KEY) — elle est propre au réseau
+    Kbine et ne donne aucun accès à l'admin du site.</p>
   <label>Clé admin <input id="key" type="password" placeholder="••••••••"></label>
   <button style="width:100%;margin-top:16px" onclick="enter()">Entrer</button>
   <div id="gateMsg"></div>

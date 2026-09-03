@@ -23,6 +23,7 @@
   };
 
   var giftCards = [], giftCat = 'app', categoryItems = [];
+  var shopProducts = [], shopUrl = '';
   var marketAllItems = [], marketParentId = '', marketSubFilter = '';
   var newItemPhotos = [null, null, null];
 
@@ -33,7 +34,7 @@
   function absUrl(u) { if (!u) return ''; if (/^https?:\/\//i.test(u)) return u; var b = BB.apiBase(); return b + (u.charAt(0) === '/' ? '' : '/') + u; }
 
   function showView(name) {
-    ['home', 'category', 'cards'].forEach(function (v) { var el = $('view-' + v); if (el) el.style.display = (v === name) ? '' : 'none'; });
+    ['home', 'category', 'cards', 'shop'].forEach(function (v) { var el = $('view-' + v); if (el) el.style.display = (v === name) ? '' : 'none'; });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -42,6 +43,68 @@
     $('marketGrid').innerHTML = MARKET_PARENTS.map(function (p) {
       return '<button class="market-parent" type="button" data-id="' + p.id + '"><div class="market-parent__icon">' + p.icon + '</div><h3>' + esc(p.label) + '</h3><p>' + esc(p.desc) + '</p><span class="bb-badge bb-badge--pending">' + esc(p.count) + '</span></button>';
     }).join('');
+  }
+
+  // \u2500\u2500 Boutique BIPBIP (catalogue Shopify via /api/shop/products) \u2500\u2500
+  // La tuile n'appara\u00eet que si la boutique renvoie au moins un produit : tant
+  // qu'elle est ferm\u00e9e ou vide, le Market reste stricto sensu comme avant.
+  var SHOP_PARENT = { id: 'shop', icon: ico('solar:shop-2-linear', 32), label: 'Boutique BIPBIP', desc: 'Accessoires neufs, livr\u00e9s \u00e0 Abidjan.', count: 'Neuf' };
+  function loadShopProducts() {
+    return fetch(BB.apiBase() + '/api/shop/products', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        shopProducts = (d && Array.isArray(d.products)) ? d.products : [];
+        shopUrl = (d && d.shopUrl) || '';
+        if (!shopProducts.length) return;
+        SHOP_PARENT.count = shopProducts.length + (shopProducts.length > 1 ? ' articles' : ' article');
+        if (MARKET_PARENTS[0].id !== 'shop') MARKET_PARENTS.unshift(SHOP_PARENT);
+        renderMarket();
+      })
+      .catch(function () { });
+  }
+  function renderShop() {
+    var grid = $('shopGrid'); if (!grid) return;
+    if (!shopProducts.length) {
+      renderShopMore();
+      grid.innerHTML = '<div class="cards-empty" style="grid-column:1/-1">' + ico('solar:shop-2-linear', 34) + '<div class="t">La boutique ouvre bient\u00f4t.</div><div class="s">Les premiers articles arrivent tr\u00e8s vite.</div></div>';
+      return;
+    }
+    renderShopMore();
+    grid.innerHTML = shopProducts.map(function (p) {
+      var img = absUrl(p.img);
+      return '<button class="gift-card" type="button" data-shop="' + esc(p.id) + '">' +
+        '<div class="gift-card__art">' +
+          (p.available ? '' : '<span class="gift-card__value">Rupture</span>') +
+          (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name || '') + '" loading="lazy">' : ico('solar:box-linear', 48)) +
+        '</div><div class="gift-card__name">' + esc(p.name || '') + '</div>' +
+        '<div class="gift-card__price">' + (p.price ? fmt(p.price) + ' ' + esc(p.currency || 'XOF') : '') + '</div></button>';
+    }).join('');
+  }
+  function renderShopMore() {
+    var box = $('shopMore'); if (!box) return;
+    box.innerHTML = shopUrl
+      ? '<a class="bb-cta" href="' + esc(shopUrl) + '" target="_blank" rel="noopener">' + ico('solar:shop-2-linear', 18) + ' Voir toute la boutique</a>'
+      : '';
+  }
+  function openShopDetail(p) {
+    var db = $('cardDenoms'); if (db) db.style.display = 'none';
+    resetItemGallery();
+    var img = absUrl(p.img);
+    $('itemArt').innerHTML = img ? '<img src="' + esc(img) + '" alt="">' : ico('solar:box-linear', 60);
+    $('itemName').textContent = p.name || '';
+    $('itemPrice').textContent = p.price ? (fmt(p.price) + ' ' + (p.currency || 'XOF')) : '';
+    setItemDesc(p.desc || 'Article neuf de la boutique Bipbip.');
+    setItemLegal('Article vendu par Bipbip Recharge. Paiement et livraison g\u00e9r\u00e9s sur la boutique.');
+    var act = $('itemAction');
+    act.className = 'bb-cta bb-cta--block';
+    if (p.available && p.url) {
+      act.innerHTML = ico('solar:cart-large-2-bold', 18) + ' Acheter sur la boutique';
+      act.onclick = function () { window.open(p.url, '_blank', 'noopener'); };
+    } else {
+      act.innerHTML = ico('solar:clock-circle-linear', 18) + ' Bient\u00f4t de retour';
+      act.onclick = null;
+    }
+    $('itemModal').classList.add('is-open');
   }
 
   // ── Gift cards (catalogue Reloadly réel) ──
@@ -103,9 +166,10 @@
       return;
     }
     grid.innerHTML = list.map(function (it) {
-      var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : absUrl(it.photo)) : '';
+      var img = itemPhotos(it)[0] || '';
       return '<button class="gift-card" type="button" data-item="' + esc(it.id) + '">' +
-        '<div class="gift-card__art">' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : ico('solar:box-linear', 48)) + '</div>' +
+        '<div class="gift-card__art">' +
+          (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : ico('solar:box-linear', 48)) + '</div>' +
         '<div class="gift-card__name">' + esc(it.name || '') + '</div>' +
         '<div class="gift-card__price">' + (it.price ? fmt(it.price) + ' XOF' : '') + '</div></button>';
     }).join('');
@@ -117,6 +181,7 @@
   }
   function openCategory(catId) {
     if (catId === 'cards') { showView('cards'); if (!giftCards.length) loadGiftCards(); return; }
+    if (catId === 'shop') { showView('shop'); renderShop(); return; }
     $('catTitle').textContent = MARKET_TITLES[catId] || 'Catégorie';
     $('catIntro').textContent = "Catalogue d'articles d'occasion en Côte d'Ivoire.";
     marketParentId = catId; marketSubFilter = ''; marketAllItems = [];
@@ -139,8 +204,66 @@
     document.querySelectorAll('#cardDenoms .card-denom').forEach(function (el, i) { el.classList.toggle('is-active', i === idx); });
   }
   window.__selectCardDenom = selectCardDenom;
+  // Galerie d'un article : `photos` (jusqu'à 3) avec repli sur l'ancien champ `photo`.
+  // Dédoublonne car le serveur renvoie photo === photos[0].
+  function itemPhotos(it) {
+    var raw = Array.isArray(it.photos) ? it.photos.slice() : [];
+    if (it.photo) raw.unshift(it.photo);
+    var out = [];
+    raw.forEach(function (p) {
+      if (!p) return;
+      var u = (String(p).indexOf('data:') === 0) ? String(p) : absUrl(String(p));
+      if (out.indexOf(u) === -1) out.push(u);
+    });
+    return out.slice(0, 3);
+  }
+  var CAT_LABELS = (function () {
+    var m = { bazar: 'Bazar', electronics: 'Appareil électronique', books: 'Livre' };
+    Object.keys(MARKET_SUBCATS).forEach(function (p) {
+      MARKET_SUBCATS[p].forEach(function (s) { m[s.slug] = s.label; });
+    });
+    return m;
+  })();
+  function catLabelOf(cat) {
+    return String(cat || '').split('/').filter(Boolean)
+      .map(function (s) { return CAT_LABELS[s] || s; }).join(' · ');
+  }
+  function setThumbActive(i) {
+    var thumbs = $('itemThumbs'); if (!thumbs) return;
+    Array.prototype.forEach.call(thumbs.children, function (t, k) { t.classList.toggle('is-active', k === i); });
+    var counter = $('itemPhotoCount');
+    if (counter && counter.style.display !== 'none') counter.textContent = (i + 1) + '/' + thumbs.children.length;
+  }
+  function showPhoto(i) {
+    var art = $('itemArt'); if (!art || !art.children[i]) return;
+    art.scrollTo({ left: art.children[i].offsetLeft - art.offsetLeft, behavior: 'smooth' });
+    setThumbActive(i);
+  }
+  // Replie la description au-delà de 8 lignes, avec un bouton « Voir plus »
+  function setItemDesc(txt) {
+    var desc = $('itemDesc'), more = $('itemDescMore');
+    if (!desc) return;
+    desc.textContent = txt;
+    desc.classList.remove('is-clamped');
+    if (!more) return;
+    more.style.display = 'none'; more.textContent = 'Voir plus';
+    setTimeout(function () {
+      desc.classList.add('is-clamped');
+      if (desc.scrollHeight > desc.clientHeight + 4) more.style.display = '';
+      else desc.classList.remove('is-clamped');
+    }, 60);
+  }
+  // Repasse #itemArt en vignette simple (cartes cadeaux / boutique)
+  function resetItemGallery() {
+    var art = $('itemArt');
+    if (art) { art.classList.remove('is-gallery'); art.onscroll = null; art.scrollLeft = 0; }
+    var t = $('itemThumbs'); if (t) { t.style.display = 'none'; t.innerHTML = ''; }
+    var c = $('itemPhotoCount'); if (c) c.style.display = 'none';
+    var m = $('itemMeta'); if (m) { m.style.display = 'none'; m.innerHTML = ''; }
+  }
   function openCardDetail(card) {
     selectedCard = card;
+    resetItemGallery();
     selectedDenom = (card.items && card.items[0]) || null;
     var img = absUrl(card.img);
     $('itemArt').innerHTML = img ? '<img src="' + esc(img) + '" alt="">' : ico('solar:gift-linear', 60);
@@ -153,29 +276,56 @@
     var denomsBox = $('cardDenoms');
     if (!denomsBox) { denomsBox = document.createElement('div'); denomsBox.id = 'cardDenoms'; denomsBox.className = 'card-denoms'; $('itemPrice').insertAdjacentElement('afterend', denomsBox); }
     denomsBox.innerHTML = denomsHtml; denomsBox.style.display = denomsHtml ? '' : 'none';
-    $('itemDesc').textContent = 'Choisis un montant. Après paiement validé, le code te sera livré dans tes commandes.';
+    setItemDesc('Choisis un montant. Après paiement validé, le code te sera livré dans tes commandes.');
     var act = $('itemAction');
     act.innerHTML = '<iconify-icon icon="solar:lock-keyhole-bold" width="18"></iconify-icon> Confirmer l\'achat';
     act.className = 'bb-cta bb-cta--block';
+    setItemLegal(LEGAL_C2C);
     act.onclick = function () { confirmGiftCardPurchase(card); };
     $('itemModal').classList.add('is-open');
   }
   function openItemDetail(it) {
     var db = $('cardDenoms'); if (db) db.style.display = 'none';
-    var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : absUrl(it.photo)) : '';
-    $('itemArt').innerHTML = img ? '<img src="' + esc(img) + '" alt="">' : ico('solar:box-linear', 60);
+    var photos = itemPhotos(it);
+    var art = $('itemArt');
+    art.classList.add('is-gallery');
+    art.innerHTML = photos.length
+      ? photos.map(function (u) { return '<div class="item-gallery__slide"><img src="' + esc(u) + '" alt="" loading="lazy"></div>'; }).join('')
+      : '<div class="item-gallery__slide">' + ico('solar:box-linear', 60) + '</div>';
+    art.scrollLeft = 0;
+    art.onscroll = function () { setThumbActive(Math.round(art.scrollLeft / (art.clientWidth || 1))); };
+    var thumbs = $('itemThumbs');
+    thumbs.style.display = photos.length > 1 ? '' : 'none';
+    thumbs.innerHTML = photos.length > 1
+      ? photos.map(function (u, i) { return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" data-photo="' + i + '"><img src="' + esc(u) + '" alt=""></button>'; }).join('')
+      : '';
+    var counter = $('itemPhotoCount');
+    counter.style.display = photos.length > 1 ? '' : 'none';
+    counter.textContent = '1/' + photos.length;
     $('itemName').textContent = it.name || '';
     $('itemPrice').textContent = fmt(it.price) + ' XOF';
-    $('itemDesc').textContent = it.desc || 'Aucune description fournie.';
+    var meta = $('itemMeta'), tags = [];
+    var catLabel = catLabelOf(it.cat);
+    if (catLabel) tags.push('<span>' + esc(catLabel) + '</span>');
+    if (it.sellerName) tags.push('<span>' + esc(it.sellerName) + '</span>');
+    if (it.createdAt) {
+      var d = new Date(it.createdAt);
+      if (!isNaN(d)) tags.push('<span>' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) + '</span>');
+    }
+    meta.innerHTML = tags.join(''); meta.style.display = tags.length ? '' : 'none';
+    setItemDesc((it.desc || '').trim() || 'Aucune description fournie.');
     var phone = (it.phone || '').replace(/\D/g, '');
     if (phone.length === 10 && phone.charAt(0) === '0') phone = '225' + phone;
     var href = phone ? ('https://wa.me/' + phone + '?text=' + encodeURIComponent('Bonjour, je suis intéressé(e) par votre article "' + (it.name || '') + '" sur Bipbip Market.')) : 'https://wa.me/2250152597408';
     var act = $('itemAction');
     act.innerHTML = '<iconify-icon icon="solar:chat-round-line-bold" width="18"></iconify-icon> Contacter le vendeur';
     act.className = 'bb-cta bb-cta--block';
+    setItemLegal(LEGAL_C2C);
     act.onclick = function () { window.open(href, '_blank'); };
     $('itemModal').classList.add('is-open');
   }
+  var LEGAL_C2C = "Transaction directe entre acheteur et vendeur pour les articles d'occasion. Bipbip n'intervient pas dans le paiement de l'article.";
+  function setItemLegal(txt) { var el = $('itemLegal'); if (el) el.textContent = txt; }
   function closeItemModal() { $('itemModal').classList.remove('is-open'); }
 
   async function confirmGiftCardPurchase(card) {
@@ -329,12 +479,21 @@
     $('marketGrid').addEventListener('click', function (e) { var c = e.target.closest('.market-parent'); if (c) openCategory(c.dataset.id); });
     $('cardsTabs').addEventListener('click', function (e) { var b = e.target.closest('.cards-tab'); if (b) setGiftCat(b.dataset.cat); });
     $('cardsGrid').addEventListener('click', function (e) { var c = e.target.closest('[data-card]'); if (c) { var card = giftCards.find(function (x) { return String(x.id) === c.dataset.card; }); if (card) openCardDetail(card); } });
+    var shopGrid = $('shopGrid');
+    if (shopGrid) shopGrid.addEventListener('click', function (e) { var c = e.target.closest('[data-shop]'); if (c) { var p = shopProducts.find(function (x) { return String(x.id) === c.dataset.shop; }); if (p) openShopDetail(p); } });
     $('catSubTabs').addEventListener('click', function (e) { var b = e.target.closest('.cards-tab'); if (b) setSubcat(b.dataset.slug); });
     $('catItemsGrid').addEventListener('click', function (e) { var c = e.target.closest('[data-item]'); if (c) { var it = categoryItems.find(function (x) { return String(x.id) === c.dataset.item; }); if (it) openItemDetail(it); } });
     document.querySelectorAll('[data-market-back]').forEach(function (b) { b.addEventListener('click', function () { showView('home'); }); });
 
     // detail modal
     document.querySelectorAll('[data-close="item"]').forEach(function (b) { b.addEventListener('click', closeItemModal); });
+    $('itemThumbs').addEventListener('click', function (e) {
+      var t = e.target.closest('[data-photo]'); if (t) showPhoto(parseInt(t.dataset.photo, 10) || 0);
+    });
+    $('itemDescMore').addEventListener('click', function () {
+      var desc = $('itemDesc');
+      this.textContent = desc.classList.toggle('is-clamped') ? 'Voir plus' : 'Voir moins';
+    });
 
     // my items / add item
     var addBtn = $('openAddItemBtn'); if (addBtn) addBtn.addEventListener('click', openAddItem);
@@ -351,10 +510,10 @@
     document.querySelectorAll('[data-close="limit"]').forEach(function (b) { b.addEventListener('click', function () { $('itemLimitModal').classList.remove('is-open'); }); });
 
     // API-ready
-    (function ready() { if (window.BipbipAPI && window.BB) { renderMyItems(); } else setTimeout(ready, 120); })();
+    (function ready() { if (window.BipbipAPI && window.BB) { renderMyItems(); loadShopProducts(); } else setTimeout(ready, 120); })();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  window.BBMarket = { renderMyItems: renderMyItems };
+  window.BBMarket = { renderMyItems: renderMyItems, loadShopProducts: loadShopProducts };
 })();

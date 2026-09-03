@@ -2,14 +2,14 @@
    Bipbip Cabine — routes API des commerciaux (Kbine)
    Montées sous /api/cabine  (voir server.js : app.use('/api/cabine', cabineRoutes))
    Public  : login, recharge, history, bundles, wave-proof
-   Admin   : protégé par X-Admin-Key (middleware adminAuth)
+   Admin   : protégé par X-Admin-Key (middleware cabineAuth)
    ========================================================= */
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const cabine = require('../services/cabineService');
-const { adminAuth } = require('../middleware/adminAuth');
+const { cabineAuth } = require('../middleware/cabineAuth');
 
 const UPLOADS_DIR = path.resolve('./uploads');
 try { if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (_) {}
@@ -150,13 +150,13 @@ router.post('/postuler', async (req, res) => {
     }
 });
 
-// ======================= ADMIN (X-Admin-Key) =============================
-router.get('/admin/cabines', adminAuth, async (req, res) => {
+// ============= ADMIN CABINE (X-Admin-Key = CABINE_ADMIN_KEY) =============
+router.get('/admin/cabines', cabineAuth, async (req, res) => {
     try { res.json({ ok: true, cabines: await cabine.adminListCabines() }); }
     catch (e) { fail(res, 500, e.message); }
 });
 
-router.post('/admin/cabines', adminAuth, async (req, res) => {
+router.post('/admin/cabines', cabineAuth, async (req, res) => {
     try {
         const b = req.body || {};
         const photo_url = saveBase64Image(b.photo, 'cabine-photo');
@@ -168,7 +168,7 @@ router.post('/admin/cabines', adminAuth, async (req, res) => {
 
 // Générateur : crée une cabine avec un code auto-généré qui expire (défaut 1 mois)
 // Accepte une photo (base64) qui s'affichera dans le profil du commercial.
-router.post('/admin/generate', adminAuth, async (req, res) => {
+router.post('/admin/generate', cabineAuth, async (req, res) => {
     try {
         const b = req.body || {};
         const photo_url = saveBase64Image(b.photo, 'cabine-photo');
@@ -179,7 +179,7 @@ router.post('/admin/generate', adminAuth, async (req, res) => {
 });
 
 // Définir / changer la photo d'un commercial
-router.post('/admin/cabines/:code/photo', adminAuth, async (req, res) => {
+router.post('/admin/cabines/:code/photo', cabineAuth, async (req, res) => {
     try {
         const photo_url = saveBase64Image((req.body || {}).photo, 'cabine-photo');
         if (!photo_url) return fail(res, 400, 'Photo invalide');
@@ -190,20 +190,20 @@ router.post('/admin/cabines/:code/photo', adminAuth, async (req, res) => {
 });
 
 // ---- Candidatures KYC : lister / approuver / rejeter ---------------------
-router.get('/admin/candidatures', adminAuth, async (req, res) => {
+router.get('/admin/candidatures', cabineAuth, async (req, res) => {
     try {
         const status = req.query.status === undefined ? 'en_attente' : req.query.status;
         res.json({ ok: true, candidatures: await cabine.adminListCandidatures(status) });
     } catch (e) { fail(res, 500, e.message); }
 });
-router.post('/admin/candidatures/:id/approve', adminAuth, async (req, res) => {
+router.post('/admin/candidatures/:id/approve', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminApproveCandidature(req.params.id);
         if (!r.ok) return fail(res, 400, r.error);
         res.json(r);
     } catch (e) { fail(res, 500, e.message); }
 });
-router.post('/admin/candidatures/:id/reject', adminAuth, async (req, res) => {
+router.post('/admin/candidatures/:id/reject', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminRejectCandidature(req.params.id);
         if (!r.ok) return fail(res, 400, r.error);
@@ -212,17 +212,17 @@ router.post('/admin/candidatures/:id/reject', adminAuth, async (req, res) => {
 });
 
 // ---- Commandes en attente : lister / valider / rejeter -------------------
-router.get('/admin/orders', adminAuth, async (req, res) => {
+router.get('/admin/orders', cabineAuth, async (req, res) => {
     try { res.json({ ok: true, orders: await cabine.adminListPendingOrders() }); }
     catch (e) { fail(res, 500, e.message); }
 });
-router.post('/admin/orders/:id/validate', adminAuth, async (req, res) => {
+router.post('/admin/orders/:id/validate', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminValidateOrder(req.params.id);
         res.json(r);
     } catch (e) { fail(res, 500, e.message); }
 });
-router.post('/admin/orders/:id/reject', adminAuth, async (req, res) => {
+router.post('/admin/orders/:id/reject', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminRejectOrder(req.params.id, (req.body || {}).reason);
         if (!r.ok) return fail(res, 400, r.error);
@@ -230,7 +230,7 @@ router.post('/admin/orders/:id/reject', adminAuth, async (req, res) => {
     } catch (e) { fail(res, 500, e.message); }
 });
 // Annuler une commande validée (échec USSD réel) → réajuste les compteurs
-router.post('/admin/orders/:id/cancel', adminAuth, async (req, res) => {
+router.post('/admin/orders/:id/cancel', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminCancelOrder(req.params.id);
         if (!r.ok) return fail(res, 400, r.error);
@@ -239,19 +239,19 @@ router.post('/admin/orders/:id/cancel', adminAuth, async (req, res) => {
 });
 
 // ---- Message LED diffusé aux cabines -------------------------------------
-router.post('/admin/message', adminAuth, async (req, res) => {
+router.post('/admin/message', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminSetMessage((req.body || {}).message);
         if (!r.ok) return fail(res, 400, r.error);
         res.json(r);
     } catch (e) { fail(res, 500, e.message); }
 });
-router.delete('/admin/message', adminAuth, async (req, res) => {
+router.delete('/admin/message', cabineAuth, async (req, res) => {
     try { res.json(await cabine.adminClearMessage()); }
     catch (e) { fail(res, 500, e.message); }
 });
 
-router.put('/admin/cabines/:code', adminAuth, async (req, res) => {
+router.put('/admin/cabines/:code', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminSetCabine(req.params.code, req.body || {});
         if (!r.ok) return fail(res, 400, r.error);
@@ -259,14 +259,14 @@ router.put('/admin/cabines/:code', adminAuth, async (req, res) => {
     } catch (e) { fail(res, 500, e.message); }
 });
 
-router.get('/admin/deposits', adminAuth, async (req, res) => {
+router.get('/admin/deposits', cabineAuth, async (req, res) => {
     try {
         const status = req.query.status === undefined ? 'en_attente' : req.query.status;
         res.json({ ok: true, deposits: await cabine.adminListDeposits(status) });
     } catch (e) { fail(res, 500, e.message); }
 });
 
-router.post('/admin/deposits/:id/confirm', adminAuth, async (req, res) => {
+router.post('/admin/deposits/:id/confirm', cabineAuth, async (req, res) => {
     try {
         const r = await cabine.adminConfirmDeposit(req.params.id);
         if (!r.ok) return fail(res, 400, r.error);

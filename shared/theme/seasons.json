@@ -67,7 +67,7 @@
       "id": "ete",
       "label": "Été / Vacances",
       "emoji": "🌴",
-      "window": { "type": "recurring-md", "from": "06-21", "to": "08-31", "exclude": ["indep"] }
+      "window": { "type": "recurring-md", "from": "06-21", "to": "07-05", "exclude": ["indep"] }
     }
   ]
 }

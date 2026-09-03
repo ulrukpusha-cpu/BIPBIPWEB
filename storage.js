@@ -75,6 +75,17 @@ const jsonStorage = {
         return order;
     },
 
+    async setOrderManualDelivered(orderId) {
+        const order = orders[orderId];
+        if (!order) return null;
+        order.status = 'credit_delivered';
+        order.validatedAt = new Date().toISOString();
+        validatedOrders.push({ ...order });
+        delete orders[orderId];
+        saveOrdersFile();
+        return order;
+    },
+
     async setOrderRejected(orderId, reason) {
         const order = orders[orderId] || validatedOrders.find(o => o.id === orderId);
         if (!order) return null;
@@ -155,6 +166,7 @@ if (useSupabase) {
             createOrder: db.createOrder,
             updateOrderProof: db.updateOrderProof,
             setOrderValidated: db.setOrderValidated,
+            setOrderManualDelivered: db.setOrderManualDelivered || (async () => null),
             setOrderRejected: db.setOrderRejected,
             setOrderDelivered: db.setOrderDelivered || (async () => null),
             setOrderDelivered: db.setOrderDelivered || (async () => null),
@@ -176,6 +188,7 @@ if (useSupabase) {
             createOrder: db.createOrder,
             updateOrderProof: db.updateOrderProof,
             setOrderValidated: db.setOrderValidated,
+            setOrderManualDelivered: db.setOrderManualDelivered || (async () => null),
             setOrderRejected: db.setOrderRejected,
             getOrdersPending: db.getOrdersPending,
             getValidatedOrders: db.getValidatedOrders,

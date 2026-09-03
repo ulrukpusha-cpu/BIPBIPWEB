@@ -293,11 +293,16 @@
       var items = (d && d.items) || [];
       if (!items.length) { list.innerHTML = emptyMsg('Aucun article en attente.'); return; }
       list.innerHTML = items.map(function (it) {
-        var img = it.photo ? (it.photo.indexOf('data:') === 0 ? it.photo : makeAbsImg(it.photo)) : '';
-        return '<div class="admin-card"><div style="display:flex;gap:10px">' + (img ? '<img src="' + img + '" style="width:54px;height:54px;border-radius:8px;object-fit:cover;flex-shrink:0">' : '') +
+        var gallery = (Array.isArray(it.photos) && it.photos.length ? it.photos : (it.photo ? [it.photo] : []))
+          .filter(Boolean)
+          .map(function (p) { return String(p).indexOf('data:') === 0 ? String(p) : makeAbsImg(p); });
+        return '<div class="admin-card"><div style="display:flex;gap:10px">' +
+          (gallery.length ? '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">' + gallery.map(function (u) {
+            return '<img src="' + u + '" style="width:54px;height:54px;border-radius:8px;object-fit:cover">';
+          }).join('') + '</div>' : '') +
           '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">' + esc(it.name) + ' · <span style="color:var(--bb-accent)">' + (it.price ? Number(it.price).toLocaleString('fr-FR') + ' F' : '—') + '</span></div>' +
-          '<div class="hint">' + esc(it.cat) + ' · ' + esc(it.sellerName || it.sellerId || '') + '</div>' +
-          '<div class="hint" style="margin-top:2px">' + esc((it.desc || '').slice(0, 90)) + '</div>' +
+          '<div class="hint">' + esc(it.cat) + ' · ' + esc(it.sellerName || it.sellerId || '') + ' · ' + gallery.length + ' photo(s)</div>' +
+          '<div class="hint" style="margin-top:2px;white-space:pre-line">' + esc(it.desc || '') + '</div>' +
           (it.phone ? '<div class="hint" style="font-family:ui-monospace,monospace">' + esc(it.phone) + '</div>' : '') + '</div></div>' +
           '<div class="profil-row-2" style="margin-top:8px"><button class="profil-btn-secondary admin-reject" type="button" onclick="adminRejectMarketItem(\'' + it.id + '\')">Refuser</button><button class="profil-btn-warn admin-ok" type="button" onclick="adminValidateMarketItem(\'' + it.id + '\')">Valider</button></div></div>';
       }).join('');

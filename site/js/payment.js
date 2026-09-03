@@ -56,8 +56,7 @@
             '<div id="wavePanelBody" style="display:none">' +
               '<a href="' + WAVE_URL + '" target="_blank" rel="noopener" class="pay-card__cta pay-card__cta--wave" style="margin-top:12px"><iconify-icon icon="solar:wallet-money-linear" width="18"></iconify-icon> Ouvrir Wave Pay</a>' +
               '<p class="pay-card__url">pay.wave.com/m/M_ci_KslOdTnbqD3G</p>' +
-              '<p class="pay-card__qr-title">Scanne-moi</p><p class="pay-card__qr-hint">Scannez le QR Wave Business, payez le montant, puis envoyez une capture.</p>' +
-              '<div class="pay-card__qr-wrap"><img src="/assets/wave-business-qr.png" alt="QR Wave Business" loading="lazy"></div>' +
+              '<p class="pay-card__qr-hint">Payez le montant via Wave, puis envoyez une capture.</p>' +
               '<button type="button" class="pay-card__continue" data-choose="wave"><iconify-icon icon="solar:check-circle-linear" width="16"></iconify-icon> Continuer vers la preuve</button>' +
             '</div></div>' +
         '</div>' +

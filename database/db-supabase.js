@@ -150,6 +150,22 @@ async function setOrderValidated(orderId) {
     return getOrderById(orderId);
 }
 
+async function setOrderManualDelivered(orderId) {
+    // Ferme une commande DEJA rechargee A LA MAIN (via gateway/USSD) : passe en statut
+    // final 'credit_delivered' SANS declencher de recharge. Meme garde atomique que
+    // setOrderValidated -> si un automate (agent OCR / rapprochement depot) l'a deja
+    // prise, renvoie null et l'appelant ne relance rien (anti-double-livraison).
+    const { data, error } = await supabase
+        .from('orders')
+        .update({ status: 'credit_delivered', validated_at: new Date().toISOString() })
+        .eq('id', orderId)
+        .in('status', ['pending', 'proof_sent'])
+        .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    return getOrderById(orderId);
+}
+
 async function setOrderRejected(orderId, reason) {
     // garde : on ne rejette JAMAIS une commande deja livree (sinon le client perd sa
     // commande alors que le credit est parti et que le wallet a ete debite).
@@ -222,6 +238,7 @@ module.exports = {
     createOrder,
     updateOrderProof,
     setOrderValidated,
+    setOrderManualDelivered,
     setOrderRejected,
     setOrderDelivered,
     getStats,

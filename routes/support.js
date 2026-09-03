@@ -77,12 +77,12 @@ function adminChatIds() {
  * la clé du dispositif : quand l'admin fait "répondre" à ce message dans Telegram,
  * server.js relit le marqueur et route sa réponse vers le bon client.
  */
-async function notifyAdmins(conv, text, { force = false } = {}) {
+async function notifyAdmins(conv, text, { force = false, throttleMs = 10 * 60000 } = {}) {
     const ids = adminChatIds();
     if (!ADMIN_BOT_TOKEN || !ids.length) return;
     // Anti-spam : un seul ping par conversation toutes les 10 min, sauf escalade explicite.
     const last = notifyAdmins._last || (notifyAdmins._last = new Map());
-    if (!force && Date.now() - (last.get(conv.id) || 0) < 10 * 60000) return;
+    if (!force && throttleMs > 0 && Date.now() - (last.get(conv.id) || 0) < throttleMs) return;
     last.set(conv.id, Date.now());
 
     // Le pseudo va dans <code> : une mention @xxx cliquable ouvrirait une
@@ -196,7 +196,7 @@ router.post('/message', async (req, res) => {
 
         // Un humain a repris la main : l'IA se tait, l'admin est prévenu.
         if (support.isHumanActive(c.id) || c.status === 'waiting') {
-            notifyAdmins(c, msg).catch(() => {});
+            notifyAdmins(c, msg, { force: support.isHumanActive(c.id), throttleMs: 60000 }).catch(() => {});
             return res.json({ reply: null, status: c.status, humanActive: support.isHumanActive(c.id) });
         }
 
@@ -339,7 +339,7 @@ router.post('/bridge/ingest', async (req, res) => {
         support.requestHuman(c.id);
         notifyAdmins(c, text, { force: true }).catch(() => {});
     } else if (from === 'client') {
-        notifyAdmins(c, text).catch(() => {});
+        notifyAdmins(c, text, { force: support.isHumanActive(c.id), throttleMs: 60000 }).catch(() => {});
     }
     res.json({ ok: true, conversationId: c.id, humanActive: support.isHumanActive(c.id) });
 });

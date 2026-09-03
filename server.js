@@ -436,6 +436,15 @@ app.get('/recharge-orange-ci', (req, res) => {
 app.get('/recharge-moov-ci', (req, res) => {
     res.sendFile(path.join(__dirname, 'seo', 'recharge-moov-ci.html'));
 });
+app.get('/comment-biper-mtn-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'comment-biper-mtn-ci.html'));
+});
+app.get('/comment-biper-moov-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'comment-biper-moov-ci.html'));
+});
+app.get('/comment-recharger-orange-ci', (req, res) => {
+    res.sendFile(path.join(__dirname, 'seo', 'comment-recharger-orange-ci.html'));
+});
 app.get('/robots.txt', (req, res) => {
     res.type('text/plain');
     res.sendFile(path.join(__dirname, 'robots.txt'));
@@ -464,15 +473,34 @@ function shouldServeApp(req) {
 }
 
 app.get('/', (req, res) => {
+    // AdSense 22/08/2026 : une seule URL = un seul contenu. La landing est servie a TOUS
+    // (Googlebot indexe en mobile-first et ne voyait que la coquille de l app).
+    // L application reste accessible sur /app.
+    // Exception : le Mini App Telegram est un contexte embarque ou la landing n a aucun
+    // sens. Googlebot ne peut pas l emprunter (il ne s annonce jamais comme Telegram),
+    // donc ce cas ne recree pas le probleme d indexation.
     if (shouldServeApp(req)) {
-        res.sendFile(path.join(__dirname, 'app', 'index.html'));
-    } else {
-        res.sendFile(path.join(__dirname, 'site', 'index.html'));
+        res.sendFile(path.join(__dirname, "app", "index.html"));
+        return;
     }
+    res.sendFile(path.join(__dirname, "site", "index.html"));
 });
 
 app.get(['/confidentialite','/privacy','/politique-confidentialite'], (req, res) => {
     res.sendFile(path.join(__dirname, 'confidentialite.html'));
+});
+
+// ── Pages editoriales et legales (AdSense 22/08/2026) ──
+// URL propres sans .html, alignees sur les balises canonical de chaque page.
+[
+    ['/a-propos', 'a-propos.html'],
+    ['/contact', 'contact.html'],
+    ['/cgu', 'cgu.html'],
+    ['/mentions-legales', 'mentions-legales.html'],
+].forEach(function (r) {
+    app.get(r[0], function (req, res) {
+        res.sendFile(path.join(__dirname, r[1]));
+    });
 });
 
 app.get('/app', (req, res) => {
@@ -1533,6 +1561,13 @@ function readMarketItems() {
         return JSON.parse(fs.readFileSync(MARKET_ITEMS_FILE, 'utf8')) || [];
     } catch (e) { return []; }
 }
+// Galerie d'un article : `photos` si présent, sinon repli sur l'ancien champ `photo`
+// (articles créés avant le support multi-images).
+function itemPhotos(it) {
+    const arr = Array.isArray(it && it.photos) ? it.photos.filter(Boolean) : [];
+    if (arr.length) return arr.slice(0, 3);
+    return (it && it.photo) ? [it.photo] : [];
+}
 function writeMarketItems(arr) {
     try {
         const fs = require('fs');
@@ -1557,13 +1592,20 @@ app.post('/api/market/items', (req, res) => {
             return res.status(403).json({ error: 'Limite d\'articles atteinte', limit, count: myActive, needPack: true });
         }
     }
+    // Photos : jusqu'à 3 (dataURL ou /uploads). `photo` reste la vignette (= photos[0])
+    // pour compat avec les anciens clients qui ne lisent que ce champ.
+    const photos = (Array.isArray(b.photos) ? b.photos : (b.photo ? [b.photo] : []))
+        .filter(p => typeof p === 'string' && p)
+        .slice(0, 3)
+        .map(p => p.slice(0, 300000));
     const item = {
         id: 'it_' + crypto.randomBytes(5).toString('hex'),
-        name: String(b.name).slice(0, 100),
+        name: String(b.name).slice(0, 140),
         cat: String(b.cat).slice(0, 60),
-        desc: String(b.desc || '').slice(0, 600),
+        desc: String(b.desc || '').slice(0, 2000),
         price: parseInt(b.price, 10) || 0,
-        photo: String(b.photo || '').slice(0, 300000), // dataURL accepté
+        photo: photos[0] || String(b.photo || '').slice(0, 300000), // dataURL accepté
+        photos: photos,
         phone: String(b.phone || '').slice(0, 25),
         sellerId: String(b.userId || b.sellerId || 'anon').slice(0, 60),
         sellerName: String(b.displayName || b.sellerName || '').slice(0, 80),
@@ -1612,7 +1654,7 @@ app.get('/api/market/items', (req, res) => {
     // N'expose pas le téléphone vendeur publiquement
     res.json({ items: items.map(it => ({
         id: it.id, name: it.name, cat: it.cat, desc: it.desc,
-        price: it.price, photo: it.photo, sellerName: it.sellerName,
+        price: it.price, photo: it.photo, photos: itemPhotos(it), sellerName: it.sellerName,
         phone: it.phone, createdAt: it.createdAt
     })) });
 });
@@ -1624,7 +1666,7 @@ app.get('/api/market/items/mine', (req, res) => {
     const items = readMarketItems().filter(it => String(it.sellerId) === uid);
     res.json({ items: items.map(it => ({
         id: it.id, name: it.name, cat: it.cat, desc: it.desc, price: it.price,
-        photo: it.photo, status: it.status, createdAt: it.createdAt
+        photo: it.photo, photos: itemPhotos(it), status: it.status, createdAt: it.createdAt
     })) });
 });
 
@@ -1826,7 +1868,9 @@ app.post('/api/orders', paymentLimiter, async (req, res) => {
                 `💰 Montant: ${amountTotal} FCFA\n` +
                 (operator === 'CARTE_CADEAU' ? '' : `📞 Numéro: ${phone}\n`) +
                 `📅 Date: ${new Date().toLocaleString('fr-FR')}`,
-                {},
+                // Boutons des la notif : sans eux l admin ne peut pas VERROUILLER la commande
+                // avant de recharger a la main -> double livraison (perte du 22/08/2026).
+                orderAdminKeyboard({ id: orderId, phone: phone, operator: operator }),
                 notifToken
             );
         }
@@ -1922,14 +1966,7 @@ app.post('/api/orders/:id/proof', upload.single('proof'), async (req, res) => {
         const proofUrl = `${req.protocol}://${req.get('host')}${proofPath}`;
         
         const caption = buildProofTelegramCaption(order, paymentMethod);
-        const keyboard = {
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: '✅ Valider', callback_data: `validate_${orderId}` },
-                    { text: '❌ Rejeter', callback_data: `reject_${orderId}` }
-                ]]
-            }
-        };
+        const keyboard = orderAdminKeyboard(order);
         // Envoyer la preuve aux admins via le bot admin uniquement
         {
             const proofToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
@@ -1979,14 +2016,7 @@ app.post('/api/orders/:id/proof-base64', async (req, res) => {
         
         const proofUrl = `${req.protocol}://${req.get('host')}${proofPath}`;
         const captionB64 = buildProofTelegramCaption(order, paymentMethod);
-        const keyboard2 = {
-            reply_markup: {
-                inline_keyboard: [[
-                    { text: '✅ Valider', callback_data: `validate_${orderId}` },
-                    { text: '❌ Rejeter', callback_data: `reject_${orderId}` }
-                ]]
-            }
-        };
+        const keyboard2 = orderAdminKeyboard(order);
         // Envoyer la preuve aux admins via le bot admin uniquement
         {
             const proofToken = TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN;
@@ -2013,6 +2043,25 @@ function isAdminRequest(req) {
 
 // Statuts finaux : plus rien à valider / rejeter sur ces commandes.
 const FINAL_ORDER_STATUSES = ['validated', 'credit_delivered', 'forfait_delivered', 'rejected'];
+
+// Operateurs pour lesquels "Deja recharge (manuel)" n'a pas de sens (livraison = code
+// cadeau / promo / annonce, pas une recharge telephone USSD) -> on n'affiche pas le bouton.
+const MANUAL_DONE_EXCLUDE_OPS = ['ANNONCE_LED', 'PACK_ARTICLES', 'CARTE_CADEAU', 'PROMO_LIKES', 'PROMO_SOCIAL', 'RECHARGE_INTL'];
+// Clavier admin d'une commande. Le 3e bouton "Deja recharge (manuel)" ferme la commande
+// SANS relancer de recharge (cas ou l'admin a recharge le client a la main via le gateway),
+// ce qui la sort des 'pending/proof_sent' -> l'agent OCR ET le rapprochement-depot l'ignorent.
+function orderAdminKeyboard(order) {
+    const oid = order && (order.id || order._id);
+    const rows = [[
+        { text: '✅ Valider', callback_data: `validate_${oid}` },
+        { text: '❌ Rejeter', callback_data: `reject_${oid}` }
+    ]];
+    const op = String((order && order.operator) || '').toUpperCase();
+    if (order && order.phone && !MANUAL_DONE_EXCLUDE_OPS.includes(op)) {
+        rows.push([{ text: '📲 Déjà rechargé (manuel)', callback_data: `manualdone_${oid}` }]);
+    }
+    return { reply_markup: { inline_keyboard: rows } };
+}
 
 // La commande a-t-elle DÉJÀ été livrée ? Deux cas :
 //  - livraison USSD (crédit/forfait CI) → statut credit_delivered / forfait_delivered
@@ -2100,6 +2149,8 @@ app.post('/api/admin/orders/:id/validate', async (req, res) => {
         }
         return res.status(404).json({ error: 'Commande introuvable' });
     }
+
+    consumeDepositForOrder(order, 'API /validate');
 
     // 2) Réponse immédiate au client (l\'agent validateur ne timeout plus)
     res.json({ success: true, message: 'Commande validée, traitement en cours' });
@@ -2266,6 +2317,7 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
             }
             return res.status(404).json({ error: 'Commande introuvable' });
         }
+        consumeDepositForOrder(order, 'Web App admin');
         if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
             if (order.userId) {
                 const promoLink = order.notes ? order.notes.split(' | ')[0].trim() : '';
@@ -2276,6 +2328,16 @@ app.post('/api/admin/orders/:id/validate-by-telegram', async (req, res) => {
             }
         } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
             const ussdResult = await dispatchDelivery(order);
+            // Statut LIVREE : sans cela la commande restait `validated` apres une livraison
+            // reussie -> SMS « retard reseau » a +15 min a un client deja recharge, et
+            // isOrderDelivered() faux (un rejet restait possible sur une commande livree).
+            // Meme regle que le post-traitement de l'API /validate.
+            if (ussdResult.success) {
+                try {
+                    await orderStorage.setOrderDelivered(orderId,
+                        getOrderBundleMeta(order) ? 'forfait' : 'credit');
+                } catch (e) { console.error('[Validate manuel] setOrderDelivered:', e.message || e); }
+            }
             if (order.userId) {
                 const txt = ussdResult.success
                     ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -3217,14 +3279,7 @@ async function handleTelegramUpdateAdmin(body) {
                         await sendTelegramMessage(chatId, `📱 <b>Recharges (MTN / Orange / Moov) — ${recharges.length} commande(s)</b> — utilise les boutons ci-dessous.`, {}, botToken);
                         for (const o of recharges.slice(0, 15)) {
                             const txt = `#${o.id} — ${o.operator} ${o.amountTotal} F\n📞 ${o.phone || 'N/A'}`;
-                            await sendTelegramMessage(chatId, txt, {
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Valider', callback_data: `validate_${o.id}` },
-                                        { text: '❌ Rejeter', callback_data: `reject_${o.id}` }
-                                    ]]
-                                }
-                            }, botToken);
+                            await sendTelegramMessage(chatId, txt, orderAdminKeyboard(o), botToken);
                         }
                         if (recharges.length > 15) {
                             await sendTelegramMessage(chatId, `… et ${recharges.length - 15} autre(s).`, {}, botToken);
@@ -3235,14 +3290,7 @@ async function handleTelegramUpdateAdmin(body) {
                         await sendTelegramMessage(chatId, `📢 <b>Annonces LED (via commandes)</b> — ${annoncesLed.length} commande(s)`, {}, botToken);
                         for (const o of annoncesLed.slice(0, 15)) {
                             const txt = `#${o.id} — ${o.amountTotal} F\nType: ANNONCE_LED`;
-                            await sendTelegramMessage(chatId, txt, {
-                                reply_markup: {
-                                    inline_keyboard: [[
-                                        { text: '✅ Valider', callback_data: `validate_${o.id}` },
-                                        { text: '❌ Rejeter', callback_data: `reject_${o.id}` }
-                                    ]]
-                                }
-                            }, botToken);
+                            await sendTelegramMessage(chatId, txt, orderAdminKeyboard(o), botToken);
                         }
                         if (annoncesLed.length > 15) {
                             await sendTelegramMessage(chatId, `… et ${annoncesLed.length - 15} autre(s).`, {}, botToken);
@@ -3641,10 +3689,38 @@ async function handleTelegramUpdateAdmin(body) {
                 return;
             }
 
+            if (data.startsWith('manualdone_')) {
+                const orderId = data.replace('manualdone_', '');
+                const order = await orderStorage.setOrderManualDelivered(orderId);
+                if (order) {
+                    consumeDepositForOrder(order, 'bouton admin Deja recharge');
+                    await answerTelegramCallback(callbackId, 'Marquée : déjà rechargée à la main', botToken);
+                    if (chatId) await sendTelegramMessage(chatId, `📲 Commande #${orderId} marquée <b>déjà rechargée (manuel)</b>.\nAucune recharge automatique ne partira.`, {}, botToken);
+                    // Prevenir le client (recharge effectuee) SANS relancer d'USSD -> bot principal (defaut)
+                    if (order.userId && order.phone) {
+                        try {
+                            await sendTelegramMessage(order.userId,
+                                `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`);
+                        } catch (e) { console.error('[ManualDone] notif client:', e.message); }
+                        try { await pushService.sendToUser(order.userId, '✅ Recharge effectuée', `${order.operator} ${order.amount} F`, { screen: 'commandes', orderId: String(orderId) }); } catch (e) {}
+                    }
+                    await removeOrderButtonsFromAllAdmins(orderId, botToken);
+                } else {
+                    const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+                    if (existing) {
+                        await answerTelegramCallback(callbackId, 'Déjà traitée (' + existing.status + ')', botToken);
+                        await removeOrderButtonsFromAllAdmins(orderId, botToken);
+                    } else {
+                        await answerTelegramCallback(callbackId, 'Commande introuvable', botToken);
+                    }
+                }
+                return;
+            }
             if (data.startsWith('validate_')) {
                 const orderId = data.replace('validate_', '');
                 const order = await orderStorage.setOrderValidated(orderId);
                 if (order) {
+                    consumeDepositForOrder(order, 'bouton admin Valider');
                     await answerTelegramCallback(callbackId, 'Commande validée', botToken);
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`, {}, botToken);
                     if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
@@ -3658,6 +3734,16 @@ async function handleTelegramUpdateAdmin(body) {
                         }
                     } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
                         const ussdResult = await dispatchDelivery(order);
+                        // Statut LIVREE : sans cela la commande restait `validated` apres une livraison
+                        // reussie -> SMS « retard reseau » a +15 min a un client deja recharge, et
+                        // isOrderDelivered() faux (un rejet restait possible sur une commande livree).
+                        // Meme regle que le post-traitement de l'API /validate.
+                        if (ussdResult.success) {
+                            try {
+                                await orderStorage.setOrderDelivered(orderId,
+                                    getOrderBundleMeta(order) ? 'forfait' : 'credit');
+                            } catch (e) { console.error('[Validate manuel] setOrderDelivered:', e.message || e); }
+                        }
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -4054,10 +4140,38 @@ async function handleTelegramUpdate(body) {
                 await sendTelegramMessage(chatId, '✅ Annulé. Tape /demarrer pour recommencer.');
                 return;
             }
+            if (data.startsWith('manualdone_')) {
+                const orderId = data.replace('manualdone_', '');
+                const order = await orderStorage.setOrderManualDelivered(orderId);
+                if (order) {
+                    consumeDepositForOrder(order, 'bouton admin Deja recharge');
+                    await answerTelegramCallback(callbackId, 'Marquée : déjà rechargée à la main');
+                    if (chatId) await sendTelegramMessage(chatId, `📲 Commande #${orderId} marquée <b>déjà rechargée (manuel)</b>.\nAucune recharge automatique ne partira.`);
+                    // Prevenir le client (recharge effectuee) SANS relancer d'USSD -> bot principal (defaut)
+                    if (order.userId && order.phone) {
+                        try {
+                            await sendTelegramMessage(order.userId,
+                                `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`);
+                        } catch (e) { console.error('[ManualDone] notif client:', e.message); }
+                        try { await pushService.sendToUser(order.userId, '✅ Recharge effectuée', `${order.operator} ${order.amount} F`, { screen: 'commandes', orderId: String(orderId) }); } catch (e) {}
+                    }
+                    await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+                } else {
+                    const existing = await orderStorage.getOrderById(orderId).catch(() => null);
+                    if (existing) {
+                        await answerTelegramCallback(callbackId, 'Déjà traitée (' + existing.status + ')');
+                        await removeOrderButtonsFromAllAdmins(orderId, TELEGRAM_BOT_TOKEN_ADMIN || TELEGRAM_BOT_TOKEN);
+                    } else {
+                        await answerTelegramCallback(callbackId, 'Commande introuvable');
+                    }
+                }
+                return;
+            }
             if (data.startsWith('validate_')) {
                 const orderId = data.replace('validate_', '');
                 const order = await orderStorage.setOrderValidated(orderId);
                 if (order) {
+                    consumeDepositForOrder(order, 'bouton admin Valider');
                     await answerTelegramCallback(callbackId, 'Commande validée');
                     if (chatId) await sendTelegramMessage(chatId, `✅ Commande #${orderId} validée !`);
                     if (order.operator === 'PACK_ARTICLES') { await creditArticlePack(order); } else if ((order.operator === 'PROMO_LIKES' || order.operator === 'PROMO_SOCIAL')) {
@@ -4071,6 +4185,16 @@ async function handleTelegramUpdate(body) {
                         }
                     } else if (order.operator !== 'ANNONCE_LED' && order.operator !== 'PACK_ARTICLES' && order.phone) {
                         const ussdResult = await dispatchDelivery(order);
+                        // Statut LIVREE : sans cela la commande restait `validated` apres une livraison
+                        // reussie -> SMS « retard reseau » a +15 min a un client deja recharge, et
+                        // isOrderDelivered() faux (un rejet restait possible sur une commande livree).
+                        // Meme regle que le post-traitement de l'API /validate.
+                        if (ussdResult.success) {
+                            try {
+                                await orderStorage.setOrderDelivered(orderId,
+                                    getOrderBundleMeta(order) ? 'forfait' : 'credit');
+                            } catch (e) { console.error('[Validate manuel] setOrderDelivered:', e.message || e); }
+                        }
                         if (order.userId) {
                             const txt = ussdResult.success
                                 ? `✅ <b>Recharge effectuée !</b>\n\n📲 ${order.operator} - ${order.amount} FCFA\n📞 ${order.phone}\n\nMerci d'avoir utilisé Bipbip Recharge CI ! 🎉`
@@ -4325,6 +4449,21 @@ app.post('/api/deposits', (req, res) => {
     tryAutoValidateFromDeposit(dep).catch(e => console.error('[deposits] auto-val:', e.message));
 });
 
+// Un depot doit COUVRIR le total du (frais inclus).
+//  - sous-paiement (au-dela de 5 F d'arrondi) : refuse, les frais de service ne sont pas regles ;
+//  - sur-paiement : ACCEPTE depuis le 25/08/2026. Avant, la regle |depot - total| <= 5
+//    rejetait le client qui paie trop : 1075 F verses pour 1050 F dus (commande B1FA786B25)
+//    ne matchaient aucune commande, l'auto-validation ne partait jamais et l'admin devait
+//    valider a la main. La marge haute est plafonnee (10 % du total, 100 F max) pour qu'un
+//    depot ne puisse pas avaler la commande d'un AUTRE client d'un montant proche ; en cas
+//    de candidats multiples, la branche d'ambiguite (numero payeur) tranche ou abandonne.
+function depositCoversTotal(depAmount, total) {
+    const d = Number(depAmount), t = Number(total);
+    if (!t || !isFinite(d)) return false;
+    if (d < t - 5) return false;
+    return (d - t) <= Math.min(100, Math.ceil(t * 0.10));
+}
+
 // Auto-validation d'une commande à partir d'un DÉPÔT RÉEL (plus sûr qu'un screenshot).
 // Ne valide QUE si le rapprochement est UNIQUE (un seul dépôt ↔ une seule commande
 // du même montant total, frais inclus, dans une fenêtre récente). Sinon on laisse
@@ -4340,9 +4479,16 @@ async function tryAutoValidateFromDeposit(dep) {
         candidates = [...(pend || []), ...(sent || [])].filter(o => {
             if (!o.phone) return false;
             const total = Number(o.amountTotal || o.amount || 0);   // montant TOTAL (frais inclus)
-            if (Math.abs(total - dep.amount) > 5) return false;
+            if (!depositCoversTotal(dep.amount, total)) return false;
             const created = new Date(o.createdAt || o.created_at || 0).getTime();
-            if (created && Math.abs(dep.receivedAt - created) > 60 * 60 * 1000) return false;
+            if (created) {
+                const delta = dep.receivedAt - created;
+                // Un paiement suit TOUJOURS la creation de la commande. Un depot anterieur
+                // ne peut pas la financer. Sans cette regle, un depot orphelin validait la
+                // commande d'un AUTRE client creee juste apres (incident du 22/08/2026).
+                if (delta < -2 * 60 * 1000) return false;      // depot trop anterieur
+                if (delta > 60 * 60 * 1000) return false;      // depot trop ancien
+            }
             return true;
         });
     } catch (e) {
@@ -4350,25 +4496,62 @@ async function tryAutoValidateFromDeposit(dep) {
         return false;
     }
     if (candidates.length !== 1) {
-        // Ambiguïté de montant (ex. 15 commandes à 210F) : départager par le NUMÉRO PAYEUR.
-        // Le dépôt Wave/Djamo porte senderPhone (numéro réel du payeur, infalsifiable).
-        // Si le client a rechargé SON PROPRE numéro et qu'une seule candidate a ce numéro,
-        // le rapprochement est fiable. Sinon (0 ou plusieurs), on laisse le flux preuve.
-        if (!dep.senderPhone) return false;
-        const _sp = normalizePhoneCI(dep.senderPhone);
-        const byPhone = candidates.filter(o => normalizePhoneCI(o.phone) === _sp);
-        if (byPhone.length !== 1) return false;
-        candidates = byPhone;
-        console.log(`[deposits] ambiguité ${dep.amount}F levée par numéro payeur ${_sp} → commande ${candidates[0].id}`);
+        // Double-clic client : plusieurs commandes STRICTEMENT jumelles (meme numero, meme
+        // total, meme operateur) ne sont pas une ambiguite mais une seule intention. Sans ce
+        // cas, le depot restait orphelin jusqu'a l'annulation du doublon par le job
+        // « Scenario 4 » (20 min plus tard) ; l'admin rechargeait a la main entre-temps et
+        // l'auto-validation livrait une 2e fois -> double recharge du 22/08/2026.
+        const _twinKey = (o) => normalizePhoneCI(o.phone) + '|'
+            + Number(o.amountTotal || o.amount || 0) + '|'
+            + String(o.operator || '').toUpperCase();
+        const _n = candidates.length;
+        if (_n > 1 && candidates.every(o => _twinKey(o) === _twinKey(candidates[0]))) {
+            // On garde la plus RECENTE : c'est celle que le job de dedoublonnage conserve.
+            // setOrderValidated reste atomique -> aucune double livraison possible.
+            candidates = [candidates.slice().sort((a, b) =>
+                new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0)
+            )[0]];
+            console.log('[deposits] ' + dep.amount + 'F : ' + _n
+                + ' commandes jumelles (double-clic) -> ' + candidates[0].id);
+        } else {
+            // Vraie ambiguite (ex. 15 commandes a 210F de clients DIFFERENTS) : departager par
+            // le NUMERO PAYEUR, que le depot Wave/Djamo porte et qui est infalsifiable.
+            if (!dep.senderPhone) return false;
+            const _sp = normalizePhoneCI(dep.senderPhone);
+            const byPhone = candidates.filter(o => normalizePhoneCI(o.phone) === _sp);
+            if (byPhone.length !== 1) return false;
+            candidates = byPhone;
+            console.log('[deposits] ambiguite ' + dep.amount + 'F levee par numero payeur '
+                + _sp + ' -> commande ' + candidates[0].id);
+        }
     }
     const order = candidates[0];
+    // Garde-fou payeur (incident du 22/08/2026) : le controle par numero ne s'appliquait
+    // qu'en cas d'ambiguite. Avec UNE seule candidate il etait saute, si bien que le depot
+    // d'un client pouvait valider la commande d'un inconnu du meme montant.
+    // Regle : si le payeur n'est pas le numero recharge (cas legitime quand on recharge un
+    // proche), on exige que le client ait explicitement declare son paiement (proof_sent).
+    const _payer = dep.senderPhone ? normalizePhoneCI(dep.senderPhone) : '';
+    const payerMatches = !!_payer && _payer === normalizePhoneCI(order.phone);
+    if (!payerMatches && String(order.status || '') !== 'proof_sent') {
+        console.warn('[deposits] auto-val REFUSEE : depot ' + dep.amount + 'F de '
+            + (dep.senderPhone || '?') + ' vs commande ' + order.id + ' (' + order.phone
+            + ', statut ' + order.status + '). Payeur different + pas de preuve -> flux manuel.');
+        return false;
+    }
     try {
         const fetch = (await import('node-fetch')).default;
-        const r = await fetch(`http://127.0.0.1:${PORT}/api/admin/orders/${order.id}/validate`, {
-            method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_SECRET_KEY || '' },
-        });
+        // Rattachement AVANT l'appel : /validate consomme desormais lui aussi un depot
+        // (consumeDepositForOrder) ; sans ce marquage il en choisirait un AUTRE du meme
+        // montant et la commande serait payee par deux depots. Annule si l'appel echoue.
+        dep.matchedOrderId = order.id; saveDeposits();
+        let r;
+        try {
+            r = await fetch(`http://127.0.0.1:${PORT}/api/admin/orders/${order.id}/validate`, {
+                method: 'POST', headers: { 'x-admin-key': process.env.ADMIN_SECRET_KEY || '' },
+            });
+        } catch (e) { dep.matchedOrderId = null; saveDeposits(); throw e; }
         if (r.status === 200 || r.status === 404) {   // 200 = validée par le dépôt ; 404 = déjà validée
-            dep.matchedOrderId = order.id; saveDeposits();
             console.log(`[deposits] AUTO-VALIDATION ${dep.amount}F → commande ${order.id} (HTTP ${r.status})`);
             try {
                 await sendTelegramToAllAdmins(
@@ -4380,9 +4563,60 @@ async function tryAutoValidateFromDeposit(dep) {
             } catch (e) { /* noop */ }
             return true;
         }
+        dep.matchedOrderId = null; saveDeposits();   // validation refusee -> depot rendu disponible
         console.log(`[deposits] auto-validation ${order.id} échec HTTP ${r.status}`);
     } catch (e) { console.error('[deposits] auto-validation err:', e.message); }
     return false;
+}
+
+// Attribue (= consomme) le depot reel qui a paye une commande validee par un chemin
+// NON automatique : bouton admin « Valider », bouton « Deja recharge (manuel) », Web App
+// admin, agent OCR validant sur la preuve seule. Aucun de ces chemins ne marquait le depot
+// comme consomme : il restait « orphelin » et le job periodique le re-servait a une AUTRE
+// commande quelques minutes plus tard = 2e recharge pour un seul paiement (incident du
+// 25/08/2026 : depot 525F de 0787103075 -> 8FCAE3DE2A validee a la main a 12:02:53, puis
+// AUTO-VALIDATION du meme depot sur 7E307E1F5B a 12:04:41).
+// Choix : depot non rattache du meme montant TOTAL dans la fenetre de la commande, en
+// preferant celui dont le numero payeur est celui de la commande. En cas de doute on
+// consomme quand meme : rendre un depot indisponible degrade au pire une auto-validation
+// (retour au flux preuve/manuel), alors que le laisser libre offre une recharge gratuite.
+function consumeDepositForOrder(order, source) {
+    try {
+        if (!order || !order.id) return null;
+        if (deposits.some(d => d.matchedOrderId === order.id)) return null;   // deja attribue
+        const total = Number(order.amountTotal || order.amount || 0);
+        if (!total) return null;
+        const created = new Date(order.createdAt || order.created_at || 0).getTime() || Date.now();
+        const cands = deposits.filter(d => !d.matchedOrderId
+            && depositCoversTotal(d.amount, total)
+            && (d.receivedAt - created) >= -2 * 60 * 1000
+            && (d.receivedAt - created) <= 60 * 60 * 1000);
+        if (!cands.length) return null;
+        // Ne JAMAIS deviner : l'agent validateur utilise les depots NON CONSOMMES comme 2e
+        // option de validation (un depot reel concordant est infalsifiable et promeut un
+        // manual_review en auto_validate). Consommer un depot "au cas ou" le lui retire.
+        // On ne consomme donc que si l'attribution est CERTAINE.
+        const ph = normalizePhoneCI(order.phone || '');
+        const byPhone = ph ? cands.filter(d => normalizePhoneCI(d.senderPhone || '') === ph) : [];
+        let pick = null;
+        if (byPhone.length === 1) pick = byPhone[0];
+        else if (!byPhone.length && cands.length === 1) pick = cands[0];
+        if (!pick) {
+            console.log('[deposits] attribution AMBIGUE pour ' + order.id + ' (' + cands.length
+                + ' depots pour ' + total + 'F, dont ' + byPhone.length + ' du payeur)'
+                + ' -> aucun depot consomme, laisses a l agent validateur');
+            return null;
+        }
+        pick.matchedOrderId = order.id;
+        pick.autoAttached = true;   // devine : un depot explicitement designe (agent OCR) peut le liberer
+        saveDeposits();
+        console.log('[deposits] CONSOMME ' + pick.id + ' (' + pick.amount + 'F de '
+            + (pick.senderPhone || '?') + ') par ' + source + ' -> commande ' + order.id);
+        return pick;
+    } catch (e) {
+        console.error('[deposits] consumeDepositForOrder:', (e && e.message) || e);
+        return null;
+    }
 }
 
 // Liste des dépôts récents (agent de validation + admin)
@@ -4403,7 +4637,18 @@ app.post('/api/deposits/:id/consume', (req, res) => {
     if (dep.matchedOrderId && dep.matchedOrderId !== orderId) {
         return res.status(409).json({ error: 'Déjà consommé', matchedOrderId: dep.matchedOrderId });
     }
+    // L'agent OCR designe un depot precis (montant + txid lus sur la preuve) : il prime sur
+    // celui devine par consumeDepositForOrder au moment du /validate. Sans cette liberation,
+    // DEUX depots resteraient consommes pour une seule commande.
+    for (const d of deposits) {
+        if (d !== dep && d.matchedOrderId === orderId && d.autoAttached) {
+            d.matchedOrderId = null; delete d.autoAttached;
+            console.log('[deposits] auto-attribution ' + d.id + ' liberee au profit de '
+                + dep.id + ' (commande ' + orderId + ')');
+        }
+    }
     dep.matchedOrderId = orderId;
+    delete dep.autoAttached;
     saveDeposits();
     res.json({ ok: true });
 });

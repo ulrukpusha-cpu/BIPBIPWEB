@@ -83,9 +83,18 @@
   <div class="bb-modal-backdrop" id="itemModal">
     <div class="bb-modal">
       <div class="bb-modal__head"><h3 id="itemName">Article</h3><button class="bb-modal__close" type="button" data-close="item" aria-label="Fermer">✕</button></div>
-      <div class="item-detail__art" id="itemArt"></div>
+      <div class="item-gallery">
+        <div class="item-detail__art" id="itemArt"></div>
+        <div class="item-gallery__count" id="itemPhotoCount" style="display:none"></div>
+      </div>
+      <div class="item-gallery__thumbs" id="itemThumbs" style="display:none"></div>
       <div class="item-detail__price" id="itemPrice"></div>
-      <p class="item-detail__desc" id="itemDesc"></p>
+      <div class="item-detail__meta" id="itemMeta" style="display:none"></div>
+      <div class="item-detail__section">
+        <h4>Description</h4>
+        <p class="item-detail__desc" id="itemDesc"></p>
+        <button class="item-detail__more" type="button" id="itemDescMore" style="display:none">Voir plus</button>
+      </div>
       <button class="bb-cta bb-cta--block" id="itemAction" type="button">Action</button>
       <p class="hint" style="text-align:center;margin:10px 0 0">Transaction directe entre acheteur et vendeur pour les articles d'occasion. Bipbip n'intervient pas dans le paiement de l'article.</p>
     </div>
@@ -127,10 +136,11 @@
         </select>
 
         <label class="profil-label">Nom de l'article</label>
-        <input type="text" id="newItemName" class="profil-input" placeholder="Ex : iPhone 12 Pro 128 Go" required maxlength="80">
+        <input type="text" id="newItemName" class="profil-input" placeholder="Ex : iPhone 12 Pro 128 Go" required maxlength="140">
 
         <label class="profil-label">Description</label>
-        <textarea id="newItemDesc" class="profil-textarea" rows="3" maxlength="400" placeholder="État, âge, ce qui est inclus…" required></textarea>
+        <textarea id="newItemDesc" class="profil-textarea" rows="6" maxlength="2000" placeholder="État, âge, ce qui est inclus…" required></textarea>
+        <p class="hint" style="margin:2px 0 0">Les retours à la ligne sont conservés : une caractéristique par ligne s'affiche proprement dans la fiche.</p>
 
         <label class="profil-label">Prix (FCFA)</label>
         <input type="number" id="newItemPrice" class="profil-input" placeholder="50 000" required min="100" step="100">
