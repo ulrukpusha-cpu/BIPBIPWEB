@@ -4629,8 +4629,22 @@
       renderMyItemsList(merged);
     } catch (e) { /* garde le cache local */ }
   }
-  // Upload jusqu'à 3 images add-item : compresse en carré 1000px → dataURL par slot
+  // Upload jusqu'à 3 images add-item : carré 1000px pour la fiche + vignette
+  // 400px pour la grille. Les deux sont calculés ICI, sur le téléphone : le VPS
+  // n'a qu'un vCPU et ne redimensionne rien.
   var __newItemPhotos = [null, null, null];
+  var __newItemThumbs = [null, null, null];
+  // Recadre au centre en carré de `size` px et renvoie un dataURL JPEG.
+  function squareDataUrl(img, size, quality) {
+    var c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, size, size);
+    var scale = Math.max(size / img.width, size / img.height);
+    var w = img.width * scale, h = img.height * scale;
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    return c.toDataURL('image/jpeg', quality);
+  }
   function updateItemPhotoSlot(idx) {
     var slot = document.querySelector('.item-photo-slot[data-slot="' + idx + '"]');
     if (!slot) return;
@@ -4645,6 +4659,7 @@
   }
   window.removeItemPhoto = function (idx) {
     __newItemPhotos[idx] = null;
+    __newItemThumbs[idx] = null;
     var inp = document.getElementById('newItemFile' + idx); if (inp) inp.value = '';
     updateItemPhotoSlot(idx);
   };
@@ -4660,18 +4675,11 @@
       try {
         var img = new Image();
         img.onload = function () {
-          // Recadre/compresse en CARRÉ 1000×1000 (centré) pour un rendu net dans le Market
-          var SIZE = 1000;
-          var c = document.createElement('canvas');
-          c.width = SIZE; c.height = SIZE;
-          var ctx = c.getContext('2d');
-          ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, SIZE, SIZE);
-          var scale = Math.max(SIZE / img.width, SIZE / img.height);
-          var w = img.width * scale, h = img.height * scale;
-          ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
-          __newItemPhotos[idx] = c.toDataURL('image/jpeg', 0.82);
+          // 1000×1000 pour la fiche article, 400×400 pour la grille
+          __newItemPhotos[idx] = squareDataUrl(img, 1000, 0.82);
+          __newItemThumbs[idx] = squareDataUrl(img, 400, 0.72);
           updateItemPhotoSlot(idx);
-          if (statusEl) statusEl.textContent = '✓ Image ' + (idx + 1) + ' prête (1000×1000)';
+          if (statusEl) statusEl.textContent = '✓ Image ' + (idx + 1) + ' prête (1000×1000 + vignette)';
         };
         img.src = e.target.result;
       } catch (err) { if (statusEl) statusEl.textContent = '⚠ Erreur image ' + (idx + 1); }
@@ -4704,10 +4712,16 @@
       if (myCount >= (FREE_ITEMS_LIMIT + paidQuota)) { showItemLimitModal(); return; }
     }
     // Collecte des photos (3 max) — au moins 1 requise
-    var photos = __newItemPhotos.filter(Boolean);
+    // Photos et vignettes doivent rester alignées index par index côté serveur.
+    var photos = [], thumbs = [];
+    for (var pi = 0; pi < __newItemPhotos.length; pi++) {
+      if (!__newItemPhotos[pi]) continue;
+      photos.push(__newItemPhotos[pi]);
+      thumbs.push(__newItemThumbs[pi] || '');
+    }
     var legacyPhoto = document.getElementById('newItemPhoto'); // champ historique, absent du DOM actuel
     if (!photos.length && legacyPhoto && legacyPhoto.value) {
-      photos = [legacyPhoto.value];
+      photos = [legacyPhoto.value]; thumbs = [''];
     }
     const item = {
       id: 'it_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -4717,6 +4731,7 @@
       price: parseInt(document.getElementById('newItemPrice').value, 10) || 0,
       photo: photos[0] || '',
       photos: photos,
+      thumbs: thumbs,
       phone: document.getElementById('newItemPhone').value,
       sellerId: ((typeof getRegisteredUserId === 'function' && getRegisteredUserId()) || u.tgId || u.id), sellerName: u.name,
       status: 'pending',
@@ -4727,7 +4742,12 @@
       status.textContent = '⚠ Tous les champs obligatoires (+ au moins 1 photo conseillée).';
       return;
     }
-    const items = getMyItems(); items.unshift(item); saveMyItems(items);
+    // Cache local : on ne garde que la vignette. Stocker les 3 dataURL pleine
+    // taille (~400 Ko par article) saturait le quota localStorage (~5 Mo).
+    const localItem = Object.assign({}, item, {
+      photo: thumbs[0] || photos[0] || '', photos: undefined, thumbs: undefined
+    });
+    const items = getMyItems(); items.unshift(localItem); saveMyItems(items);
     var serverOk = false;
     try {
       var payload = Object.assign({}, item, userPayloadFields());
@@ -4743,6 +4763,7 @@
       : '✓ Article enregistré localement (envoi serveur indisponible).';
     document.getElementById('addItemForm').reset();
     __newItemPhotos = [null, null, null];
+    __newItemThumbs = [null, null, null];
     [0,1,2].forEach(updateItemPhotoSlot);
     renderMyItems();
     setTimeout(() => navigateTo('profil'), 1800);
@@ -5878,6 +5899,18 @@
     });
     return out.slice(0, 3);
   }
+  // Vignette pour la grille : `thumbs[0]` si le serveur en fournit une,
+  // sinon repli sur l'image pleine taille (articles d'avant la migration).
+  function marketItemThumbList(it) {
+    var full = marketItemPhotos(it);
+    var raw = Array.isArray(it.thumbs) ? it.thumbs.filter(Boolean) : [];
+    return full.map(function (f, i) {
+      var t = raw[i];
+      if (!t) return f;
+      return (String(t).indexOf('data:') === 0) ? String(t) : absUrl(String(t));
+    });
+  }
+  function marketItemThumb(it) { return marketItemThumbList(it)[0] || ''; }
   var MARKET_CAT_LABELS = {
     bazar: 'Bazar', electronics: 'Appareil électronique', books: 'Livre',
     mode: 'Mode', maison: 'Maison', beaute: 'Beauté', sport: 'Sport', cuisine: 'Cuisine', enfants: 'Enfants',
@@ -5938,10 +5971,13 @@
       };
     }
     if (thumbs) {
+      // La bande de miniatures (54px) tire les vignettes 400px, pas les
+      // images 1000px : elle s'affiche pendant que la grande charge.
+      var small = marketItemThumbList(it);
       thumbs.style.display = photos.length > 1 ? '' : 'none';
       thumbs.innerHTML = photos.length > 1
         ? photos.map(function (u, i) {
-            return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" onclick="setMarketPhoto(' + i + ')"><img src="' + escapeHtml(u) + '" alt=""></button>';
+            return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" onclick="setMarketPhoto(' + i + ')"><img src="' + escapeHtml(small[i] || u) + '" alt=""></button>';
           }).join('')
         : '';
     }
@@ -6458,7 +6494,8 @@
       return;
     }
     grid.innerHTML = list.map(function (it) {
-      var img = marketItemPhotos(it)[0] || '';
+      // Vignette 400px, pas l'image 1000px : la grille affiche ~150px de large
+      var img = marketItemThumb(it);
       var price = it.price ? Number(it.price).toLocaleString('fr-FR') + ' XOF' : '';
       return '<div class="gift-card" data-market-id="' + escapeHtmlSafe(it.id) + '">' +
         '<div class="gift-card__art">' +

@@ -25,7 +25,8 @@
   var giftCards = [], giftCat = 'app', categoryItems = [];
   var shopProducts = [], shopUrl = '';
   var marketAllItems = [], marketParentId = '', marketSubFilter = '';
-  var newItemPhotos = [null, null, null];
+  var newItemPhotos = [null, null, null];   // 1000px, fiche article
+  var newItemThumbs = [null, null, null];   // 400px, grille
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return window.BB ? BB.escapeHtml(s) : String(s == null ? '' : s); }
@@ -166,7 +167,7 @@
       return;
     }
     grid.innerHTML = list.map(function (it) {
-      var img = itemPhotos(it)[0] || '';
+      var img = itemThumb(it);   // vignette 400px, pas l'image 1000px
       return '<button class="gift-card" type="button" data-item="' + esc(it.id) + '">' +
         '<div class="gift-card__art">' +
           (img ? '<img src="' + esc(img) + '" alt="" loading="lazy">' : ico('solar:box-linear', 48)) + '</div>' +
@@ -217,6 +218,17 @@
     });
     return out.slice(0, 3);
   }
+  // Vignette de grille, repli sur l'image pleine taille avant migration.
+  function itemThumbList(it) {
+    var full = itemPhotos(it);
+    var raw = Array.isArray(it.thumbs) ? it.thumbs.filter(Boolean) : [];
+    return full.map(function (f, i) {
+      var t = raw[i];
+      if (!t) return f;
+      return (String(t).indexOf('data:') === 0) ? String(t) : absUrl(String(t));
+    });
+  }
+  function itemThumb(it) { return itemThumbList(it)[0] || ''; }
   var CAT_LABELS = (function () {
     var m = { bazar: 'Bazar', electronics: 'Appareil électronique', books: 'Livre' };
     Object.keys(MARKET_SUBCATS).forEach(function (p) {
@@ -296,8 +308,10 @@
     art.onscroll = function () { setThumbActive(Math.round(art.scrollLeft / (art.clientWidth || 1))); };
     var thumbs = $('itemThumbs');
     thumbs.style.display = photos.length > 1 ? '' : 'none';
+    // Miniatures 54px : on tire les vignettes 400px, pas les images 1000px.
+    var small = itemThumbList(it);
     thumbs.innerHTML = photos.length > 1
-      ? photos.map(function (u, i) { return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" data-photo="' + i + '"><img src="' + esc(u) + '" alt=""></button>'; }).join('')
+      ? photos.map(function (u, i) { return '<button type="button" class="item-gallery__thumb' + (i === 0 ? ' is-active' : '') + '" data-photo="' + i + '"><img src="' + esc(small[i] || u) + '" alt=""></button>'; }).join('')
       : '';
     var counter = $('itemPhotoCount');
     counter.style.display = photos.length > 1 ? '' : 'none';
@@ -418,17 +432,26 @@
     reader.onload = function (e) {
       var img = new Image();
       img.onload = function () {
-        var SIZE = 1000, c = document.createElement('canvas'); c.width = SIZE; c.height = SIZE;
-        var ctx = c.getContext('2d'); ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, SIZE, SIZE);
-        var scale = Math.max(SIZE / img.width, SIZE / img.height), w = img.width * scale, h = img.height * scale;
-        ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
-        newItemPhotos[idx] = c.toDataURL('image/jpeg', 0.82);
+        newItemPhotos[idx] = squareDataUrl(img, 1000, 0.82);
+        newItemThumbs[idx] = squareDataUrl(img, 400, 0.72);
         updatePhotoSlot(idx);
-        if (statusEl) statusEl.textContent = '✓ Image ' + (idx + 1) + ' prête (1000×1000)';
+        if (statusEl) statusEl.textContent = '✓ Image ' + (idx + 1) + ' prête (1000×1000 + vignette)';
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(f);
+  }
+  // Recadre au centre en carré de `size` px. Calculé côté client : le VPS
+  // n'a qu'un vCPU et ne redimensionne rien.
+  function squareDataUrl(img, size, quality) {
+    var c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, size, size);
+    var scale = Math.max(size / img.width, size / img.height);
+    var w = img.width * scale, h = img.height * scale;
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+    return c.toDataURL('image/jpeg', quality);
   }
   async function submitAddItem() {
     var u = BB.getCurrentUser(); var status = $('addItemStatus');
@@ -436,18 +459,29 @@
     var myCount = getMyItems().length, paidQuota = 0;
     try { paidQuota = parseInt(localStorage.getItem('bb_item_quota') || '0', 10) || 0; } catch (e) {}
     if (myCount >= (FREE_ITEMS_LIMIT + paidQuota)) { showLimitModal(); return; }
-    var photos = newItemPhotos.filter(Boolean);
+    // Photos et vignettes alignées index par index côté serveur.
+    var photos = [], thumbs = [];
+    for (var pi = 0; pi < newItemPhotos.length; pi++) {
+      if (!newItemPhotos[pi]) continue;
+      photos.push(newItemPhotos[pi]);
+      thumbs.push(newItemThumbs[pi] || '');
+    }
     var item = {
       id: 'it_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       cat: $('newItemCat').value, name: $('newItemName').value, desc: $('newItemDesc').value,
-      price: parseInt($('newItemPrice').value, 10) || 0, photo: photos[0] || '', photos: photos,
+      price: parseInt($('newItemPrice').value, 10) || 0, photo: photos[0] || '',
+      photos: photos, thumbs: thumbs,
       phone: $('newItemPhone').value, sellerId: (BB.getRegisteredUserId() || u.tgId || u.id), sellerName: u.name,
       status: 'pending', createdAt: Date.now()
     };
     if (!item.cat || !item.name || !item.desc || !item.price || !item.phone) {
       status.className = 'hint is-error'; status.style.display = ''; status.textContent = '⚠ Tous les champs sont obligatoires (+ au moins 1 photo conseillée).'; return;
     }
-    var items = getMyItems(); items.unshift(item); saveMyItems(items);
+    // Cache local : vignette seulement, sinon le quota localStorage sature.
+    var localItem = Object.assign({}, item, {
+      photo: thumbs[0] || photos[0] || '', photos: undefined, thumbs: undefined
+    });
+    var items = getMyItems(); items.unshift(localItem); saveMyItems(items);
     var serverOk = false;
     try {
       var payload = Object.assign({}, item, BB.userPayloadFields());
@@ -458,7 +492,8 @@
     status.className = 'hint is-ok'; status.style.display = '';
     status.textContent = serverOk ? '✓ Article envoyé à l\'admin pour validation.' : '✓ Article enregistré localement (envoi serveur indisponible).';
     $('addItemForm').reset();
-    newItemPhotos = [null, null, null]; [0, 1, 2].forEach(updatePhotoSlot);
+    newItemPhotos = [null, null, null]; newItemThumbs = [null, null, null];
+    [0, 1, 2].forEach(updatePhotoSlot);
     renderMyItems();
     setTimeout(closeAddItem, 1600);
   }

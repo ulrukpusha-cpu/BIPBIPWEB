@@ -1,0 +1,19 @@
+{
+  "orders": {},
+  "cands": {},
+  "budget": {
+    "day": "2026-09-05",
+    "total": 0,
+    "count": 0,
+    "perCabine": {}
+  },
+  "stats": {
+    "validated": 0,
+    "review": 0,
+    "rejected": 0,
+    "failed": 0,
+    "cands": 0
+  },
+  "lastReportDay": null,
+  "lastErrorAt": 0
+}

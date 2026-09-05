@@ -525,6 +525,9 @@ app.use(express.static('.', {
         }
     }
 }));
+// NB : le express.static('.') ci-dessus sert déjà ./uploads/... et pose
+// Cache-Control: public, max-age=604800 sur les images — c'est lui qui gagne.
+// Ce montage ne sert que de repli (chemin explicite si UPLOADS_DIR change).
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.use('/api', authTelegram);
@@ -1568,6 +1571,48 @@ function itemPhotos(it) {
     if (arr.length) return arr.slice(0, 3);
     return (it && it.photo) ? [it.photo] : [];
 }
+// Vignettes 400px pour la grille. Repli sur les images pleine taille pour les
+// articles publiés avant le passage en fichiers.
+function itemThumbs(it) {
+    const arr = Array.isArray(it && it.thumbs) ? it.thumbs.filter(Boolean) : [];
+    return arr.length ? arr.slice(0, 3) : itemPhotos(it);
+}
+
+// Les photos étaient stockées en dataURL base64 DANS market-items.json : la
+// grille d'une catégorie téléchargeait ~1,8 Mo pour 5 articles, sans cache
+// possible (une image encodée en JSON n'est pas cachable par le navigateur) et
+// en 1000×1000 pour un affichage à 150 px. On écrit désormais de vrais
+// fichiers servis par /uploads, et l'API ne renvoie que des URL.
+const MARKET_IMG_DIR = require('path').join(UPLOADS_DIR, 'market');
+const MARKET_IMG_MAX = 3 * 1024 * 1024;
+function saveMarketImage(dataUrl, baseName) {
+    if (typeof dataUrl !== 'string' || !dataUrl) return null;
+    // Déjà une URL (ancien article, ou client qui renvoie ce qu'il a reçu)
+    if (dataUrl.startsWith('/uploads/') || /^https?:\/\//i.test(dataUrl)) return dataUrl;
+    const m = /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=\s]+)$/i.exec(dataUrl);
+    if (!m) return null;
+    const ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+    let buf;
+    try { buf = Buffer.from(m[2], 'base64'); } catch (e) { return null; }
+    if (!buf.length || buf.length > MARKET_IMG_MAX) return null;
+    try {
+        const fs = require('fs');
+        fs.mkdirSync(MARKET_IMG_DIR, { recursive: true });
+        const file = baseName + '.' + ext;
+        fs.writeFileSync(require('path').join(MARKET_IMG_DIR, file), buf);
+        return '/uploads/market/' + file;
+    } catch (e) { console.error('[market] écriture image', e.message); return null; }
+}
+// Supprime les fichiers d'un article retiré, pour ne pas laisser d'orphelins.
+function deleteMarketImages(it) {
+    const fs = require('fs');
+    const all = [].concat(itemPhotos(it), Array.isArray(it && it.thumbs) ? it.thumbs : []);
+    all.forEach(u => {
+        if (typeof u !== 'string' || !u.startsWith('/uploads/market/')) return;
+        const name = require('path').basename(u);
+        try { fs.unlinkSync(require('path').join(MARKET_IMG_DIR, name)); } catch (e) {}
+    });
+}
 function writeMarketItems(arr) {
     try {
         const fs = require('fs');
@@ -1592,20 +1637,33 @@ app.post('/api/market/items', (req, res) => {
             return res.status(403).json({ error: 'Limite d\'articles atteinte', limit, count: myActive, needPack: true });
         }
     }
-    // Photos : jusqu'à 3 (dataURL ou /uploads). `photo` reste la vignette (= photos[0])
-    // pour compat avec les anciens clients qui ne lisent que ce champ.
-    const photos = (Array.isArray(b.photos) ? b.photos : (b.photo ? [b.photo] : []))
-        .filter(p => typeof p === 'string' && p)
-        .slice(0, 3)
-        .map(p => p.slice(0, 300000));
+    // Photos : jusqu'à 3, reçues en dataURL et écrites en fichiers sous
+    // /uploads/market. Le client envoie aussi une vignette 400px par photo
+    // (`thumbs`), calculée sur le téléphone : le VPS n'a qu'un vCPU, on ne
+    // redimensionne pas côté serveur. `photo` reste la 1re image pour les
+    // anciens clients qui ne lisent que ce champ.
+    const itemId = 'it_' + crypto.randomBytes(5).toString('hex');
+    const rawPhotos = (Array.isArray(b.photos) ? b.photos : (b.photo ? [b.photo] : []))
+        .filter(p => typeof p === 'string' && p).slice(0, 3);
+    const rawThumbs = (Array.isArray(b.thumbs) ? b.thumbs : [])
+        .filter(p => typeof p === 'string');
+    const photos = [], thumbs = [];
+    rawPhotos.forEach((p, i) => {
+        const full = saveMarketImage(p, itemId + '_' + i);
+        if (!full) return;
+        photos.push(full);
+        // Sans vignette fournie, on retombe sur l'image pleine taille.
+        thumbs.push(saveMarketImage(rawThumbs[i], itemId + '_' + i + '_t') || full);
+    });
     const item = {
-        id: 'it_' + crypto.randomBytes(5).toString('hex'),
+        id: itemId,
         name: String(b.name).slice(0, 140),
         cat: String(b.cat).slice(0, 60),
         desc: String(b.desc || '').slice(0, 2000),
         price: parseInt(b.price, 10) || 0,
-        photo: photos[0] || String(b.photo || '').slice(0, 300000), // dataURL accepté
+        photo: photos[0] || '',
         photos: photos,
+        thumbs: thumbs,
         phone: String(b.phone || '').slice(0, 25),
         sellerId: String(b.userId || b.sellerId || 'anon').slice(0, 60),
         sellerName: String(b.displayName || b.sellerName || '').slice(0, 80),
@@ -1654,8 +1712,8 @@ app.get('/api/market/items', (req, res) => {
     // N'expose pas le téléphone vendeur publiquement
     res.json({ items: items.map(it => ({
         id: it.id, name: it.name, cat: it.cat, desc: it.desc,
-        price: it.price, photo: it.photo, photos: itemPhotos(it), sellerName: it.sellerName,
-        phone: it.phone, createdAt: it.createdAt
+        price: it.price, photo: it.photo, photos: itemPhotos(it), thumbs: itemThumbs(it),
+        sellerName: it.sellerName, phone: it.phone, createdAt: it.createdAt
     })) });
 });
 
@@ -1666,7 +1724,8 @@ app.get('/api/market/items/mine', (req, res) => {
     const items = readMarketItems().filter(it => String(it.sellerId) === uid);
     res.json({ items: items.map(it => ({
         id: it.id, name: it.name, cat: it.cat, desc: it.desc, price: it.price,
-        photo: it.photo, photos: itemPhotos(it), status: it.status, createdAt: it.createdAt
+        photo: it.photo, photos: itemPhotos(it), thumbs: itemThumbs(it),
+        status: it.status, createdAt: it.createdAt
     })) });
 });
 
@@ -1680,6 +1739,7 @@ app.delete('/api/market/items/:id', (req, res) => {
     if (String(it.sellerId) !== uid) return res.status(403).json({ error: 'Pas ton article' });
     items = items.filter(x => x.id !== req.params.id);
     writeMarketItems(items);
+    deleteMarketImages(it);
     res.json({ ok: true });
 });
 
@@ -1707,10 +1767,11 @@ app.post('/api/admin/market/items/:id/validate', (req, res) => {
 app.post('/api/admin/market/items/:id/reject', (req, res) => {
     if (!isAdminRequest(req)) return res.status(401).json({ error: 'Non autorise' });
     let items = readMarketItems();
-    const before = items.length;
+    const rejected = items.find(x => x.id === req.params.id);
     items = items.filter(x => x.id !== req.params.id);
-    if (items.length === before) return res.status(404).json({ error: 'Article introuvable' });
+    if (!rejected) return res.status(404).json({ error: 'Article introuvable' });
     writeMarketItems(items);
+    deleteMarketImages(rejected);
     res.json({ ok: true });
 });
 // ============================================================
