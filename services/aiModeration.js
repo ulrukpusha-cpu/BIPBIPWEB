@@ -142,4 +142,4 @@ async function moderateSocialLink(url) {
     return { ok: true, platform: linkResult.platform, ai_checked: !!aiResult.ai_checked };
 }
 
-module.exports = { moderateAnnonce, moderateLocal, moderateLink, moderateWithOpenAI, moderateSocialLink };
+module.exports = { moderateAnnonce, moderateLocal, moderateLink, moderateWithOpenAI, moderateSocialLink, MOTS_INTERDITS };

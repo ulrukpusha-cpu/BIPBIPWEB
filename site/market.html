@@ -140,6 +140,15 @@
 
         <label class="profil-label">Description</label>
         <textarea id="newItemDesc" class="profil-textarea" rows="6" maxlength="2000" placeholder="État, âge, ce qui est inclus…" required></textarea>
+        <div class="ai-assist" id="aiItemAssist">
+          <button class="ai-btn" type="button" id="aiItemGenerate" data-ai="generate">
+            <iconify-icon icon="solar:magic-stick-3-bold" width="14"></iconify-icon><span>Générer avec l'IA</span>
+          </button>
+          <button class="ai-btn" type="button" id="aiItemImprove" data-ai="improve">
+            <iconify-icon icon="solar:pen-new-square-bold" width="14"></iconify-icon><span>Améliorer</span>
+          </button>
+        </div>
+        <p class="ai-status" id="aiItemStatus" style="display:none"></p>
         <p class="hint" style="margin:2px 0 0">Les retours à la ligne sont conservés : une caractéristique par ligne s'affiche proprement dans la fiche.</p>
 
         <label class="profil-label">Prix (FCFA)</label>

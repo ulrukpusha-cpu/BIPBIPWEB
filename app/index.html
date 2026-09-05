@@ -704,6 +704,29 @@
     box-sizing: border-box; display: flex; width: 100%;
   }
 
+  /* ── Aide IA à la rédaction (description d'article + annonce LED) ── */
+  .ai-assist { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+  .ai-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 11px; border-radius: 999px;
+    background: color-mix(in srgb, var(--bb-accent) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bb-accent) 42%, transparent);
+    color: var(--bb-accent); font-size: 11.5px; font-weight: 800;
+    cursor: pointer; transition: filter 120ms ease, transform 120ms ease;
+  }
+  .ai-btn:hover { filter: brightness(1.15); }
+  .ai-btn:active { transform: scale(0.96); }
+  .ai-btn:disabled { opacity: 0.5; cursor: progress; }
+  .ai-btn.is-busy iconify-icon { animation: ai-spin 900ms linear infinite; }
+  @keyframes ai-spin { to { transform: rotate(360deg); } }
+  .ai-status { font-size: 11px; margin: 4px 0 0; padding-left: 2px; color: var(--bb-muted); line-height: 1.45; }
+  .ai-status.is-error { color: var(--bb-bad, #ef4444); }
+  .ai-status.is-ok { color: var(--bb-good, #16a34a); }
+  .ai-undo {
+    background: none; border: 0; padding: 0 0 0 6px; cursor: pointer;
+    color: var(--bb-accent); font-size: 11px; font-weight: 800; text-decoration: underline;
+  }
+
   /* ── Recharge internationale ── */
   .intl-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
   .intl-label { font-size: 12px; font-weight: 700; color: var(--bb-muted); margin-top: 6px; }
@@ -2900,6 +2923,15 @@
       <div class="profil-section">
         <h3><iconify-icon icon="solar:dialog-2-linear" width="16"></iconify-icon><span data-i18n="profil.annonce.title">Annonces à passer dans le LED</span></h3>
         <textarea id="annonceLedText" rows="3" maxlength="200" placeholder="Votre message (200 caractères max)..." data-i18n-placeholder="profil.annonce.placeholder" class="profil-textarea"></textarea>
+        <div class="ai-assist" id="aiAnnonceAssist">
+          <button class="ai-btn" type="button" id="aiAnnonceGenerate" onclick="aiWriteAnnonce('generate')">
+            <iconify-icon icon="solar:magic-stick-3-bold" width="14"></iconify-icon><span>Rédiger avec l'IA</span>
+          </button>
+          <button class="ai-btn" type="button" id="aiAnnonceImprove" onclick="aiWriteAnnonce('improve')">
+            <iconify-icon icon="solar:pen-new-square-bold" width="14"></iconify-icon><span>Améliorer</span>
+          </button>
+        </div>
+        <p class="ai-status" id="aiAnnonceStatus" style="display:none"></p>
         <p class="hint"><span id="annonceCharCount">0</span><span data-i18n="profil.annonce.charcount"> /200 caractères</span></p>
         <label class="profil-label" data-i18n="profil.annonce.choose_formule">Choisir la formule</label>
         <select id="annoncePrice" class="profil-select">
@@ -3268,6 +3300,15 @@
 
         <label class="profil-label" data-i18n="addItem.description">Description</label>
         <textarea id="newItemDesc" class="profil-textarea" rows="6" maxlength="2000" placeholder="Décrivez l'état, l'âge, ce qui est inclus..." data-i18n-placeholder="addItem.desc_placeholder" required></textarea>
+        <div class="ai-assist" id="aiItemAssist">
+          <button class="ai-btn" type="button" id="aiItemGenerate" onclick="aiWriteItemDesc('generate')">
+            <iconify-icon icon="solar:magic-stick-3-bold" width="14"></iconify-icon><span>Générer avec l'IA</span>
+          </button>
+          <button class="ai-btn" type="button" id="aiItemImprove" onclick="aiWriteItemDesc('improve')">
+            <iconify-icon icon="solar:pen-new-square-bold" width="14"></iconify-icon><span>Améliorer</span>
+          </button>
+        </div>
+        <p class="ai-status" id="aiItemStatus" style="display:none"></p>
         <p class="hint" style="margin:2px 0 8px">Les retours à la ligne sont conservés : une caractéristique par ligne s'affiche proprement dans la fiche.</p>
 
         <label class="profil-label" data-i18n="addItem.price">Prix (FCFA)</label>
@@ -4908,6 +4949,127 @@
       if (c) c.textContent = e.target.value.length;
     }
   });
+
+  // ───────────────────────────────────────────────
+  // Aide IA à la rédaction (description d'article + annonce LED)
+  // ───────────────────────────────────────────────
+  var __aiPrevText = {};   // texte d'avant la génération, pour le « Annuler »
+
+  function aiSetStatus(id, msg, kind) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'ai-status' + (kind ? ' is-' + kind : '');
+    el.innerHTML = msg || '';
+    el.style.display = msg ? '' : 'none';
+  }
+  function aiSetBusy(ids, busy, label) {
+    ids.forEach(function (id) {
+      var b = document.getElementById(id);
+      if (!b) return;
+      b.disabled = busy;
+      b.classList.toggle('is-busy', busy && b.id === label);
+    });
+  }
+  window.aiUndo = function (field, statusId) {
+    var el = document.getElementById(field);
+    if (!el || __aiPrevText[field] == null) return;
+    el.value = __aiPrevText[field];
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    delete __aiPrevText[field];
+    aiSetStatus(statusId, 'Texte précédent restauré.', '');
+  };
+
+  // Appel commun : renvoie le texte produit, ou lève une erreur déjà lisible
+  async function aiCall(path, payload) {
+    var base = (window.BipbipAPI && window.BipbipAPI.base) || '';
+    var r = await fetch(base + '/api/ai/' + path, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify(Object.assign({}, payload, userPayloadFields()))
+    });
+    var data = await r.json().catch(function () { return null; });
+    if (!r.ok || !data || !data.ok) {
+      throw new Error((data && data.error) || 'Service indisponible (HTTP ' + r.status + ').');
+    }
+    return data.text;
+  }
+
+  window.aiWriteItemDesc = async function (mode) {
+    var ta = document.getElementById('newItemDesc');
+    if (!ta) return;
+    var name = (document.getElementById('newItemName') || {}).value || '';
+    var current = ta.value.trim();
+    if (mode === 'improve' && current.length < 15) {
+      aiSetStatus('aiItemStatus', '✏️ Écris d\'abord quelques mots, l\'IA les améliorera ensuite.', 'error');
+      return;
+    }
+    if (mode === 'generate' && !name.trim()) {
+      aiSetStatus('aiItemStatus', '✏️ Renseigne le nom de l\'article au-dessus pour que l\'IA puisse rédiger.', 'error');
+      return;
+    }
+    var btns = ['aiItemGenerate', 'aiItemImprove'];
+    aiSetBusy(btns, true, mode === 'improve' ? 'aiItemImprove' : 'aiItemGenerate');
+    aiSetStatus('aiItemStatus', mode === 'improve' ? 'Amélioration en cours…' : 'Rédaction en cours…', '');
+    try {
+      var text = await aiCall('item-description', {
+        mode: mode,
+        name: name,
+        cat: (document.getElementById('newItemCat') || {}).value || '',
+        price: parseInt((document.getElementById('newItemPrice') || {}).value, 10) || 0,
+        current: current
+      });
+      __aiPrevText['newItemDesc'] = ta.value;
+      ta.value = text;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      aiSetStatus('aiItemStatus',
+        '✓ Proposition de l\'IA — relis et corrige avant de publier.' +
+        '<button type="button" class="ai-undo" onclick="aiUndo(\'newItemDesc\',\'aiItemStatus\')">Annuler</button>', 'ok');
+    } catch (e) {
+      aiSetStatus('aiItemStatus', '⚠ ' + (e.message || 'Erreur inconnue'), 'error');
+    } finally {
+      aiSetBusy(btns, false);
+    }
+  };
+
+  window.aiWriteAnnonce = async function (mode) {
+    var ta = document.getElementById('annonceLedText');
+    if (!ta) return;
+    var current = ta.value.trim();
+    if (!current) {
+      aiSetStatus('aiAnnonceStatus', '✏️ Écris ce que tu veux annoncer, même en quelques mots, puis relance l\'IA.', 'error');
+      return;
+    }
+    var btns = ['aiAnnonceGenerate', 'aiAnnonceImprove'];
+    aiSetBusy(btns, true, mode === 'improve' ? 'aiAnnonceImprove' : 'aiAnnonceGenerate');
+    aiSetStatus('aiAnnonceStatus', 'Rédaction en cours…', '');
+    try {
+      var text = await aiCall('annonce', { mode: mode, current: current });
+      __aiPrevText['annonceLedText'] = ta.value;
+      ta.value = text;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));  // met à jour le compteur
+      aiSetStatus('aiAnnonceStatus',
+        '✓ Proposition de l\'IA — relis avant de publier.' +
+        '<button type="button" class="ai-undo" onclick="aiUndo(\'annonceLedText\',\'aiAnnonceStatus\')">Annuler</button>', 'ok');
+    } catch (e) {
+      aiSetStatus('aiAnnonceStatus', '⚠ ' + (e.message || 'Erreur inconnue'), 'error');
+    } finally {
+      aiSetBusy(btns, false);
+    }
+  };
+
+  // Masque les boutons si le serveur n'a pas de clé IA configurée
+  (function checkAiAvailability() {
+    var base = (window.BipbipAPI && window.BipbipAPI.base) || '';
+    fetch(base + '/api/ai/health', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.enabled) return;
+        ['aiItemAssist', 'aiAnnonceAssist'].forEach(function (id) {
+          var el = document.getElementById(id); if (el) el.style.display = 'none';
+        });
+      })
+      .catch(function () {});
+  })();
 
   // ───────────────────────────────────────────────
   // Convertir Points → BBR (placeholder)

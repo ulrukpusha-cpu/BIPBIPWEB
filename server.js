@@ -2464,6 +2464,7 @@ app.use('/api/reloadly', reloadlyRoutes); // Reloadly -> app grand public BIPBIP
 app.use('/api/bitrefill', require('./routes/bitrefill')); // Bitrefill -> complement Reloadly
 app.use('/api/push', pushRoutes); // Tokens FCM (notifications push)
 app.use('/api/support', require('./routes/support')); // Chat support (widget Aide + pont bot Telegram)
+app.use('/api/ai', require('./routes/aiWriter')); // Aide IA : description d'article Market + annonce LED
 app.use('/api/telegram/webhook-cabine', cabineBotRoutes); // Bot Telegram Cabine dédié
 app.get('/api/led/messages', (req, res) => {
     ledService.getActiveMessages()

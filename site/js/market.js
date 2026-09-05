@@ -462,6 +462,60 @@
     renderMyItems();
     setTimeout(closeAddItem, 1600);
   }
+  // ── Aide IA à la rédaction de la description ──
+  var aiPrevDesc = null;
+  function aiStatus(msg, kind) {
+    var el = $('aiItemStatus'); if (!el) return;
+    el.className = 'ai-status' + (kind ? ' is-' + kind : '');
+    el.innerHTML = msg || '';
+    el.style.display = msg ? '' : 'none';
+  }
+  function aiBusy(busy, activeId) {
+    ['aiItemGenerate', 'aiItemImprove'].forEach(function (id) {
+      var b = $(id); if (!b) return;
+      b.disabled = busy;
+      b.classList.toggle('is-busy', busy && id === activeId);
+    });
+  }
+  window.__aiUndoDesc = function () {
+    var ta = $('newItemDesc');
+    if (!ta || aiPrevDesc == null) return;
+    ta.value = aiPrevDesc; aiPrevDesc = null;
+    aiStatus('Texte précédent restauré.', '');
+  };
+  async function aiWriteDesc(mode) {
+    var ta = $('newItemDesc'); if (!ta) return;
+    var name = ($('newItemName') || {}).value || '';
+    var current = ta.value.trim();
+    if (mode === 'improve' && current.length < 15) {
+      aiStatus('✏️ Écris d\'abord quelques mots, l\'IA les améliorera ensuite.', 'error'); return;
+    }
+    if (mode === 'generate' && !name.trim()) {
+      aiStatus('✏️ Renseigne le nom de l\'article au-dessus pour que l\'IA puisse rédiger.', 'error'); return;
+    }
+    aiBusy(true, mode === 'improve' ? 'aiItemImprove' : 'aiItemGenerate');
+    aiStatus(mode === 'improve' ? 'Amélioration en cours…' : 'Rédaction en cours…', '');
+    try {
+      var payload = Object.assign({
+        mode: mode, name: name,
+        cat: ($('newItemCat') || {}).value || '',
+        price: parseInt(($('newItemPrice') || {}).value, 10) || 0,
+        current: current
+      }, BB.userPayloadFields());
+      var r = await fetch(BB.apiBase() + '/api/ai/item-description', {
+        method: 'POST', headers: BB.apiHeaders(), body: JSON.stringify(payload)
+      });
+      var d = await r.json().catch(function () { return null; });
+      if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || 'Service indisponible (HTTP ' + r.status + ').');
+      aiPrevDesc = ta.value;
+      ta.value = d.text;
+      aiStatus('✓ Proposition de l\'IA — relis et corrige avant de publier.' +
+        '<button type="button" class="ai-undo" onclick="__aiUndoDesc()">Annuler</button>', 'ok');
+    } catch (e) {
+      aiStatus('⚠ ' + (e.message || 'Erreur inconnue'), 'error');
+    } finally { aiBusy(false); }
+  }
+
   function showLimitModal() {
     var m = $('itemLimitModal'); if (m) m.classList.add('is-open');
   }
@@ -507,6 +561,18 @@
     });
     document.addEventListener('click', function (e) { var r = e.target.closest('[data-rmphoto]'); if (r) { e.stopPropagation(); var i = parseInt(r.dataset.rmphoto, 10); newItemPhotos[i] = null; var f = $('newItemFile' + i); if (f) f.value = ''; updatePhotoSlot(i); } });
     $('payPackBtn').addEventListener('click', payItemPack);
+
+    // Aide IA : boutons + masquage si le serveur n'a pas de clé configurée
+    var aiBox = $('aiItemAssist');
+    if (aiBox) {
+      aiBox.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-ai]'); if (b) aiWriteDesc(b.dataset.ai);
+      });
+      fetch(BB.apiBase() + '/api/ai/health', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (!d || !d.enabled) aiBox.style.display = 'none'; })
+        .catch(function () {});
+    }
     document.querySelectorAll('[data-close="limit"]').forEach(function (b) { b.addEventListener('click', function () { $('itemLimitModal').classList.remove('is-open'); }); });
 
     // API-ready
