@@ -19,6 +19,11 @@ const { MOTS_INTERDITS, moderateLocal } = require('./aiModeration');
 const BASE_URL = (process.env.AI_WRITER_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const API_KEY = () => process.env.AI_WRITER_API_KEY || process.env.OPENAI_API_KEY || '';
 const MODEL = process.env.AI_WRITER_MODEL || 'gpt-4o-mini';
+// Modèles à raisonnement (gpt-oss, qwen3…) : les tokens de réflexion sont
+// décomptés de max_tokens. Sans effort réduit et sans marge, la réserve part
+// entièrement dans le raisonnement et le contenu revient vide (finish_reason
+// « length »). Mettre AI_WRITER_REASONING_EFFORT=none pour ne rien envoyer.
+const REASONING_EFFORT = process.env.AI_WRITER_REASONING_EFFORT || 'low';
 const MAX_DESC = 2000;      // aligné sur maxlength du textarea et sur le slice serveur
 const MAX_ANNONCE = 200;    // aligné sur moderateAnnonce()
 const TIMEOUT_MS = 20000;
@@ -60,21 +65,35 @@ async function callOpenAI(system, user, maxTokens) {
     const fetch = (await import('node-fetch')).default;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    const payload = {
+        model: MODEL,
+        temperature: 0.7,
+        max_tokens: maxTokens,
+        messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+        ]
+    };
+    if (REASONING_EFFORT && REASONING_EFFORT !== 'none') payload.reasoning_effort = REASONING_EFFORT;
     try {
-        const res = await fetch(BASE_URL + '/chat/completions', {
+        const post = (body) => fetch(BASE_URL + '/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: MODEL,
-                temperature: 0.7,
-                max_tokens: maxTokens,
-                messages: [
-                    { role: 'system', content: system },
-                    { role: 'user', content: user }
-                ]
-            }),
+            body: JSON.stringify(body),
             signal: ctrl.signal
         });
+        let res = await post(payload);
+        // Tous les fournisseurs ne connaissent pas reasoning_effort : on retente sans.
+        if (res.status === 400 && payload.reasoning_effort) {
+            const peek = await res.text().catch(() => '');
+            if (/reasoning_effort/i.test(peek)) {
+                const retry = Object.assign({}, payload);
+                delete retry.reasoning_effort;
+                res = await post(retry);
+            } else {
+                res = { ok: false, status: 400, text: async () => peek };
+            }
+        }
         if (!res.ok) {
             const body = await res.text().catch(() => '');
             console.error('[aiWriter]', BASE_URL, res.status, body.slice(0, 300));
@@ -88,9 +107,12 @@ async function callOpenAI(system, user, maxTokens) {
             throw err;
         }
         const data = await res.json();
-        const text = data && data.choices && data.choices[0] && data.choices[0].message
-            ? data.choices[0].message.content : '';
+        const choice = data && data.choices && data.choices[0];
+        const text = choice && choice.message ? choice.message.content : '';
         if (!text || !text.trim()) {
+            if (choice && choice.finish_reason === 'length') {
+                console.error('[aiWriter] budget de tokens épuisé par le raisonnement — augmenter max_tokens ou baisser AI_WRITER_REASONING_EFFORT');
+            }
             const err = new Error("L'IA n'a rien renvoyé. Réessaie.");
             err.code = 'EMPTY';
             throw err;
@@ -110,16 +132,32 @@ async function callOpenAI(system, user, maxTokens) {
 
 const RULES_COMMON =
     "Tu écris en français simple, pour des utilisateurs de Côte d'Ivoire.\n" +
-    "INTERDIT ABSOLU : inventer une information qui ne t'a pas été donnée " +
-    "(marque, modèle, état, âge, garantie, accessoires, dimensions, lieu, contact). " +
-    "Si une info manque, reste général plutôt que de la deviner.\n" +
     "Pas de markdown : ni #, ni *, ni tirets de liste, ni blocs de code.\n" +
     "N'utilise à aucun prix ces mots, ils sont bloqués par le filtre anti-spam : " + motsInterditsLine() + ".\n" +
     "Réponds uniquement par le texte final, sans introduction ni commentaire.";
 
+// Le modèle infère spontanément l'état d'un article d'occasion à partir du
+// seul nom (« en bon état », « légers signes d'usure ») : c'est faux et
+// l'acheteur s'y fie. La consigne doit être explicite et donner des exemples.
+// Réservée aux ARTICLES : appliquée aux annonces, elle fait refuser le modèle
+// alors que le lieu et le prix viennent justement de l'utilisateur.
+const RULES_NO_INVENT_ITEM =
+    "RÈGLE LA PLUS IMPORTANTE — n'affirme JAMAIS un fait qui ne t'a pas été donné mot pour mot.\n" +
+    "Sont notamment INTERDITS s'ils ne figurent pas dans les informations fournies :\n" +
+    "- l'état, l'usure, la propreté (« bon état », « comme neuf », « légers signes d'usure », « très peu servi ») ;\n" +
+    "- l'âge, la date d'achat, la durée d'utilisation ;\n" +
+    "- l'authenticité, l'origine, la garantie, la facture ;\n" +
+    "- ce qui est livré ou inclus (boîte, chargeur, accessoires, « prêt à l'emploi ») ;\n" +
+    "- le délai, le lieu ou le mode de remise ;\n" +
+    "- toute caractéristique technique non citée (taille, capacité, couleur, matière).\n" +
+    "Si l'information manque, tu n'en parles pas du tout. Tu ne la remplaces pas par une " +
+    "formule prudente : tu l'omets purement et simplement.\n" +
+    "Tu peux en revanche décrire ce que le type de produit est en général, sans rien affirmer " +
+    "sur CET exemplaire précis.";
+
 function itemSystemPrompt() {
     return "Tu rédiges des descriptions d'articles d'occasion pour le Market de Bipbip Recharge.\n" +
-        RULES_COMMON + "\n" +
+        RULES_COMMON + "\n" + RULES_NO_INVENT_ITEM + "\n" +
         "Structure attendue :\n" +
         "- 2 à 4 phrases de présentation ;\n" +
         "- une ligne vide ;\n" +
@@ -132,10 +170,14 @@ function itemSystemPrompt() {
 function annonceSystemPrompt() {
     return "Tu rédiges des annonces très courtes pour le bandeau lumineux (LED) de l'application Bipbip Recharge.\n" +
         RULES_COMMON + "\n" +
+        "Reprends fidèlement ce que l'utilisateur t'a donné (produit, lieu, prix, horaires) " +
+        "et n'ajoute AUCUNE information qu'il n'a pas écrite : ni prix, ni date, ni numéro, " +
+        "ni adresse, ni promesse de ta part.\n" +
+        "Ne refuse jamais de rédiger : même si la demande est brève ou mal orthographiée, " +
+        "produis la meilleure annonce possible avec ce que tu as.\n" +
         "Contraintes : " + MAX_ANNONCE + " caractères MAXIMUM, une seule phrase (deux très courtes au plus), " +
         "accrocheuse et immédiatement compréhensible en défilement. " +
-        "Un emoji au maximum, en début de message. " +
-        "N'invente ni prix, ni date, ni numéro, ni adresse.";
+        "Un emoji au maximum, en début de message.";
 }
 
 /**
@@ -167,7 +209,8 @@ async function writeItemDescription(input) {
           (facts ? facts + '\n\n' : '') + 'Description actuelle :\n' + current
         : "Rédige la description de cet article d'occasion à partir des seules informations suivantes.\n\n" + facts;
 
-    const text = clamp(await callOpenAI(itemSystemPrompt(), user, 700), MAX_DESC);
+    // 1600 : ~600 tokens de texte utile + la marge de raisonnement du modèle.
+    const text = clamp(await callOpenAI(itemSystemPrompt(), user, 1600), MAX_DESC);
     return { text, mode: improve ? 'improve' : 'generate', model: MODEL };
 }
 
@@ -188,7 +231,9 @@ async function writeAnnonce(input) {
         ? "Reformule cette annonce pour le bandeau LED, sans ajouter d'information :\n\n" + current
         : "Transforme cette idée en annonce pour le bandeau LED :\n\n" + current;
 
-    let text = clamp(await callOpenAI(annonceSystemPrompt(), user, 200), MAX_ANNONCE);
+    // 800 alors que la sortie fait 200 caractères : la marge est pour le
+    // raisonnement, la longueur réelle est imposée par clamp().
+    let text = clamp(await callOpenAI(annonceSystemPrompt(), user, 800), MAX_ANNONCE);
 
     // L'annonce passera par moderateAnnonce() à la publication : si le modèle a
     // quand même sorti un mot bloqué, autant le dire tout de suite.
