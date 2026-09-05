@@ -29,7 +29,11 @@ async function createAnnonce(userId, contenu, prix) {
         nombre_diffusion,
         diffusions_restantes: nombre_diffusion,
         statut: 'en_attente',
-        ai_moderation_result: 'ok',
+        // Le vrai résultat, pas un 'ok' inconditionnel : l'admin doit pouvoir
+        // voir si l'IA a réellement vérifié ou si elle était injoignable.
+        ai_moderation_result: mod.ai_checked ? 'ok'
+            : mod.ai_error ? 'erreur_ia_non_verifie'
+            : 'filtre_local_seulement',
         position_actualite,
     }).select('id, statut, date_creation').single();
     if (error) return { error: error.message };
